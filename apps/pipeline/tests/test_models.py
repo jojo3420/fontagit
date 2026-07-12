@@ -50,10 +50,9 @@ class TestFontRecord:
     """FontRecord 모델 테스트."""
 
     def test_create_font_record_with_defaults(self) -> None:
-        """기본값을 사용한 FontRecord 인스턴스 생성."""
+        """기본값을 사용한 FontRecord 인스턴스 생성 (name_ko 미지정 시 None)."""
         record = FontRecord(
             name_en="Roboto",
-            name_ko="로보토",
             category="sans-serif",
             subsets=["latin"],
             variants=["regular", "bold"],
@@ -63,7 +62,7 @@ class TestFontRecord:
             last_modified="2024-01-01",
         )
         assert record.name_en == "Roboto"
-        assert record.name_ko == "로보토"
+        assert record.name_ko is None  # default
         assert record.tier == "A"  # default
         assert record.category == "sans-serif"
         assert record.license is None  # default
@@ -96,11 +95,10 @@ class TestOutputDocument:
     """OutputDocument 모델 테스트."""
 
     def test_create_output_document_with_defaults(self) -> None:
-        """기본값을 사용한 OutputDocument 인스턴스 생성."""
+        """기본값을 사용한 OutputDocument 인스턴스 생성 (schema_version 미지정 시 1)."""
         fonts = [
             FontRecord(
                 name_en="Roboto",
-                name_ko="로보토",
                 category="sans-serif",
                 subsets=["latin"],
                 variants=["regular"],
@@ -111,12 +109,11 @@ class TestOutputDocument:
             )
         ]
         doc = OutputDocument(
-            schema_version=1,
             generated_at="2024-01-15T10:00:00Z",
             record_count=1,
             fonts=fonts,
         )
-        assert doc.schema_version == 1
+        assert doc.schema_version == 1  # default
         assert doc.generated_at == "2024-01-15T10:00:00Z"
         assert doc.source == "google-fonts-webfonts-api"  # default
         assert doc.record_count == 1

@@ -1,7 +1,5 @@
 """FontAgit 데이터 모델."""
 
-from typing import Any
-
 from pydantic import BaseModel
 
 
@@ -13,7 +11,7 @@ class GoogleFontRaw(BaseModel):
     subsets: list[str]
     version: str
     lastModified: str
-    files: dict[str, Any]
+    files: dict[str, str]
     category: str
     menu: str | None = None
 
@@ -22,7 +20,7 @@ class FontRecord(BaseModel):
     """처리된 폰트 레코드."""
 
     name_en: str
-    name_ko: str
+    name_ko: str | None = None
     tier: str = "A"
     category: str
     subsets: list[str]
@@ -38,7 +36,7 @@ class FontRecord(BaseModel):
 class OutputDocument(BaseModel):
     """최종 출력 문서."""
 
-    schema_version: int
+    schema_version: int = 1
     generated_at: str
     source: str = "google-fonts-webfonts-api"
     record_count: int
