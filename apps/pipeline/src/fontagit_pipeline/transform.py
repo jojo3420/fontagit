@@ -2,14 +2,7 @@
 
 
 def normalize_variants(variants: list[str]) -> list[str]:
-    """Normalize font variants (regular/italic) to weight+style format.
-
-    Maps:
-      'regular' -> '400'
-      'italic' -> '400 italic'
-      '700' -> '700'
-      '700italic' -> '700 italic'
-    """
+    """구글 variants를 '숫자 weight' 또는 '숫자 italic' 형태로 정규화한다."""
     mapping = {
         "regular": "400",
         "italic": "400 italic",
@@ -20,28 +13,14 @@ def normalize_variants(variants: list[str]) -> list[str]:
 
 
 def build_official_url(family: str) -> str:
-    """Build official Google Fonts URL for a family.
-
-    Args:
-        family: Font family name (ASCII only)
-
-    Returns:
-        URL string with family name space-replaced by +
-
-    Raises:
-        ValueError: If family contains non-ASCII characters
-    """
+    """family의 공백만 '+'로 바꿔 공식 specimen URL을 만든다. 비ASCII family는 ValueError."""
     if not family.isascii():
         raise ValueError(f"Family name must be ASCII: {family}")
     return f"https://fonts.google.com/specimen/{family.replace(' ', '+')}"
 
 
 def build_aliases(name_en: str, name_ko: str | None = None) -> list[str]:
-    """Build deduplicated list of font name aliases (exact string matching), order preserved.
-
-    Creates candidates: original, lowercase, no-spaces, lowercase+ttf,
-    then dedupes by exact string while preserving order.
-    """
+    """검색용 기본 별칭 목록을 만든다(동일 문자열 기준 중복 제거, 순서 유지)."""
     candidates = [
         name_en,
         name_en.lower(),

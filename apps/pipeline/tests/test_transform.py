@@ -28,7 +28,7 @@ def test_build_official_url_rejects_non_ascii():
         build_official_url("나눔고딕")
 
 
-def test_build_aliases_dedupes_case_insensitively_keeping_order():
+def test_build_aliases_dedupes_exact_strings_keeping_order():
     assert build_aliases("Noto Sans KR") == [
         "Noto Sans KR",
         "noto sans kr",
