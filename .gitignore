@@ -216,3 +216,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Node
+node_modules/
+.next/
+out/
+
+# env & 파이프라인 산출물
+.env
+apps/pipeline/output/
