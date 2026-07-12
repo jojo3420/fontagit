@@ -1,4 +1,6 @@
 import json
+import logging
+
 import pytest
 
 from fontagit_pipeline.models import GoogleFontRaw, FontRecord
@@ -100,3 +102,34 @@ def test_build_records_merges_dedup_and_converts(webfonts_sample):
     for rec in records:
         assert rec.license is None
         assert rec.license_verified is False
+
+
+def test_build_records_skips_non_ascii_family_with_warning(caplog):
+    """비ASCII family는 build_official_url의 ValueError에 의해 건너뛰고 로그한다."""
+    caplog.set_level(logging.WARNING)
+    fonts = [
+        GoogleFontRaw(
+            family="Noto Sans KR",
+            variants=["regular", "700"],
+            subsets=["korean", "latin"],
+            version="v1.0",
+            lastModified="2024-09-01",
+            files={"regular": "https://x/noto.ttf", "700": "https://x/noto700.ttf"},
+            category="sans-serif",
+        ),
+        GoogleFontRaw(
+            family="나눔고딕",
+            variants=["regular", "700"],
+            subsets=["korean"],
+            version="v1.0",
+            lastModified="2024-09-01",
+            files={"regular": "https://x/nanum.ttf", "700": "https://x/nanum700.ttf"},
+            category="sans-serif",
+        ),
+    ]
+    records = build_records(fonts, latin_limit=100)
+    families = [rec.name_en for rec in records]
+    assert "Noto Sans KR" in families
+    assert "나눔고딕" not in families
+    assert len(records) == 1
+    assert any("나눔고딕" in record.message for record in caplog.records if record.levelno == logging.WARNING)
