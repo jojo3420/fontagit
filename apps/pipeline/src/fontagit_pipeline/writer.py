@@ -10,7 +10,7 @@ def write_output(doc: OutputDocument, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
     # 같은 디렉토리에 임시 파일 생성
-    temp_fd, temp_path_str = tempfile.mkstemp(dir=path.parent, text=True)
+    temp_fd, temp_path_str = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
     temp_path = Path(temp_path_str)
 
     try:
