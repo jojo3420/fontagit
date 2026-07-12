@@ -1,9 +1,16 @@
+import json
 import pytest
 
+from fontagit_pipeline.models import GoogleFontRaw, FontRecord
 from fontagit_pipeline.transform import (
     build_aliases,
     build_official_url,
     normalize_variants,
+    filter_korean,
+    select_latin_top,
+    merge_dedup,
+    to_record,
+    build_records,
 )
 
 
@@ -35,3 +42,61 @@ def test_build_aliases_dedupes_exact_strings_keeping_order():
         "notosanskr",
         "noto sans kr ttf",
     ]
+
+
+@pytest.fixture
+def webfonts_sample() -> list[GoogleFontRaw]:
+    """load webfonts_sample.json and convert to GoogleFontRaw."""
+    import pathlib
+    fixture_path = pathlib.Path(__file__).parent / "fixtures" / "webfonts_sample.json"
+    with open(fixture_path) as f:
+        data = json.load(f)
+    return [GoogleFontRaw(**item) for item in data]
+
+
+def test_filter_korean_keeps_fonts_with_korean_subset_in_order(webfonts_sample):
+    result = filter_korean(webfonts_sample)
+    families = [font.family for font in result]
+    assert "Noto Sans KR" in families
+    assert families == ["Noto Sans KR"]
+
+
+def test_select_latin_top_keeps_latin_fonts_up_to_limit(webfonts_sample):
+    result = select_latin_top(webfonts_sample, limit=100)
+    families = [font.family for font in result]
+    assert "Roboto" in families
+    assert len(families) <= 100
+
+
+def test_merge_dedup_korean_first_then_latin_not_in_korean(webfonts_sample):
+    korean = filter_korean(webfonts_sample)
+    latin = select_latin_top(webfonts_sample, limit=100)
+    result = merge_dedup(korean, latin)
+    families = [font.family for font in result]
+    assert families == ["Noto Sans KR", "Roboto"]
+    assert len(families) == len(set(families))
+
+
+def test_to_record_creates_record_with_license_none_and_verified_false(webfonts_sample):
+    raw = webfonts_sample[0]
+    rec = to_record(raw)
+    assert rec.name_en == "Noto Sans KR"
+    assert rec.license is None
+    assert rec.license_verified is False
+
+
+def test_to_record_uses_build_official_url_and_normalize_variants(webfonts_sample):
+    raw = webfonts_sample[1]
+    rec = to_record(raw)
+    assert rec.official_url == "https://fonts.google.com/specimen/Roboto"
+    assert rec.variants == ["400", "700"]
+
+
+def test_build_records_merges_dedup_and_converts(webfonts_sample):
+    records = build_records(webfonts_sample, latin_limit=100)
+    families = [rec.name_en for rec in records]
+    assert families == ["Noto Sans KR", "Roboto"]
+    assert len(families) == len(set(families))
+    for rec in records:
+        assert rec.license is None
+        assert rec.license_verified is False
