@@ -23,7 +23,7 @@
 ### 비범위 (이번 스펙에서 제외)
 
 - 파이프라인 실데이터 연동, 백엔드/DB/검색 API.
-- 필터/검색/정렬/비교의 실제 로직 동작.
+- 필터/검색/정렬/비교의 실제 로직 동작(검색 버튼은 라우팅 없는 목업이며, 전용 검색결과 화면은 확정 세트에 없어 제외).
 - 창작자 등록 폼의 서버 제출.
 - 광고 네트워크 실연동(슬롯 자리만 확보).
 
@@ -70,6 +70,7 @@ CSS 변수로 `styles/tokens.css`에 정의한다.
 - UI 폰트: Pretendard (메뉴/버튼/설명은 항상 UI 폰트, 견본 폰트로 UI 렌더 금지).
 - 스케일: 히어로 42 / 화면 제목 24 / 본문 15 / 캡션 12.
 - 견본 폰트(Google Fonts): Black Han Sans(검은고딕), Gowun Batang(고운바탕), Nanum Myeongjo(나눔명조), Jua(주아), Do Hyeon(도현), Gowun Dodum(고운돋움), Kirang Haerang(기랑해랑), Nanum Brush Script(나눔손글씨 붓), Gaegu(개구), Song Myung(송명), Noto Sans KR(노토 산스 KR). 각각 `next/font/google`로 CSS 변수 노출.
+- 폰트 로딩 전략(중요): 한글 웹폰트는 글리프가 많아 용량이 크고, 위 견본 폰트 대부분은 단일 굵기다(Black Han Sans/Jua/Do Hyeon 등). CWV(Core Web Vitals, 로딩 속도 지표) 저하를 막기 위해 (1) 전 폰트를 전역 preload 하지 않고 화면에 실제 노출되는 폰트만 로드, (2) `display: 'swap'` 적용, (3) 상세/캔버스처럼 특정 폰트가 필요한 라우트에서만 해당 폰트를 로드한다. 단일 굵기 폰트는 굵기 배열을 억지로 늘리지 않는다.
 
 ### 반경/간격
 
@@ -86,11 +87,12 @@ CSS 변수로 `styles/tokens.css`에 정의한다.
 | 트렌드 (1h) | `/trends` | TOP10 확장, 주간/월간 토글 |
 | 타입 캔버스 (3a) | `/playground` | 한 문장을 모든 폰트로, 딥 그린 테마, 입력 반영 |
 | 비교 (5a) | `/compare` | 최대 3종 나란히, 캔버스 입력 연동 |
-| 컬렉션 (8a) | `/collections/[slug]` | 서문 + 폰트별 한 줄 코멘트 |
+| 컬렉션 목록 | `/collections` | 헤더 nav '컬렉션'의 대상. 컬렉션 카드 인덱스(원본에 전용 화면 없음, 토큰/카드 재사용한 최소 화면) |
+| 컬렉션 상세 (8a) | `/collections/[slug]` | 서문 + 폰트별 한 줄 코멘트 |
 | 등록 (8b) | `/submit` | 창작자 등록 폼(UI만) |
 | 시스템 (1i) | `not-found.tsx` + `EmptyState` | 404(아지트지기 보이스) + 빈 상태 |
 | 모바일 (4a-4b-4c) | 위 라우트의 반응형 | 홈/상세/캔버스가 소형 화면에서 모바일 디자인으로 |
-| 런칭자산 (7) | `app/icon.*`, `app/opengraph-image.*` | 파비콘 세트 + OG 공유 카드(1200x630) |
+| 런칭자산 (7) | `app/icon.*`, `app/opengraph-image.*`, `fonts/[slug]/opengraph-image.*` | 파비콘 세트 + 기본 OG 카드(1200x630) + 폰트 상세 동적 OG(폰트명 노출, 7b) |
 | 다크모드 (9b) | 전역 테마 | `data-theme` + CSS 변수 오버라이드 |
 
 라우트 이름 규칙: 마스터플랜 URL 규칙과 정합(`/fonts`, `/trends`, `/compare`, `/playground`, `/submit`).
@@ -107,10 +109,12 @@ apps/web/
     trends/page.tsx         트렌드 (1h)
     playground/page.tsx     타입 캔버스 (3a)
     compare/page.tsx        비교 (5a)
-    collections/[slug]/page.tsx  컬렉션 (8a)
+    collections/page.tsx    컬렉션 목록
+    collections/[slug]/page.tsx  컬렉션 상세 (8a)
+    fonts/[slug]/opengraph-image.tsx  폰트 상세 동적 OG (7b)
     submit/page.tsx         등록 (8b)
     not-found.tsx           404 (1i)
-    icon.tsx / opengraph-image.tsx  런칭자산 (7)
+    icon.tsx / opengraph-image.tsx  파비콘 + 기본 OG (7)
   components/
     Header.tsx  Footer.tsx  Hero.tsx
     TierChip.tsx  LicenseBadge.tsx  FilterChip.tsx  Button.tsx
@@ -141,7 +145,7 @@ apps/web/
 - `TrendRow`: 순위(포인트) + 변동(▲up/▼down/—hold/NEW) + 이름(견본 폰트 렌더) + 이동수 + TierChip.
 - `FontCard`: 견본 글자(견본 폰트) + 이름 + 메타(파운드리/굵기/이동수) + TierChip + LicenseBadge.
 - `PreviewInput`: 입력값을 견본 텍스트에 라이브 반영(핵심 인터랙션). 기본 문구 "입력해 보세요".
-- `Specimen`: 상세용 대형 견본 블록(굵기별 렌더).
+- `Specimen`: 상세용 대형 견본 블록. 여러 문장/크기로 렌더한다. 다굵기 폰트만 굵기별 견본을 보이고, 단일 굵기 폰트(대부분의 무료 한글 폰트)는 문장/크기 변화 견본만 보인다. `weights`는 표시용 메타값으로 실제 렌더 굵기 수와 다를 수 있다.
 - `AdSlot`: 고정 높이(예: 90px) 자리, 점선 플레이스홀더. CLS 방지.
 - `EmptyState`: 아이콘 + 아지트지기 보이스 카피.
 - `ThemeToggle`: `data-theme` 전환(라이트/다크), 시스템 설정 초기값.
@@ -199,18 +203,18 @@ export interface Collection {
 
 - 반응형: 데스크톱 라우트가 소형 화면에서 모바일 디자인(4a/4b/4c)으로 접힌다. 상세는 미리보기 입력을 하단 고정, 하단 탭바 노출, 필터는 시트로 접어 화면을 견본에 양보. 브레이크포인트는 원본 모바일 프레임 폭 기준으로 설정.
 - 인터랙션(핵심만): 미리보기 입력 라이브 반영, 타입 캔버스 입력, 비교 폰트 선택, 다크모드 토글. 이들은 클라이언트 컴포넌트로 최소 상태만. 필터/검색/정렬/비교 로직은 비동작 UI.
-- 다크모드: `<html data-theme>` + `styles/tokens.css`의 다크 오버라이드. `prefers-color-scheme` 초기값 + 헤더 토글. 다크 홈은 포인트 톤업(#7FC2A2).
+- 다크모드: `<html data-theme>` + `styles/tokens.css`의 다크 오버라이드. `prefers-color-scheme` 초기값 + 헤더 토글. 다크 홈은 포인트 톤업(#7FC2A2). SSG라 초기 테마가 늦게 적용되면 잘못된 테마가 깜빡이므로(FOUC), `layout.tsx`에 페인트 전 `data-theme`를 설정하는 인라인 스크립트를 넣어 하이드레이션 불일치를 막는다.
 
 ## 9. 검증
 
 - 렌더 스모크: Playwright로 각 라우트 로드 + 콘솔 에러 0 확인.
-- 시각 대조: 데스크톱/모바일 뷰포트 스크린샷을 원본 디자인과 대조(95% 목표).
+- 시각 대조: 데스크톱/모바일 뷰포트 스크린샷 대조(95% 목표). 원본 `.dc.html`은 dc-runtime이 있어야 렌더되므로 기준선은 (1) 최초 1회 원본을 브라우저로 렌더해 확보한 참조 스크린샷, 또는 (2) 원본 소스에서 추출한 토큰/레이아웃 값과의 1:1 대조로 삼는다.
 - 단위 테스트: 분기 로직 위주 — `LicenseBadge`(3상태), 상세 tier 분기(무료 vs 유료+대안 모듈), 트렌드 변동 표시. 로직 없는 순수 마크업 컴포넌트는 스냅샷 최소.
 - CWV: 폰트 `display: swap`, 광고 슬롯 고정 높이(CLS 0 지향), SSG 정적 출력 확인.
 
 ## 10. 구현 단계 (플랜에서 태스크로 분해)
 
-1. 토대: `apps/web` 스캐폴드(Next.js App Router, TS, SSG 설정) + 토큰 + 폰트 등록 + 루트 레이아웃 + Header/Footer + 원자 컴포넌트(Chip/Badge/Button).
+1. 토대: `apps/web` 스캐폴드(Next.js App Router, TypeScript, 정적 출력). 패키지명은 기존 `pnpm --filter web` 및 `web:dev`/`web:build` 스크립트와 맞추기 위해 반드시 `web`로 한다. 정적 출력은 `output: 'export'`(또는 SSG 빌드)로 하고, 동적 라우트(`[slug]`)는 `generateStaticParams`로 사전 생성하며 동적 OG 이미지도 빌드 시 생성한다. 이어서 토큰 + 폰트 등록 + 루트 레이아웃 + Header/Footer + 원자 컴포넌트(Chip/Badge/Button).
 2. 핵심: 홈(1d) → 목록(1f) → 상세 무료/유료(1g/6a) → 트렌드(1h).
 3. 확장: 캔버스(3a) → 비교(5a) → 컬렉션(8a) → 등록(8b) → 시스템(1i, 404/빈상태).
 4. 마감: 모바일 반응형(4a/4b/4c) → 다크모드(9b) → 런칭자산(파비콘/OG, 7).
