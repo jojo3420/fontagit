@@ -1,9 +1,6 @@
 """Models 모듈 TDD 테스트."""
 
-from datetime import datetime
 
-import pytest
-from pydantic import ValidationError
 
 from fontagit_pipeline.models import GoogleFontRaw, FontRecord, OutputDocument
 

@@ -3,7 +3,7 @@ import logging
 
 import pytest
 
-from fontagit_pipeline.models import GoogleFontRaw, FontRecord
+from fontagit_pipeline.models import GoogleFontRaw
 from fontagit_pipeline.transform import (
     build_aliases,
     build_official_url,
