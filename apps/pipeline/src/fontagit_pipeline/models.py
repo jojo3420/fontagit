@@ -1,6 +1,6 @@
 """FontAgit 데이터 모델."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class GoogleFontRaw(BaseModel):
@@ -31,6 +31,15 @@ class FontRecord(BaseModel):
     aliases: list[str]
     version: str
     last_modified: str
+
+    @model_validator(mode="after")
+    def validate_license_requires_verification(self) -> "FontRecord":
+        """라이선스는 verified가 True일 때만 설정 가능하다."""
+        if self.license is not None and not self.license_verified:
+            raise ValueError(
+                "라이선스는 license_verified=True일 때만 설정할 수 있습니다"
+            )
+        return self
 
 
 class OutputDocument(BaseModel):

@@ -1,6 +1,7 @@
 """Models 모듈 TDD 테스트."""
 
-
+import pytest
+from pydantic import ValidationError
 
 from fontagit_pipeline.models import GoogleFontRaw, FontRecord, OutputDocument
 
@@ -86,6 +87,56 @@ class TestFontRecord:
         assert record.tier == "B"
         assert record.license == "OFL"
         assert record.license_verified is True
+
+    def test_font_record_forbids_unverified_license(self) -> None:
+        """라이선스는 license_verified=False일 때 설정할 수 없다."""
+        with pytest.raises(ValidationError, match="라이선스는"):
+            FontRecord(
+                name_en="Noto Sans",
+                category="sans-serif",
+                subsets=["latin"],
+                variants=["400"],
+                official_url="https://fonts.google.com/specimen/Noto+Sans",
+                license="OFL",
+                license_verified=False,
+                aliases=["noto"],
+                version="1.0",
+                last_modified="2024-02-01",
+            )
+
+    def test_font_record_allows_verified_license(self) -> None:
+        """라이선스는 license_verified=True일 때 설정 가능하다."""
+        record = FontRecord(
+            name_en="Noto Sans",
+            category="sans-serif",
+            subsets=["latin"],
+            variants=["400"],
+            official_url="https://fonts.google.com/specimen/Noto+Sans",
+            license="OFL",
+            license_verified=True,
+            aliases=["noto"],
+            version="1.0",
+            last_modified="2024-02-01",
+        )
+        assert record.license == "OFL"
+        assert record.license_verified is True
+
+    def test_font_record_allows_no_license(self) -> None:
+        """라이선스가 None일 때는 license_verified 값이 무관하게 허용된다."""
+        record = FontRecord(
+            name_en="Noto Sans",
+            category="sans-serif",
+            subsets=["latin"],
+            variants=["400"],
+            official_url="https://fonts.google.com/specimen/Noto+Sans",
+            license=None,
+            license_verified=False,
+            aliases=["noto"],
+            version="1.0",
+            last_modified="2024-02-01",
+        )
+        assert record.license is None
+        assert record.license_verified is False
 
 
 class TestOutputDocument:

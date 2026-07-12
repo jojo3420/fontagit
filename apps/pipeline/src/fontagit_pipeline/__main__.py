@@ -8,7 +8,7 @@ from pathlib import Path
 import httpx
 from pydantic import ValidationError
 
-from fontagit_pipeline.client import fetch_webfonts
+from fontagit_pipeline.client import fetch_webfonts, WebfontsError
 from fontagit_pipeline.config import load_settings
 from fontagit_pipeline.models import GoogleFontRaw, OutputDocument
 from fontagit_pipeline.transform import build_records
@@ -48,8 +48,8 @@ def main() -> int:
 
     Returns:
         0: 성공
-        2: API 키 누락 (ValidationError)
-        3: 네트워크 오류 (httpx.HTTPError)
+        2: API 키 누락 또는 유효성 검사 실패 (ValidationError)
+        3: API 조회 실패, 데이터 검증 실패, 또는 파일 저장 실패
     """
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
@@ -61,13 +61,27 @@ def main() -> int:
 
     try:
         fonts = fetch_webfonts(settings.google_fonts_api_key)
+    except WebfontsError as exc:
+        logger.error("webfonts 데이터 검증 실패: %s", exc)
+        return 3
     except httpx.HTTPError as exc:
-        logger.error("webfonts 조회 실패: %s", exc)
+        logger.error("webfonts 조회 실패: %s", exc.__class__.__name__)
         return 3
 
     generated_at = datetime.now(timezone.utc).isoformat()
     doc = build_document(fonts, generated_at)
-    write_output(doc, _OUTPUT_PATH)
+
+    # 빈 응답 처리: record_count가 0이면 기존 파일 보존
+    if doc.record_count == 0:
+        logger.error("변환된 폰트 레코드가 없습니다 (덮어쓰기 건너뜀).")
+        return 3
+
+    try:
+        write_output(doc, _OUTPUT_PATH)
+    except OSError as exc:
+        logger.error("파일 저장 실패: %s", exc.__class__.__name__)
+        return 3
+
     logger.info("저장 완료: %s (%d개)", _OUTPUT_PATH, doc.record_count)
     return 0
 
