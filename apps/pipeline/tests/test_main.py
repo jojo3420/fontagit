@@ -2,8 +2,7 @@
 
 from datetime import datetime, timezone
 
-
-from fontagit_pipeline.config import build_document
+from fontagit_pipeline.__main__ import build_document
 from fontagit_pipeline.models import GoogleFontRaw, OutputDocument
 
 
