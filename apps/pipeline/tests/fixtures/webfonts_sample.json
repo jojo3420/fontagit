@@ -1,0 +1,30 @@
+[
+  {
+    "family": "Noto Sans KR",
+    "variants": ["100", "300", "400", "500", "700", "900"],
+    "subsets": ["cyrillic", "cyrillic-ext", "greek", "greek-ext", "korean", "latin", "latin-ext", "vietnamese"],
+    "version": "v24.1.0",
+    "lastModified": "2024-09-01",
+    "files": {
+      "100": "https://fonts.gstatic.com/s/notoaenskr/v24/KFO...",
+      "300": "https://fonts.gstatic.com/s/notoaenskr/v24/KFO...",
+      "regular": "https://fonts.gstatic.com/s/notoaenskr/v24/KFO...",
+      "700": "https://fonts.gstatic.com/s/notoaenskr/v24/KFO..."
+    },
+    "category": "sans-serif",
+    "menu": "Noto Sans KR"
+  },
+  {
+    "family": "Roboto",
+    "variants": ["regular", "700"],
+    "subsets": ["cyrillic", "cyrillic-ext", "greek", "greek-ext", "latin", "latin-ext", "vietnamese"],
+    "version": "v30.0.0",
+    "lastModified": "2024-09-01",
+    "files": {
+      "regular": "https://fonts.gstatic.com/s/roboto/v30/KFO...",
+      "700": "https://fonts.gstatic.com/s/roboto/v30/KFO..."
+    },
+    "category": "sans-serif",
+    "menu": "Roboto"
+  }
+]

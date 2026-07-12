@@ -434,7 +434,7 @@ def build_official_url(family: str) -> str:
 
 
 def build_aliases(name_en: str, name_ko: str | None = None) -> list[str]:
-    """검색용 기본 별칭 목록을 만든다(소문자 기준 중복 제거, 순서 유지)."""
+    """검색용 기본 별칭 목록을 만든다(동일 문자열 기준 중복 제거, 순서 유지)."""
     candidates = [
         name_en,
         name_en.lower(),
@@ -446,7 +446,7 @@ def build_aliases(name_en: str, name_ko: str | None = None) -> list[str]:
     seen: set[str] = set()
     result: list[str] = []
     for c in candidates:
-        key = c.lower()
+        key = c
         if key not in seen:
             seen.add(key)
             result.append(c)
