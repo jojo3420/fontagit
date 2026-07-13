@@ -14,7 +14,7 @@ export function Header() {
         <Link href="/fonts">폰트</Link>
         <Link href="/trends">트렌드</Link>
         <Link href="/collections">컬렉션</Link>
-        <Link href="/submit" prefetch={false}>등록</Link>
+        <Link href="/submit">등록</Link>
       </nav>
       <div className={styles.actions}>
         <button type="button" className={styles.iconBtn} aria-label="검색">

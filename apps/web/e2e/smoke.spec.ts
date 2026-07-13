@@ -10,6 +10,7 @@ const routes = [
   { path: '/compare', name: 'Compare' },
   { path: '/collections', name: 'Collections' },
   { path: '/collections/dawn-serif', name: 'Collection Detail' },
+  { path: '/submit', name: 'Submit' },
 ];
 
 routes.forEach((route) => {
@@ -91,4 +92,11 @@ test('header collections link navigates without 404', async ({ page }) => {
   await page.getByRole('navigation').getByRole('link', { name: '컬렉션' }).click();
   await expect(page).toHaveURL(/\/collections\/?$/);
   await expect(page.getByRole('heading', { name: '컬렉션', level: 1 })).toBeVisible();
+});
+
+test('submit form is non-submitting', async ({ page }) => {
+  await page.goto('/submit', { waitUntil: 'networkidle' });
+  const submitButton = page.getByRole('button', { name: '신청 보내기' });
+  await submitButton.click();
+  await expect(page).toHaveURL(/\/submit\/?$/);
 });
