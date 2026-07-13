@@ -1,52 +1,14 @@
-/* Design Tokens */
-
 :root {
-  --color-background: #ffffff;
-  --color-foreground: #171717;
-  --color-brand: #2c5545;
-  --color-border: #e5e5e5;
-  --color-success: #10b981;
-  --color-error: #ef4444;
-  --color-warning: #f59e0b;
-  --color-info: #3b82f6;
-
-  --spacing-xs: 0.25rem;
-  --spacing-sm: 0.5rem;
-  --spacing-md: 1rem;
-  --spacing-lg: 1.5rem;
-  --spacing-xl: 2rem;
-  --spacing-2xl: 4rem;
-
-  --radius-sm: 0.25rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 1rem;
-  --radius-full: 9999px;
-
-  --font-size-xs: 0.75rem;
-  --font-size-sm: 0.875rem;
-  --font-size-base: 1rem;
-  --font-size-lg: 1.125rem;
-  --font-size-xl: 1.25rem;
-  --font-size-2xl: 1.5rem;
-
-  --line-height-tight: 1.25;
-  --line-height-normal: 1.5;
-  --line-height-loose: 1.75;
-
-  --font-weight-normal: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
-
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --bg: #FAFAF8; --ink: #1A1A1A; --sub: #6B6B6B; --sub-2: #9A9A96;
+  --border: #E6E6E2; --surface: #FFFFFF; --surface-2: #F4F4F0;
+  --point: #2C5545; --point-weak: rgba(44, 85, 69, .1); --on-point: #FFFFFF;
+  --up: #2C7A5B; --down: #B4564B; --hold: #9A9A96; --warn: #B4863C;
+  --radius-card: 12px; --radius-btn: 10px; --radius-pill: 20px;
+  --pad-page: 40px;
 }
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-background: #0a0a0a;
-    --color-foreground: #ededed;
-    --color-border: #2a2a2a;
-  }
+:root[data-theme="dark"] {
+  --bg: #16171A; --ink: #EDEDEA; --sub: #B9BCBD; --sub-2: #8A8E90;
+  --border: #2A2C30; --surface: #1D1F22; --surface-2: #202226;
+  --point: #7FC2A2; --point-weak: rgba(127, 194, 162, .14); --on-point: #16171A;
 }
+@media (max-width: 620px) { :root { --pad-page: 20px; } }
