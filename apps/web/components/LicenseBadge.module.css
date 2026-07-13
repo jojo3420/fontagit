@@ -1,0 +1,24 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.yes {
+  background-color: var(--point-weak);
+  color: var(--point);
+}
+
+.conditional {
+  background-color: rgba(180, 134, 60, 0.1);
+  color: var(--warn);
+}
+
+.no {
+  background-color: rgba(180, 86, 75, 0.1);
+  color: var(--down);
+}
