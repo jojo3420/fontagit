@@ -1,0 +1,10 @@
+.main { max-width: 720px; margin: 0 auto; width: 100%; padding: var(--pad-page); }
+.kicker { font-size: 12px; font-weight: 600; color: var(--point); margin-bottom: 8px; }
+.title { margin: 0 0 10px; font-size: 28px; font-weight: 800; letter-spacing: -.02em; color: var(--ink); }
+.intro { margin: 0 0 26px; font-size: 14px; line-height: 1.7; color: var(--sub); }
+.list { display: flex; flex-direction: column; }
+.item { padding: 18px 0; border-top: 1px solid var(--border); }
+.item:last-child { border-bottom: 1px solid var(--border); }
+.itemHead { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+.itemName { font-size: 26px; line-height: 1; color: var(--ink); }
+.comment { margin: 0; font-size: 12.5px; color: var(--sub); }

@@ -8,6 +8,8 @@ const routes = [
   { path: '/trends', name: 'Trends' },
   { path: '/playground', name: 'Playground' },
   { path: '/compare', name: 'Compare' },
+  { path: '/collections', name: 'Collections' },
+  { path: '/collections/dawn-serif', name: 'Collection Detail' },
 ];
 
 routes.forEach((route) => {
@@ -82,4 +84,11 @@ test('compare updates all columns live and swaps a font', async ({ page }) => {
   await expect(page.getByText('나란히').first()).toBeVisible();
   await page.getByLabel('2번 폰트 선택').selectOption('nanum-myeongjo');
   await expect(page.getByLabel('2번 폰트 선택')).toHaveValue('nanum-myeongjo');
+});
+
+test('header collections link navigates without 404', async ({ page }) => {
+  await page.goto('/', { waitUntil: 'networkidle' });
+  await page.getByRole('navigation').getByRole('link', { name: '컬렉션' }).click();
+  await expect(page).toHaveURL(/\/collections\/?$/);
+  await expect(page.getByRole('heading', { name: '컬렉션', level: 1 })).toBeVisible();
 });
