@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&family=Gaegu:wght@400;700&family=Gowun+Batang:wght@400;700&family=Gowun+Dodum&family=Jua&family=Kirang+Haerang&family=Nanum+Brush+Script&family=Nanum+Myeongjo:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700;900&family=Song+Myung&display=swap">
+<style>
+  body{margin:0;background:#EAE8E2;font-family:'Pretendard',system-ui,sans-serif}
+  a{color:#2C5545;text-decoration:none}
+  a:hover{color:#1f3d31}
+  *{box-sizing:border-box}
+  .dv-turn{padding:44px 48px 40px;scroll-margin-top:16px}
+  .dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 26px}
+  .dv-tid{font:700 10px/1 ui-monospace,Menlo,monospace;padding:4px 8px;background:#1A1A1A;color:#fff;border-radius:5px;text-decoration:none}
+  .dv-tname{font:600 13px/1.2 'Pretendard',sans-serif;color:#1A1A1A}
+  .dv-opts{display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start}
+  .dv-opt{flex:none;display:flex;flex-direction:column;gap:11px;scroll-margin-top:16px}
+  .dv-oid{font:700 10.5px/1 ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.07);color:#1A1A1A;border-radius:5px;text-decoration:none}
+  .dv-olabel{display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.35 'Pretendard',sans-serif;color:rgba(0,0,0,.5)}
+  .dv-opt:target .dv-oid{background:#2C5545;color:#fff}
+  .card{background:#FAFAF8;border:1px solid #E6E6E2;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.05);overflow:hidden}
+</style>
+</helmet>
+
+<div style="max-width:920px;margin:40px auto 4px;padding:0 48px;font-family:'Pretendard',sans-serif">
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+    <span style="font:800 30px/1 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.03em">Font<span style="color:#2C5545">A</span>git</span>
+    <span style="font:500 14px/1 'Pretendard',sans-serif;color:#6B6B6B">폰트 아지트 · 화면 세트 v1</span>
+  </div>
+  <p style="margin:0 0 18px;font:400 13.5px/1.7 'Pretendard',sans-serif;color:#3a3a3a;max-width:760px">
+    브리프 v2 기준 하이파이 목업입니다. <b>층위 분리</b> 원칙을 그대로 적용했어요 —
+    콘텐츠(견본·목록·상세·라이선스)는 철저히 중립·조용하게 폰트가 유일한 색이 되도록, 브랜드 영역(로고·히어로·404·빈 상태)만 아지트지기 인격을 담았습니다.
+    견본은 모두 <b>실제 무료 한글 폰트</b>로 진짜 렌더링했고, 이름과 서체가 일치합니다(프리텐다드·검은고딕·고운바탕·나눔명조·배민 주아·도현 등).
+  </p>
+  <div style="display:flex;flex-wrap:wrap;gap:18px;align-items:center;padding:14px 18px;background:#FAFAF8;border:1px solid #E6E6E2;border-radius:10px">
+    <span style="font:600 11px 'Pretendard',sans-serif;color:#6B6B6B;letter-spacing:.04em">토큰</span>
+    <span style="display:inline-flex;align-items:center;gap:7px;font:500 12px 'Pretendard',sans-serif;color:#1A1A1A"><span style="width:16px;height:16px;border-radius:4px;background:#FAFAF8;border:1px solid #E6E6E2"></span>#FAFAF8 배경</span>
+    <span style="display:inline-flex;align-items:center;gap:7px;font:500 12px 'Pretendard',sans-serif;color:#1A1A1A"><span style="width:16px;height:16px;border-radius:4px;background:#1A1A1A"></span>#1A1A1A 잉크</span>
+    <span style="display:inline-flex;align-items:center;gap:7px;font:500 12px 'Pretendard',sans-serif;color:#1A1A1A"><span style="width:16px;height:16px;border-radius:4px;background:#2C5545"></span>#2C5545 딥 그린</span>
+    <span style="display:inline-flex;align-items:center;gap:7px;font:500 12px 'Pretendard',sans-serif;color:#1A1A1A"><span style="width:16px;height:16px;border-radius:4px;background:#2C2E6B"></span>#2C2E6B 딥 인디고(대안)</span>
+    <span style="font:500 12px 'Pretendard',sans-serif;color:#6B6B6B">· UI: Pretendard</span>
+  </div>
+</div>
+
+<section class="dv-turn" id="t10">
+  <div class="dv-thd"><a class="dv-tid" href="#t10">10</a><span class="dv-tname">최종 정리 — 톤앤매너 · 디자인 시스템 (웹 + 모바일)</span></div>
+  <div class="dv-opts">
+    <div class="dv-opt" id="10a">
+      <div class="dv-olabel"><a class="dv-oid" href="#10a">10a</a>FontAgit 스타일 가이드 · 확정본</div>
+      <div class="card" style="width:1180px;padding:0">
+        <!-- band -->
+        <div style="padding:38px 40px;background:#16171A;display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:18px">
+            <span style="width:60px;height:60px;border-radius:15px;background:#1D1F22;border:1px solid #2A2C30;display:inline-flex;align-items:center;justify-content:center"><svg width="34" height="34" viewBox="0 0 72 72" fill="none"><path d="M36 14 60 58H12L36 14Z" stroke="#7FC2A2" stroke-width="3.5" stroke-linejoin="round"/><path d="M30 58 36 47 42 58Z" stroke="#7FC2A2" stroke-width="3.5" fill="none" stroke-linejoin="round"/></svg></span>
+            <div>
+              <div style="font:800 30px/1 'Pretendard',sans-serif;color:#EDEDEA;letter-spacing:-.03em;margin-bottom:6px">Font<span style="color:#7FC2A2">A</span>git <span style="font:500 15px 'Pretendard',sans-serif;color:#8A8E90;letter-spacing:0">폰트 아지트</span></div>
+              <div style="font:400 14px 'Pretendard',sans-serif;color:#B9BCBD">당신의 폰트 아지트</div>
+            </div>
+          </div>
+          <div style="text-align:right;font:400 12px/1.7 'Pretendard',sans-serif;color:#8A8E90">로고 = 텐트(작은 근거지) · 심볼 1c 확정<br>A만 대문자 → Font / Agit 두 단어 · 한글 병기 필수</div>
+        </div>
+        <!-- grid -->
+        <div style="padding:36px 40px;background:#FAFAF8;display:grid;grid-template-columns:1fr 1fr;gap:36px 44px">
+
+          <!-- layering -->
+          <div style="grid-column:1 / -1">
+            <div style="font:700 12px 'Pretendard',sans-serif;color:#2C5545;letter-spacing:.04em;margin-bottom:12px">핵심 원칙 · 층위 분리</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <div style="border:1px solid #E6E6E2;border-radius:10px;padding:16px 18px;background:#fff"><div style="font:700 13px 'Pretendard',sans-serif;color:#1A1A1A;margin-bottom:5px">콘텐츠 층 — 중립·조용</div><p style="margin:0;font:400 12px/1.6 'Pretendard',sans-serif;color:#6B6B6B">견본·목록·상세·라이선스·검색결과. 폰트가 유일한 색. 무채색, 절제.</p></div>
+              <div style="border:1px solid #E6E6E2;border-radius:10px;padding:16px 18px;background:#fff"><div style="font:700 13px 'Pretendard',sans-serif;color:#1A1A1A;margin-bottom:5px">브랜드 층 — 인격</div><p style="margin:0;font:400 12px/1.6 'Pretendard',sans-serif;color:#6B6B6B">로고·히어로·About·404·빈 상태·마이크로카피. 아지트지기의 따뜻함.</p></div>
+            </div>
+            <p style="margin:10px 0 0;font:italic 400 12px 'Pretendard',sans-serif;color:#9A9A96">비유: 좋은 바 — 인테리어(콘텐츠)는 차분해 술(폰트)이 돋보이고, 주인장(브랜드)은 인격이 있다.</p>
+          </div>
+
+          <!-- color -->
+          <div>
+            <div style="font:700 12px 'Pretendard',sans-serif;color:#2C5545;letter-spacing:.04em;margin-bottom:12px">색</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;gap:11px"><span style="width:30px;height:30px;border-radius:7px;background:#FAFAF8;border:1px solid #E6E6E2"></span><span style="font:600 12px 'Pretendard',sans-serif;color:#1A1A1A">#FAFAF8</span><span style="font:400 11.5px 'Pretendard',sans-serif;color:#9A9A96">배경(따뜻한 오프화이트)</span></div>
+              <div style="display:flex;align-items:center;gap:11px"><span style="width:30px;height:30px;border-radius:7px;background:#1A1A1A"></span><span style="font:600 12px 'Pretendard',sans-serif;color:#1A1A1A">#1A1A1A</span><span style="font:400 11.5px 'Pretendard',sans-serif;color:#9A9A96">잉크 / 본문</span></div>
+              <div style="display:flex;align-items:center;gap:11px"><span style="width:30px;height:30px;border-radius:7px;background:#6B6B6B"></span><span style="font:600 12px 'Pretendard',sans-serif;color:#1A1A1A">#6B6B6B</span><span style="font:400 11.5px 'Pretendard',sans-serif;color:#9A9A96">서브 텍스트</span></div>
+              <div style="display:flex;align-items:center;gap:11px"><span style="width:30px;height:30px;border-radius:7px;background:#E6E6E2"></span><span style="font:600 12px 'Pretendard',sans-serif;color:#1A1A1A">#E6E6E2</span><span style="font:400 11.5px 'Pretendard',sans-serif;color:#9A9A96">경계선</span></div>
+              <div style="display:flex;align-items:center;gap:11px"><span style="width:30px;height:30px;border-radius:7px;background:#2C5545"></span><span style="font:600 12px 'Pretendard',sans-serif;color:#1A1A1A">#2C5545</span><span style="font:400 11.5px 'Pretendard',sans-serif;color:#2C5545;font-weight:600">포인트 · 딥 그린(확정) — 액션에만</span></div>
+              <div style="display:flex;align-items:center;gap:8px;margin-top:4px;padding-top:10px;border-top:1px dashed #E6E6E2"><span style="width:22px;height:22px;border-radius:6px;background:#16171A"></span><span style="width:22px;height:22px;border-radius:6px;background:#EDEDEA;border:1px solid #E6E6E2"></span><span style="width:22px;height:22px;border-radius:6px;background:#7FC2A2"></span><span style="font:400 11.5px 'Pretendard',sans-serif;color:#9A9A96">다크: #16171A / #EDEDEA / 포인트 톤업 #7FC2A2</span></div>
+            </div>
+          </div>
+
+          <!-- type -->
+          <div>
+            <div style="font:700 12px 'Pretendard',sans-serif;color:#2C5545;letter-spacing:.04em;margin-bottom:12px">타이포</div>
+            <div style="border:1px solid #E6E6E2;border-radius:10px;padding:16px 18px;background:#fff;margin-bottom:12px">
+              <div style="font:400 11px 'Pretendard',sans-serif;color:#9A9A96;margin-bottom:4px">UI 폰트 · Pretendard</div>
+              <div style="font:800 22px 'Pretendard',sans-serif;color:#1A1A1A">메뉴·버튼·설명은 항상 UI 폰트</div>
+              <div style="font:400 12px 'Pretendard',sans-serif;color:#6B6B6B;margin-top:4px">견본 폰트로 UI 텍스트를 렌더하지 않는다 · 폴백 필수</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:5px;font:400 12px/1.5 'Pretendard',sans-serif;color:#6B6B6B">
+              <span>히어로 <b style="color:#1A1A1A">42</b> · 화면 제목 <b style="color:#1A1A1A">24</b> · 본문 <b style="color:#1A1A1A">15</b> · 캡션 <b style="color:#1A1A1A">12</b></span>
+              <span>견본은 각 폰트로 렌더 — 이름·서체 일치 (Pretendard·검은고딕·고운바탕·나눔명조·주아·도현 등 실제 무료 폰트)</span>
+            </div>
+          </div>
+
+          <!-- components -->
+          <div>
+            <div style="font:700 12px 'Pretendard',sans-serif;color:#2C5545;letter-spacing:.04em;margin-bottom:12px">컴포넌트</div>
+            <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">
+              <span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span>
+              <span style="padding:2px 8px;background:#F1F1EE;color:#6B6B6B;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">유료</span>
+              <span style="display:inline-flex;align-items:center;gap:6px;font:500 12px 'Pretendard',sans-serif;color:#2C5545"><span style="width:18px;height:18px;border-radius:5px;background:rgba(44,85,69,.12);display:inline-flex;align-items:center;justify-content:center"><svg width="9" height="9" viewBox="0 0 12 12"><path d="M2 6l3 3 5-6" stroke="#2C5545" stroke-width="2" fill="none" stroke-linecap="round"/></svg></span>가능</span>
+              <span style="display:inline-flex;align-items:center;gap:6px;font:500 12px 'Pretendard',sans-serif;color:#B4863C"><span style="width:18px;height:18px;border-radius:5px;background:rgba(196,150,60,.16);display:inline-flex;align-items:center;justify-content:center;font:800 11px 'Pretendard',sans-serif">!</span>조건부</span>
+              <span style="display:inline-flex;align-items:center;gap:6px;font:500 12px 'Pretendard',sans-serif;color:#B4564B"><span style="width:18px;height:18px;border-radius:5px;background:rgba(180,86,75,.14);display:inline-flex;align-items:center;justify-content:center"><svg width="8" height="8" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="#B4564B" stroke-width="2" stroke-linecap="round"/></svg></span>불가</span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:14px">
+              <span style="font:500 12px 'Pretendard',sans-serif;color:#2C7A5B">▲ 상승</span>
+              <span style="font:500 12px 'Pretendard',sans-serif;color:#B4564B">▼ 하락</span>
+              <span style="font:500 12px 'Pretendard',sans-serif;color:#9A9A96">— 유지</span>
+              <span style="font:700 10px 'Pretendard',sans-serif;color:#2C5545">NEW</span>
+              <span style="padding:10px 18px;background:#2C5545;color:#fff;border-radius:10px;font:600 12.5px 'Pretendard',sans-serif">기본 버튼</span>
+              <span style="padding:7px 13px;border:1px solid #2C5545;color:#2C5545;border-radius:20px;font:500 12px 'Pretendard',sans-serif">활성 칩</span>
+            </div>
+            <p style="margin:12px 0 0;font:400 11.5px 'Pretendard',sans-serif;color:#9A9A96">상태는 색만으로 구분하지 않고 아이콘+텍스트 병행 (WCAG AA)</p>
+          </div>
+
+          <!-- voice -->
+          <div>
+            <div style="font:700 12px 'Pretendard',sans-serif;color:#2C5545;letter-spacing:.04em;margin-bottom:12px">보이스</div>
+            <div style="border-left:3px solid #2C5545;padding:2px 0 2px 14px;margin-bottom:14px"><div style="font:600 11px 'Pretendard',sans-serif;color:#2C5545;margin-bottom:3px">브랜드 · 아지트지기</div><p style="margin:0;font:400 13px/1.6 'Pretendard',sans-serif;color:#1A1A1A">"길을 잘못 드셨어요. 아지트 입구로 모실게요." — 존댓말, 다정·담백. 과장 금지.</p></div>
+            <div style="border-left:3px solid #C8C8C2;padding:2px 0 2px 14px"><div style="font:600 11px 'Pretendard',sans-serif;color:#9A9A96;margin-bottom:3px">정보 · 건조하게 사실만</div><p style="margin:0;font:400 13px/1.6 'Pretendard',sans-serif;color:#3a3a3a">"상업적 사용 가능 · 확인일 2026-07-12" — "안전함/문제없음" 같은 보증 표현 금지.</p></div>
+          </div>
+
+          <!-- mobile -->
+          <div>
+            <div style="font:700 12px 'Pretendard',sans-serif;color:#2C5545;letter-spacing:.04em;margin-bottom:12px">모바일 원칙</div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div style="display:flex;gap:9px;align-items:flex-start"><span style="color:#2C5545;font:700 13px 'Pretendard',sans-serif;line-height:1.5">·</span><span style="font:400 13px/1.5 'Pretendard',sans-serif;color:#3a3a3a">모바일 우선 — 견본은 작은 화면에서도 크게</span></div>
+              <div style="display:flex;gap:9px;align-items:flex-start"><span style="color:#2C5545;font:700 13px 'Pretendard',sans-serif;line-height:1.5">·</span><span style="font:400 13px/1.5 'Pretendard',sans-serif;color:#3a3a3a">상세의 미리보기 입력은 하단 고정, 하단 탭바로 이동</span></div>
+              <div style="display:flex;gap:9px;align-items:flex-start"><span style="color:#2C5545;font:700 13px 'Pretendard',sans-serif;line-height:1.5">·</span><span style="font:400 13px/1.5 'Pretendard',sans-serif;color:#3a3a3a">필터는 시트로 접고 화면을 견본에 양보</span></div>
+              <div style="display:flex;gap:9px;align-items:flex-start"><span style="color:#2C5545;font:700 13px 'Pretendard',sans-serif;line-height:1.5">·</span><span style="font:400 13px/1.5 'Pretendard',sans-serif;color:#3a3a3a">광고 슬롯은 높이 사전 확보로 CLS 방지 · 속도가 곧 SEO</span></div>
+            </div>
+          </div>
+
+        </div>
+        <!-- footer nav map -->
+        <div style="padding:20px 40px;background:#F4F4F0;border-top:1px solid #E6E6E2;display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center">
+          <span style="font:700 11px 'Pretendard',sans-serif;color:#6B6B6B;letter-spacing:.04em">이 세트</span>
+          <a href="#1d" style="font:500 12px 'Pretendard',sans-serif;color:#2C5545">홈 1d</a>
+          <a href="#1f" style="font:500 12px 'Pretendard',sans-serif;color:#2C5545">목록 1f</a>
+          <a href="#1g" style="font:500 12px 'Pretendard',sans-serif;color:#2C5545">상세 1g</a>
+          <a href="#6a" style="font:500 12px 'Pretendard',sans-serif;color:#2C5545">유료 상세 6a</a>
+          <a href="#1h" style="font:500 12px 'Pretendard',sans-serif;color:#2C5545">트렌드 1h</a>
+          <a href="#3a" style="font:500 12px 'Pretendard',sans-serif;color:#2C5545">캔버스 3a</a>
+          <a href="#5a" style="font:500 12px 'Pretendard',sans-serif;color:#2C5545">비교 5a</a>
+          <a href="#8a" style="font:500 12px 'Pretendard',sans-serif;color:#2C5545">컬렉션 8a</a>
+          <a href="#8b" style="font:500 12px 'Pretendard',sans-serif;color:#2C5545">등록 8b</a>
+          <a href="#1i" style="font:500 12px 'Pretendard',sans-serif;color:#2C5545">시스템 1i</a>
+          <a href="#4a" style="font:500 12px 'Pretendard',sans-serif;color:#2C5545">모바일 4a·4b·4c</a>
+          <a href="#7a" style="font:500 12px 'Pretendard',sans-serif;color:#2C5545">런칭자산 7</a>
+          <a href="#9b" style="font:500 12px 'Pretendard',sans-serif;color:#2C5545">다크모드 9b</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="dv-turn" id="t4">
+  <div class="dv-thd"><a class="dv-tid" href="#t4">4</a><span class="dv-tname">① 모바일 — 견본이 작은 화면에서도 크게 (홈 · 상세 · 캔버스)</span></div>
+  <div class="dv-opts">
+
+    <!-- 4a HOME MOBILE -->
+    <div class="dv-opt" id="4a">
+      <div class="dv-olabel"><a class="dv-oid" href="#4a">4a</a>홈 · 모바일</div>
+      <div style="width:340px;height:720px;background:#1A1A1A;border-radius:44px;padding:10px;box-shadow:0 14px 44px rgba(0,0,0,.2)">
+        <div style="width:100%;height:100%;background:#FAFAF8;border-radius:36px;overflow:hidden;display:flex;flex-direction:column">
+          <div style="height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;flex:none"><span style="font:600 12.5px 'Pretendard',sans-serif;color:#1A1A1A">9:41</span><span style="font:600 11px 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:2px">▪▪▪ ◗</span></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 20px 12px;flex:none"><div style="display:flex;align-items:center;gap:7px"><svg width="18" height="18" viewBox="0 0 72 72" fill="none"><path d="M36 14 60 58H12L36 14Z" stroke="#2C5545" stroke-width="5" stroke-linejoin="round"/><path d="M30 57 36 47 42 57Z" stroke="#2C5545" stroke-width="5" fill="none" stroke-linejoin="round"/></svg><span style="font:800 17px 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.03em">Font<span style="color:#2C5545">A</span>git</span></div><svg width="20" height="20" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round"/></svg></div>
+          <div style="flex:1;overflow:hidden;padding:0 20px">
+            <h1 style="margin:14px 0 12px;font:800 26px/1.2 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.02em">당신의<br>폰트 아지트</h1>
+            <div style="display:flex;align-items:center;gap:9px;padding:0 15px;height:48px;background:#fff;border:1px solid #E6E6E2;border-radius:12px;margin-bottom:12px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#9A9A96" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="#9A9A96" stroke-width="2" stroke-linecap="round"/></svg><span style="font:400 13.5px 'Pretendard',sans-serif;color:#9A9A96">폰트 검색</span></div>
+            <div style="display:flex;gap:7px;overflow:hidden;margin-bottom:20px"><span style="padding:6px 13px;background:#2C5545;color:#fff;border-radius:16px;font:500 12px 'Pretendard',sans-serif;white-space:nowrap">한글</span><span style="padding:6px 13px;border:1px solid #E6E6E2;color:#6B6B6B;border-radius:16px;font:500 12px 'Pretendard',sans-serif;white-space:nowrap">고딕</span><span style="padding:6px 13px;border:1px solid #E6E6E2;color:#6B6B6B;border-radius:16px;font:500 12px 'Pretendard',sans-serif;white-space:nowrap">명조</span><span style="padding:6px 13px;border:1px solid #E6E6E2;color:#6B6B6B;border-radius:16px;font:500 12px 'Pretendard',sans-serif;white-space:nowrap">무료</span></div>
+            <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:12px"><span style="font:800 15px 'Pretendard',sans-serif;color:#2C5545">이번 주 인기 TOP 10</span><span style="font:400 10px 'Pretendard',sans-serif;color:#9A9A96">이동 클릭</span></div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid #E6E6E2;border-radius:12px;background:#fff"><span style="font:800 15px 'Pretendard',sans-serif;color:#2C5545;width:16px">1</span><span style="font-family:'Pretendard',sans-serif;font-size:19px;color:#1A1A1A;flex:1">프리텐다드</span><span style="font:400 10px 'Pretendard',sans-serif;color:#2C7A5B">▲2</span></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid #E6E6E2;border-radius:12px;background:#fff"><span style="font:800 15px 'Pretendard',sans-serif;color:#2C5545;width:16px">2</span><span style="font-family:'Black Han Sans',sans-serif;font-size:20px;color:#1A1A1A;flex:1">검은고딕</span><span style="font:400 10px 'Pretendard',sans-serif;color:#2C7A5B">▲5</span></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid #E6E6E2;border-radius:12px;background:#fff"><span style="font:800 15px 'Pretendard',sans-serif;color:#2C5545;width:16px">3</span><span style="font-family:'Gowun Batang',serif;font-size:20px;color:#1A1A1A;flex:1">고운바탕</span><span style="font:400 10px 'Pretendard',sans-serif;color:#9A9A96">—</span></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid #E6E6E2;border-radius:12px;background:#fff"><span style="font:800 15px 'Pretendard',sans-serif;color:#2C5545;width:16px">4</span><span style="font-family:'Jua',sans-serif;font-size:20px;color:#1A1A1A;flex:1">배민 주아</span><span style="font:400 10px 'Pretendard',sans-serif;color:#B4564B">▼1</span></div>
+            </div>
+          </div>
+          <div style="height:56px;border-top:1px solid #E6E6E2;background:#fff;display:flex;align-items:center;justify-content:space-around;flex:none"><span style="font:600 11px 'Pretendard',sans-serif;color:#2C5545">홈</span><span style="font:500 11px 'Pretendard',sans-serif;color:#9A9A96">폰트</span><span style="font:500 11px 'Pretendard',sans-serif;color:#9A9A96">트렌드</span><span style="font:500 11px 'Pretendard',sans-serif;color:#9A9A96">캔버스</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4b DETAIL MOBILE -->
+    <div class="dv-opt" id="4b">
+      <div class="dv-olabel"><a class="dv-oid" href="#4b">4b</a>상세 · 모바일 (미리보기 입력 하단 고정)</div>
+      <div style="width:340px;height:720px;background:#1A1A1A;border-radius:44px;padding:10px;box-shadow:0 14px 44px rgba(0,0,0,.2)">
+        <div style="width:100%;height:100%;background:#FAFAF8;border-radius:36px;overflow:hidden;display:flex;flex-direction:column">
+          <div style="height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;flex:none"><span style="font:600 12.5px 'Pretendard',sans-serif;color:#1A1A1A">9:41</span><span style="font:600 11px 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:2px">▪▪▪ ◗</span></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:6px 20px 12px;flex:none;border-bottom:1px solid #E6E6E2"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" stroke="#1A1A1A" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="font:600 14px 'Pretendard',sans-serif;color:#1A1A1A">나눔명조</span><span style="padding:2px 7px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10px 'Pretendard',sans-serif">무료</span></div>
+          <div style="flex:1;overflow:hidden;padding:16px 20px">
+            <div style="font:400 11px 'Pretendard',sans-serif;color:#9A9A96;margin-bottom:8px">Bold · 34px</div>
+            <div style="font-family:'Nanum Myeongjo',serif;font-weight:700;font-size:32px;line-height:1.4;color:#1A1A1A;margin-bottom:18px">다람쥐 헌 쳇바퀴에 타고파</div>
+            <div style="border:1px solid #E6E6E2;border-radius:12px;background:#fff;padding:16px">
+              <div style="font:700 12px 'Pretendard',sans-serif;color:#1A1A1A;margin-bottom:3px">라이선스 요약</div>
+              <div style="font:400 10.5px 'Pretendard',sans-serif;color:#9A9A96;margin-bottom:12px">SIL OFL · 확인일 2026-07-12</div>
+              <div style="display:flex;flex-direction:column;gap:9px">
+                <div style="display:flex;align-items:center;gap:9px"><span style="width:17px;height:17px;border-radius:5px;background:rgba(44,85,69,.12);display:inline-flex;align-items:center;justify-content:center"><svg width="9" height="9" viewBox="0 0 12 12"><path d="M2 6l3 3 5-6" stroke="#2C5545" stroke-width="2" fill="none" stroke-linecap="round"/></svg></span><span style="font:500 12px 'Pretendard',sans-serif;color:#1A1A1A;flex:1">상업적 사용</span><span style="font:600 11px 'Pretendard',sans-serif;color:#2C5545">가능</span></div>
+                <div style="display:flex;align-items:center;gap:9px"><span style="width:17px;height:17px;border-radius:5px;background:rgba(44,85,69,.12);display:inline-flex;align-items:center;justify-content:center"><svg width="9" height="9" viewBox="0 0 12 12"><path d="M2 6l3 3 5-6" stroke="#2C5545" stroke-width="2" fill="none" stroke-linecap="round"/></svg></span><span style="font:500 12px 'Pretendard',sans-serif;color:#1A1A1A;flex:1">웹폰트</span><span style="font:600 11px 'Pretendard',sans-serif;color:#2C5545">가능</span></div>
+                <div style="display:flex;align-items:center;gap:9px"><span style="width:17px;height:17px;border-radius:5px;background:rgba(196,150,60,.16);display:inline-flex;align-items:center;justify-content:center"><span style="font:800 11px 'Pretendard',sans-serif;color:#B4863C">!</span></span><span style="font:500 12px 'Pretendard',sans-serif;color:#1A1A1A;flex:1">재배포</span><span style="font:600 11px 'Pretendard',sans-serif;color:#B4863C">조건부</span></div>
+              </div>
+            </div>
+          </div>
+          <div style="flex:none;padding:12px 20px;border-top:1px solid #E6E6E2;background:#fff;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:9px;padding:0 14px;height:42px;background:#FAFAF8;border:1px solid #E6E6E2;border-radius:10px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h10M4 17h13" stroke="#9A9A96" stroke-width="2" stroke-linecap="round"/></svg><span style="font:400 12.5px 'Pretendard',sans-serif;color:#9A9A96">미리보기 텍스트</span></div>
+            <a href="#4b" style="display:flex;flex-direction:column;align-items:center;gap:1px;padding:12px;background:#2C5545;border-radius:11px;text-decoration:none"><span style="font:600 13.5px 'Pretendard',sans-serif;color:#fff">공식 페이지에서 다운로드</span><span style="font:400 10px 'Pretendard',sans-serif;color:rgba(255,255,255,.7)">이동 → hangeul.naver.com</span></a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4c CANVAS MOBILE -->
+    <div class="dv-opt" id="4c">
+      <div class="dv-olabel"><a class="dv-oid" href="#4c">4c</a>타입 캔버스 · 모바일 (입력해 보세요)</div>
+      <div style="width:340px;height:720px;background:#1A1A1A;border-radius:44px;padding:10px;box-shadow:0 14px 44px rgba(0,0,0,.2)">
+        <div style="width:100%;height:100%;background:#F6F5F2;border-radius:36px;overflow:hidden;display:flex;flex-direction:column">
+          <div style="height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;flex:none"><span style="font:600 12.5px 'Pretendard',sans-serif;color:#1A1A1A">9:41</span><span style="font:600 11px 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:2px">▪▪▪ ◗</span></div>
+          <div style="padding:6px 20px 14px;flex:none">
+            <div style="font:800 15px 'Pretendard',sans-serif;color:#1A1A1A;margin-bottom:12px">타입 캔버스</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:0 15px;height:48px;background:#fff;border:1.5px solid #2C5545;border-radius:12px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h10M4 17h13" stroke="#2C5545" stroke-width="2" stroke-linecap="round"/></svg><input value="{{ canvas }}" onChange="{{ onCanvas }}" placeholder="아지트" style="flex:1;border:none;outline:none;background:transparent;font:600 15px 'Pretendard',sans-serif;color:#1A1A1A"></div>
+          </div>
+          <div style="flex:1;overflow:hidden;padding:0 20px">
+            <div style="font-family:'Pretendard',sans-serif;font-weight:800;font-size:52px;line-height:1;color:#1A1A1A;letter-spacing:-.03em;margin-bottom:22px;word-break:break-all">{{ canvasText }}</div>
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <div style="border-top:1px solid #E2E1DC;padding-top:12px"><div style="font:500 10px 'Pretendard',sans-serif;color:#8a8a86;margin-bottom:3px">검은고딕 · #2</div><div style="font-family:'Black Han Sans',sans-serif;font-size:30px;color:#1A1A1A;line-height:1;word-break:break-all">{{ canvasText }}</div></div>
+              <div style="border-top:1px solid #E2E1DC;padding-top:12px"><div style="font:500 10px 'Pretendard',sans-serif;color:#8a8a86;margin-bottom:3px">고운바탕 · #3</div><div style="font-family:'Gowun Batang',serif;font-size:30px;color:#1A1A1A;line-height:1.1;word-break:break-all">{{ canvasText }}</div></div>
+              <div style="border-top:1px solid #E2E1DC;padding-top:12px"><div style="font:500 10px 'Pretendard',sans-serif;color:#8a8a86;margin-bottom:3px">배민 주아 · #4</div><div style="font-family:'Jua',sans-serif;font-size:30px;color:#1A1A1A;line-height:1;word-break:break-all">{{ canvasText }}</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section class="dv-turn" id="t5">
+  <div class="dv-thd"><a class="dv-tid" href="#t5">5</a><span class="dv-tname">② 폰트 비교 모드 — 같은 문장을 나란히</span></div>
+  <div class="dv-opts">
+    <div class="dv-opt" id="5a">
+      <div class="dv-olabel"><a class="dv-oid" href="#5a">5a</a>비교 (/compare) — 캔버스 입력과 연동 · 최대 3종</div>
+      <div class="card" style="width:1180px">
+        <header style="display:flex;align-items:center;justify-content:space-between;padding:16px 32px;border-bottom:1px solid #E6E6E2;background:#FAFAF8">
+          <div style="display:flex;align-items:center;gap:10px"><svg width="22" height="22" viewBox="0 0 72 72" fill="none"><path d="M36 14 60 58H12L36 14Z" stroke="#2C5545" stroke-width="4" stroke-linejoin="round"/><path d="M30 57 36 47 42 57Z" stroke="#2C5545" stroke-width="4" fill="none" stroke-linejoin="round"/></svg><span style="font:800 21px/1 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.03em">Font<span style="color:#2C5545">A</span>git</span><span style="font:500 12px/1 'Pretendard',sans-serif;color:#6B6B6B">폰트 아지트</span></div>
+          <nav style="display:flex;gap:24px"><a href="#1f" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">폰트</a><a href="#3a" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">캔버스</a><a href="#5a" style="font:600 13.5px 'Pretendard',sans-serif;color:#2C5545">비교</a></nav>
+        </header>
+        <div style="padding:26px 32px;border-bottom:1px solid #E6E6E2;background:#FAFAF8">
+          <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:14px"><h1 style="margin:0;font:800 22px 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.02em">폰트 비교</h1><span style="font:400 13px 'Pretendard',sans-serif;color:#6B6B6B">같은 문장으로 나란히 놓고 결정하세요</span></div>
+          <div style="display:flex;align-items:center;gap:12px;padding:0 18px;height:52px;background:#fff;border:1.5px solid #2C5545;border-radius:12px;max-width:640px"><span style="font:400 12px 'Pretendard',sans-serif;color:#9A9A96">문장</span><input value="{{ canvas }}" onChange="{{ onCanvas }}" placeholder="아지트" style="flex:1;border:none;outline:none;background:transparent;font:500 16px 'Pretendard',sans-serif;color:#1A1A1A"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:#FAFAF8">
+          <div style="padding:26px 24px;border-right:1px solid #E6E6E2"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font:700 14px 'Pretendard',sans-serif;color:#1A1A1A">프리텐다드</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10px 'Pretendard',sans-serif">무료</span></div><div style="display:flex;gap:6px;margin-bottom:20px"><span style="padding:3px 9px;border:1px solid #2C5545;color:#2C5545;border-radius:14px;font:500 10.5px 'Pretendard',sans-serif">Bold</span><span style="padding:3px 9px;border:1px solid #E6E6E2;color:#9A9A96;border-radius:14px;font:500 10.5px 'Pretendard',sans-serif">48px</span><span style="padding:3px 9px;border:1px solid #E6E6E2;color:#9A9A96;border-radius:14px;font:500 10.5px 'Pretendard',sans-serif">행간 1.4</span></div><div style="font-family:'Pretendard',sans-serif;font-weight:700;font-size:48px;line-height:1.3;color:#1A1A1A;word-break:break-all">{{ canvasText }}</div><div style="font-family:'Pretendard',sans-serif;font-weight:400;font-size:14px;line-height:1.8;color:#3a3a3a;margin-top:20px">좋은 폰트는 말을 걸지 않고 뜻을 전한다. ABCabc 0123</div></div>
+          <div style="padding:26px 24px;border-right:1px solid #E6E6E2"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font:700 14px 'Pretendard',sans-serif;color:#1A1A1A">고운바탕</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10px 'Pretendard',sans-serif">무료</span></div><div style="display:flex;gap:6px;margin-bottom:20px"><span style="padding:3px 9px;border:1px solid #2C5545;color:#2C5545;border-radius:14px;font:500 10.5px 'Pretendard',sans-serif">Bold</span><span style="padding:3px 9px;border:1px solid #E6E6E2;color:#9A9A96;border-radius:14px;font:500 10.5px 'Pretendard',sans-serif">48px</span><span style="padding:3px 9px;border:1px solid #E6E6E2;color:#9A9A96;border-radius:14px;font:500 10.5px 'Pretendard',sans-serif">행간 1.4</span></div><div style="font-family:'Gowun Batang',serif;font-weight:700;font-size:48px;line-height:1.3;color:#1A1A1A;word-break:break-all">{{ canvasText }}</div><div style="font-family:'Gowun Batang',serif;font-weight:400;font-size:14px;line-height:1.9;color:#3a3a3a;margin-top:20px">좋은 폰트는 말을 걸지 않고 뜻을 전한다. ABCabc 0123</div></div>
+          <div style="padding:26px 24px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font:700 14px 'Pretendard',sans-serif;color:#1A1A1A">검은고딕</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10px 'Pretendard',sans-serif">무료</span></div><div style="display:flex;gap:6px;margin-bottom:20px"><span style="padding:3px 9px;border:1px solid #E6E6E2;color:#9A9A96;border-radius:14px;font:500 10.5px 'Pretendard',sans-serif">Regular</span><span style="padding:3px 9px;border:1px solid #E6E6E2;color:#9A9A96;border-radius:14px;font:500 10.5px 'Pretendard',sans-serif">48px</span><span style="padding:3px 9px;border:1px dashed #C8C8C2;color:#C8C8C2;border-radius:14px;font:500 10.5px 'Pretendard',sans-serif">+ 폰트 추가</span></div><div style="font-family:'Black Han Sans',sans-serif;font-size:48px;line-height:1.3;color:#1A1A1A;word-break:break-all">{{ canvasText }}</div><div style="font-family:'Black Han Sans',sans-serif;font-size:14px;line-height:1.9;color:#3a3a3a;margin-top:20px">좋은 폰트는 말을 걸지 않고 뜻을 전한다. ABCabc 0123</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="dv-turn" id="t6">
+  <div class="dv-thd"><a class="dv-tid" href="#t6">6</a><span class="dv-tname">③ 유료 폰트 상세 + "비슷한 무료 대안 3개"</span></div>
+  <div class="dv-opts">
+    <div class="dv-opt" id="6a">
+      <div class="dv-olabel"><a class="dv-oid" href="#6a">6a</a>유료 상세 — 구매 이동 + 무료 대안 모듈</div>
+      <div class="card" style="width:1180px">
+        <header style="display:flex;align-items:center;justify-content:space-between;padding:16px 32px;border-bottom:1px solid #E6E6E2;background:#FAFAF8">
+          <div style="display:flex;align-items:center;gap:10px"><svg width="22" height="22" viewBox="0 0 72 72" fill="none"><path d="M36 14 60 58H12L36 14Z" stroke="#2C5545" stroke-width="4" stroke-linejoin="round"/><path d="M30 57 36 47 42 57Z" stroke="#2C5545" stroke-width="4" fill="none" stroke-linejoin="round"/></svg><span style="font:800 21px/1 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.03em">Font<span style="color:#2C5545">A</span>git</span></div>
+          <nav style="display:flex;gap:24px"><a href="#1f" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">폰트</a><a href="#1h" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">트렌드</a></nav>
+        </header>
+        <div style="padding:20px 32px 0;background:#FAFAF8"><span style="font:400 12px 'Pretendard',sans-serif;color:#9A9A96">폰트 › 명조 › 산돌 정체</span></div>
+        <div style="display:grid;grid-template-columns:1fr 360px;background:#FAFAF8">
+          <div style="padding:28px 32px 40px">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px"><h1 style="margin:0;font:800 30px 'Pretendard',sans-serif;color:#1A1A1A">산돌 정체</h1><span style="padding:3px 10px;background:#F1F1EE;color:#6B6B6B;border-radius:6px;font:600 12px 'Pretendard',sans-serif">유료</span></div>
+            <p style="margin:0 0 22px;font:400 13px 'Pretendard',sans-serif;color:#6B6B6B">산돌 · 9가지 굵기 · 이동 3,120회</p>
+            <div style="border:1px solid #E6E6E2;border-radius:12px;background:#fff;padding:32px;margin-bottom:10px"><div style="font-family:'Nanum Myeongjo',serif;font-weight:700;font-size:44px;color:#1A1A1A;line-height:1.4">다람쥐 헌 쳇바퀴에 타고파</div></div>
+            <div style="font:400 10px 'Pretendard',sans-serif;color:#B0B0AA;font-style:italic">견본은 유사 서체(나눔명조)로 대체 표시 — 실제 서체는 공식 페이지에서 확인하세요.</div>
+          </div>
+          <div style="padding:28px 32px 40px 0">
+            <div style="border:1px solid #E6E6E2;border-radius:12px;background:#fff;padding:22px;margin-bottom:16px">
+              <div style="font:700 13px 'Pretendard',sans-serif;color:#1A1A1A;margin-bottom:4px">라이선스 요약</div>
+              <div style="font:400 11px 'Pretendard',sans-serif;color:#9A9A96;margin-bottom:16px">상용 라이선스 · 확인일 2026-07-12</div>
+              <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:18px">
+                <div style="display:flex;align-items:center;gap:10px"><span style="width:20px;height:20px;border-radius:5px;background:rgba(196,150,60,.16);display:inline-flex;align-items:center;justify-content:center"><span style="font:800 12px 'Pretendard',sans-serif;color:#B4863C">!</span></span><span style="font:500 13px 'Pretendard',sans-serif;color:#1A1A1A;flex:1">상업적 사용</span><span style="font:600 12px 'Pretendard',sans-serif;color:#B4863C">구매 시</span></div>
+                <div style="display:flex;align-items:center;gap:10px"><span style="width:20px;height:20px;border-radius:5px;background:rgba(180,86,75,.14);display:inline-flex;align-items:center;justify-content:center"><svg width="9" height="9" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="#B4564B" stroke-width="2" stroke-linecap="round"/></svg></span><span style="font:500 13px 'Pretendard',sans-serif;color:#1A1A1A;flex:1">웹폰트</span><span style="font:600 12px 'Pretendard',sans-serif;color:#B4564B">별도 구매</span></div>
+                <div style="display:flex;align-items:center;gap:10px"><span style="width:20px;height:20px;border-radius:5px;background:rgba(180,86,75,.14);display:inline-flex;align-items:center;justify-content:center"><svg width="9" height="9" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="#B4564B" stroke-width="2" stroke-linecap="round"/></svg></span><span style="font:500 13px 'Pretendard',sans-serif;color:#1A1A1A;flex:1">재배포</span><span style="font:600 12px 'Pretendard',sans-serif;color:#B4564B">불가</span></div>
+              </div>
+              <div style="padding:12px 14px;background:#FAFAF8;border:1px solid #F1F1EE;border-radius:8px;font:400 11.5px/1.6 'Pretendard',sans-serif;color:#6B6B6B;margin-bottom:18px">조건은 판매처 정책에 따릅니다. 구매 전 라이선스 범위를 확인하세요.</div>
+              <a href="#6a" style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:#2C5545;border-radius:10px;text-decoration:none"><span style="font:600 14px 'Pretendard',sans-serif;color:#fff">구매하러 가기</span><span style="font:600 13px 'Pretendard',sans-serif;color:rgba(255,255,255,.85)">₩ 99,000~</span></a>
+              <div style="font:400 10.5px 'Pretendard',sans-serif;color:#9A9A96;text-align:center;margin-top:8px">이동 → sandoll.co.kr</div>
+            </div>
+            <!-- alternatives -->
+            <div style="border:1px solid #2C5545;border-radius:12px;background:rgba(44,85,69,.04);padding:20px">
+              <div style="font:700 13px 'Pretendard',sans-serif;color:#2C5545;margin-bottom:2px">비슷한 무료 대안 3개</div>
+              <div style="font:400 11px 'Pretendard',sans-serif;color:#6B6B6B;margin-bottom:14px">분위기가 가까운 무료 명조입니다</div>
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;align-items:center;justify-content:space-between"><div><div style="font-family:'Gowun Batang',serif;font-size:20px;color:#1A1A1A;line-height:1">고운바탕</div></div><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10px 'Pretendard',sans-serif">무료</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between"><div><div style="font-family:'Nanum Myeongjo',serif;font-weight:700;font-size:20px;color:#1A1A1A;line-height:1">나눔명조</div></div><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10px 'Pretendard',sans-serif">무료</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between"><div><div style="font-family:'Song Myung',serif;font-size:20px;color:#1A1A1A;line-height:1">송명체</div></div><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10px 'Pretendard',sans-serif">무료</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="dv-turn" id="t7">
+  <div class="dv-thd"><a class="dv-tid" href="#t7">7</a><span class="dv-tname">④ 런칭 자산 — 파비콘 · OG 공유 카드 · 동적 OG</span></div>
+  <div class="dv-opts">
+    <div class="dv-opt" id="7a">
+      <div class="dv-olabel"><a class="dv-oid" href="#7a">7a</a>파비콘 세트 — 텐트 축약 (탭·앱 아이콘)</div>
+      <div class="card" style="width:560px;padding:32px;display:flex;flex-direction:column;gap:24px">
+        <div style="display:flex;align-items:flex-end;gap:24px">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px"><span style="width:64px;height:64px;border-radius:14px;background:#2C5545;display:inline-flex;align-items:center;justify-content:center"><svg width="34" height="34" viewBox="0 0 72 72" fill="none"><path d="M36 16 58 56H14L36 16Z" stroke="#fff" stroke-width="5" stroke-linejoin="round"/><path d="M30 56q0-11 6-14 6 3 6 14" stroke="#fff" stroke-width="5" fill="none" stroke-linejoin="round"/></svg></span><span style="font:500 10px 'Pretendard',sans-serif;color:#9A9A96">180 · 앱</span></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px"><span style="width:40px;height:40px;border-radius:9px;background:#2C5545;display:inline-flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 72 72" fill="none"><path d="M36 16 58 56H14L36 16Z" stroke="#fff" stroke-width="6" stroke-linejoin="round"/><path d="M30 56q0-11 6-14 6 3 6 14" stroke="#fff" stroke-width="6" fill="none" stroke-linejoin="round"/></svg></span><span style="font:500 10px 'Pretendard',sans-serif;color:#9A9A96">48</span></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px"><span style="width:24px;height:24px;border-radius:6px;background:#2C5545;display:inline-flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 72 72" fill="none"><path d="M36 18 56 54H16L36 18Z" stroke="#fff" stroke-width="8" stroke-linejoin="round"/></svg></span><span style="font:500 10px 'Pretendard',sans-serif;color:#9A9A96">16 · 탭</span></div>
+        </div>
+        <!-- browser tab mock -->
+        <div style="border:1px solid #E6E6E2;border-radius:10px 10px 0 0;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:8px;background:#EDEDEA;padding:8px 10px 0"><div style="display:flex;align-items:center;gap:7px;background:#FAFAF8;padding:8px 12px;border-radius:8px 8px 0 0;border:1px solid #E6E6E2;border-bottom:none"><svg width="13" height="13" viewBox="0 0 72 72" fill="none"><path d="M36 18 56 54H16L36 18Z" stroke="#2C5545" stroke-width="8" stroke-linejoin="round"/></svg><span style="font:500 11.5px 'Pretendard',sans-serif;color:#1A1A1A">지마켓 산스 · 무료 폰트 | FontAgit</span><span style="font:400 12px 'Pretendard',sans-serif;color:#9A9A96">×</span></div></div>
+          <div style="background:#fff;padding:9px 12px;display:flex;align-items:center;gap:8px;border-top:1px solid #E6E6E2"><span style="width:9px;height:9px;border-radius:50%;background:#E0E0DA"></span><span style="font:400 11px 'Pretendard',sans-serif;color:#9A9A96">fontagit.com</span></div>
+        </div>
+        <div style="font:400 11.5px/1.6 'Pretendard',sans-serif;color:#6B6B6B">타이틀 패턴 <b style="color:#1A1A1A">"... | FontAgit"</b> — 브랜드 검색이 FontAgent와 섞이지 않게 항상 일관 표기.</div>
+      </div>
+    </div>
+    <div class="dv-opt" id="7b">
+      <div class="dv-olabel"><a class="dv-oid" href="#7b">7b</a>OG 공유 카드 — 카톡·SNS (1200×630)</div>
+      <div class="card" style="width:600px;padding:0;overflow:hidden">
+        <div style="width:600px;height:315px;background:#FAFAF8;display:flex;flex-direction:column;justify-content:center;padding:0 48px;position:relative;border-bottom:1px solid #E6E6E2">
+          <div style="position:absolute;top:0;right:0;width:220px;height:100%;background:rgba(44,85,69,.05);border-left:1px solid rgba(44,85,69,.1);display:flex;align-items:center;justify-content:center"><svg width="90" height="90" viewBox="0 0 72 72" fill="none"><path d="M36 12 62 60H10L36 12Z" stroke="#2C5545" stroke-width="2.5" stroke-linejoin="round"/><path d="M28 60q0-14 8-19 8 5 8 19" stroke="#2C5545" stroke-width="2.5" fill="none" stroke-linejoin="round"/></svg></div>
+          <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:14px"><span style="font:800 26px 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.03em">Font<span style="color:#2C5545">A</span>git</span><span style="font:500 14px 'Pretendard',sans-serif;color:#6B6B6B">폰트 아지트</span></div>
+          <div style="font:800 40px/1.15 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.02em;max-width:320px">당신의<br>폰트 아지트</div>
+          <div style="font:400 14px 'Pretendard',sans-serif;color:#6B6B6B;margin-top:12px">무료부터 유료까지, 한 번에 찾는 폰트 아카이브</div>
+        </div>
+      </div>
+      <div class="dv-olabel" style="margin-top:4px"><a class="dv-oid" href="#7b" style="visibility:hidden">7b</a>동적 OG — 폰트 상세 공유 시 폰트명 노출</div>
+      <div class="card" style="width:600px;padding:0;overflow:hidden">
+        <div style="width:600px;height:315px;background:#fff;display:flex;flex-direction:column;justify-content:center;padding:0 48px">
+          <div style="font:600 13px 'Pretendard',sans-serif;color:#2C5545;margin-bottom:16px">FontAgit · 폰트 아지트</div>
+          <div style="font-family:'Gowun Batang',serif;font-size:64px;color:#1A1A1A;line-height:1;margin-bottom:18px">고운바탕</div>
+          <div style="display:flex;gap:8px;align-items:center"><span style="padding:3px 11px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:6px;font:600 12px 'Pretendard',sans-serif">무료</span><span style="font:400 13px 'Pretendard',sans-serif;color:#6B6B6B">명조 · 상업적 사용 가능</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="dv-turn" id="t8">
+  <div class="dv-thd"><a class="dv-tid" href="#t8">8</a><span class="dv-tname">⑤ 컬렉션 상세 · 창작자 등록 폼</span></div>
+  <div class="dv-opts">
+    <div class="dv-opt" id="8a">
+      <div class="dv-olabel"><a class="dv-oid" href="#8a">8a</a>컬렉션 상세 — 서문 + 폰트별 한 줄 코멘트</div>
+      <div class="card" style="width:600px">
+        <header style="display:flex;align-items:center;gap:10px;padding:16px 28px;border-bottom:1px solid #E6E6E2;background:#FAFAF8"><svg width="20" height="20" viewBox="0 0 72 72" fill="none"><path d="M36 14 60 58H12L36 14Z" stroke="#2C5545" stroke-width="4" stroke-linejoin="round"/><path d="M30 57 36 47 42 57Z" stroke="#2C5545" stroke-width="4" fill="none" stroke-linejoin="round"/></svg><span style="font:800 19px 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.03em">Font<span style="color:#2C5545">A</span>git</span></header>
+        <div style="padding:32px 28px">
+          <div style="font:600 12px 'Pretendard',sans-serif;color:#2C5545;margin-bottom:8px">컬렉션 · 명조 8종</div>
+          <h1 style="margin:0 0 10px;font:800 28px 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.02em">새벽 감성 명조 모음</h1>
+          <p style="margin:0 0 26px;font:400 14px/1.7 'Pretendard',sans-serif;color:#6B6B6B">긴 글에 어울리는, 획이 차분한 명조들을 모았어요. 에세이·브랜드 소개문·전자책 본문에 특히 잘 맞습니다.</p>
+          <div style="display:flex;flex-direction:column;gap:0">
+            <div style="padding:18px 0;border-top:1px solid #E6E6E2"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-family:'Gowun Batang',serif;font-size:26px;color:#1A1A1A;line-height:1">고운바탕</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10px 'Pretendard',sans-serif">무료</span></div><p style="margin:0;font:400 12.5px 'Pretendard',sans-serif;color:#6B6B6B">공기 같은 가벼움. 본문 15px에서 눈이 편해요.</p></div>
+            <div style="padding:18px 0;border-top:1px solid #E6E6E2"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-family:'Nanum Myeongjo',serif;font-weight:700;font-size:26px;color:#1A1A1A;line-height:1">나눔명조</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10px 'Pretendard',sans-serif">무료</span></div><p style="margin:0;font:400 12.5px 'Pretendard',sans-serif;color:#6B6B6B">묵직한 제목용. 굵기 대비가 또렷합니다.</p></div>
+            <div style="padding:18px 0;border-top:1px solid #E6E6E2;border-bottom:1px solid #E6E6E2"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-family:'Song Myung',serif;font-size:26px;color:#1A1A1A;line-height:1">송명체</span><span style="padding:2px 8px;background:#F1F1EE;color:#6B6B6B;border-radius:5px;font:600 10px 'Pretendard',sans-serif">유료</span></div><p style="margin:0;font:400 12.5px 'Pretendard',sans-serif;color:#6B6B6B">고전적인 인상. 표지·인용구에 잘 어울려요.</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="dv-opt" id="8b">
+      <div class="dv-olabel"><a class="dv-oid" href="#8b">8b</a>창작자 등록 (/submit)</div>
+      <div class="card" style="width:480px">
+        <header style="display:flex;align-items:center;gap:10px;padding:16px 28px;border-bottom:1px solid #E6E6E2;background:#FAFAF8"><svg width="20" height="20" viewBox="0 0 72 72" fill="none"><path d="M36 14 60 58H12L36 14Z" stroke="#2C5545" stroke-width="4" stroke-linejoin="round"/><path d="M30 57 36 47 42 57Z" stroke="#2C5545" stroke-width="4" fill="none" stroke-linejoin="round"/></svg><span style="font:800 19px 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.03em">Font<span style="color:#2C5545">A</span>git</span></header>
+        <div style="padding:30px 28px">
+          <h1 style="margin:0 0 6px;font:800 24px 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.02em">폰트 등록 신청</h1>
+          <p style="margin:0 0 24px;font:400 13px/1.6 'Pretendard',sans-serif;color:#6B6B6B">만드신 폰트를 아지트에 소개해 주세요. 검토 후 등록됩니다.</p>
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div><div style="font:600 12px 'Pretendard',sans-serif;color:#1A1A1A;margin-bottom:7px">폰트 이름 <span style="color:#2C5545">*</span></div><div style="height:44px;border:1px solid #E6E6E2;border-radius:10px;background:#fff;display:flex;align-items:center;padding:0 14px;font:400 13px 'Pretendard',sans-serif;color:#9A9A96">예: 아지트 고딕</div></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><div style="font:600 12px 'Pretendard',sans-serif;color:#1A1A1A;margin-bottom:7px">제작자 <span style="color:#2C5545">*</span></div><div style="height:44px;border:1px solid #E6E6E2;border-radius:10px;background:#fff;display:flex;align-items:center;padding:0 14px;font:400 13px 'Pretendard',sans-serif;color:#9A9A96">이름/팀</div></div><div><div style="font:600 12px 'Pretendard',sans-serif;color:#1A1A1A;margin-bottom:7px">분류</div><div style="height:44px;border:1px solid #E6E6E2;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 14px;font:400 13px 'Pretendard',sans-serif;color:#1A1A1A">고딕<span style="color:#9A9A96">▾</span></div></div></div>
+            <div><div style="font:600 12px 'Pretendard',sans-serif;color:#1A1A1A;margin-bottom:7px">공식 페이지 URL <span style="color:#2C5545">*</span></div><div style="height:44px;border:1px solid #E6E6E2;border-radius:10px;background:#fff;display:flex;align-items:center;padding:0 14px;font:400 13px 'Pretendard',sans-serif;color:#9A9A96">https://</div></div>
+            <div><div style="font:600 12px 'Pretendard',sans-serif;color:#1A1A1A;margin-bottom:7px">라이선스</div><div style="display:flex;gap:8px"><span style="padding:8px 14px;border:1px solid #2C5545;color:#2C5545;border-radius:20px;font:500 12px 'Pretendard',sans-serif">무료</span><span style="padding:8px 14px;border:1px solid #E6E6E2;color:#6B6B6B;border-radius:20px;font:500 12px 'Pretendard',sans-serif">유료</span><span style="padding:8px 14px;border:1px solid #E6E6E2;color:#6B6B6B;border-radius:20px;font:500 12px 'Pretendard',sans-serif">조건부</span></div></div>
+            <button style="height:48px;background:#2C5545;color:#fff;border:none;border-radius:11px;font:600 14px 'Pretendard',sans-serif;cursor:pointer;margin-top:6px">신청 보내기</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="dv-turn" id="t9">
+  <div class="dv-thd"><a class="dv-tid" href="#t9">9</a><span class="dv-tname">⑥ 홈 → 캔버스 진입점 · 다크모드</span></div>
+  <div class="dv-opts">
+    <div class="dv-opt" id="9a">
+      <div class="dv-olabel"><a class="dv-oid" href="#9a">9a</a>홈 히어로 아래 캔버스 진입 배너</div>
+      <div class="card" style="width:600px;padding:32px">
+        <div style="border:1px solid #E6E6E2;border-radius:16px;background:rgba(44,85,69,.04);padding:28px;display:flex;align-items:center;justify-content:space-between;gap:20px">
+          <div>
+            <div style="font:700 16px 'Pretendard',sans-serif;color:#1A1A1A;margin-bottom:6px">내 문장으로 직접 확인</div>
+            <p style="margin:0;font:400 13px/1.6 'Pretendard',sans-serif;color:#6B6B6B">브랜드명·문구를 넣고 모든 폰트에서 한 번에 미리보세요.</p>
+          </div>
+          <a href="#3a" style="flex:none;display:flex;align-items:center;gap:8px;padding:13px 20px;background:#2C5545;border-radius:11px;text-decoration:none"><span style="font:600 13.5px 'Pretendard',sans-serif;color:#fff">타입 캔버스 열기</span><span style="font:600 14px 'Pretendard',sans-serif;color:#fff">→</span></a>
+        </div>
+        <div style="margin-top:14px;font:400 11.5px 'Pretendard',sans-serif;color:#9A9A96;text-align:center">홈 TOP 10 위, 히어로 바로 아래에 배치</div>
+      </div>
+    </div>
+    <div class="dv-opt" id="9b">
+      <div class="dv-olabel"><a class="dv-oid" href="#9b">9b</a>다크모드 — 홈 (bg #16171A · 포인트 톤업)</div>
+      <div class="card" style="width:1180px;border-color:#2A2C30;background:#16171A">
+        <header style="display:flex;align-items:center;justify-content:space-between;padding:16px 32px;border-bottom:1px solid #24262A;background:#16171A">
+          <div style="display:flex;align-items:baseline;gap:11px"><span style="font:800 21px/1 'Pretendard',sans-serif;color:#EDEDEA;letter-spacing:-.03em">Font<span style="color:#7FC2A2">A</span>git</span><span style="font:500 12px/1 'Pretendard',sans-serif;color:#8A8E90">폰트 아지트</span></div>
+          <nav style="display:flex;align-items:center;gap:26px"><a href="#9b" style="font:500 13.5px 'Pretendard',sans-serif;color:#C7C9C8">폰트</a><a href="#9b" style="font:500 13.5px 'Pretendard',sans-serif;color:#C7C9C8">트렌드</a><a href="#9b" style="font:500 13.5px 'Pretendard',sans-serif;color:#C7C9C8">캔버스</a><span style="width:34px;height:34px;border-radius:8px;border:1px solid #2A2C30;display:inline-flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M20 13a7 7 0 1 1-9-9 6 6 0 0 0 9 9Z" stroke="#C7C9C8" stroke-width="2" stroke-linejoin="round"/></svg></span></nav>
+        </header>
+        <div style="padding:56px 32px 44px;text-align:center;background:#16171A">
+          <h1 style="margin:0 0 8px;font:800 40px/1.15 'Pretendard',sans-serif;color:#EDEDEA;letter-spacing:-.03em">당신의 폰트 아지트</h1>
+          <p style="margin:0 0 28px;font:400 15px 'Pretendard',sans-serif;color:#8A8E90">설치 없이, 웹에서. 좋은 폰트를 골라두고 흐름까지 챙겨드려요.</p>
+          <div style="max-width:600px;margin:0 auto;display:flex;gap:10px">
+            <div style="flex:1;display:flex;align-items:center;gap:12px;padding:0 18px;height:54px;background:#1D1F22;border:1px solid #2A2C30;border-radius:12px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#6E7274" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="#6E7274" stroke-width="2" stroke-linecap="round"/></svg><span style="font:400 14.5px 'Pretendard',sans-serif;color:#6E7274">폰트 이름을 검색하세요</span></div>
+            <button style="height:54px;padding:0 28px;background:#2C5545;color:#EDEDEA;border:none;border-radius:12px;font:600 14.5px 'Pretendard',sans-serif;cursor:pointer">검색</button>
+          </div>
+          <div style="display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin-top:20px"><span style="padding:8px 15px;border:1px solid #7FC2A2;color:#7FC2A2;border-radius:20px;font:500 13px 'Pretendard',sans-serif">한글</span><span style="padding:8px 15px;border:1px solid #2A2C30;color:#8A8E90;border-radius:20px;font:500 13px 'Pretendard',sans-serif">고딕</span><span style="padding:8px 15px;border:1px solid #2A2C30;color:#8A8E90;border-radius:20px;font:500 13px 'Pretendard',sans-serif">명조</span><span style="padding:8px 15px;border:1px solid #2A2C30;color:#8A8E90;border-radius:20px;font:500 13px 'Pretendard',sans-serif">손글씨</span><span style="padding:8px 15px;border:1px solid #2A2C30;color:#8A8E90;border-radius:20px;font:500 13px 'Pretendard',sans-serif">무료</span></div>
+        </div>
+        <div style="padding:34px 32px;background:#1B1D20;border-top:1px solid #24262A">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:20px"><div style="display:flex;align-items:baseline;gap:12px"><span style="font:800 19px 'Pretendard',sans-serif;color:#7FC2A2">이번 주 인기 TOP 10</span><span style="font:400 12px 'Pretendard',sans-serif;color:#8A8E90">이동 클릭 기준</span></div><a href="#9b" style="font:600 13px 'Pretendard',sans-serif;color:#7FC2A2">전체 →</a></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 34px">
+            <div style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #26282C"><span style="font:800 16px 'Pretendard',sans-serif;color:#7FC2A2;width:20px">1</span><span style="font:400 11px 'Pretendard',sans-serif;color:#6FBF9B;width:30px">▲ 2</span><span style="font-family:'Pretendard',sans-serif;font-size:20px;color:#EDEDEA;flex:1">프리텐다드</span><span style="font:500 11px 'Pretendard',sans-serif;color:#8A8E90">12,480</span><span style="padding:2px 8px;background:rgba(127,194,162,.16);color:#7FC2A2;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #26282C"><span style="font:800 16px 'Pretendard',sans-serif;color:#7FC2A2;width:20px">2</span><span style="font:400 11px 'Pretendard',sans-serif;color:#8A8E90;width:30px">—</span><span style="font-family:'Noto Sans KR',sans-serif;font-weight:500;font-size:20px;color:#EDEDEA;flex:1">노토 산스 KR</span><span style="font:500 11px 'Pretendard',sans-serif;color:#8A8E90">9,210</span><span style="padding:2px 8px;background:rgba(127,194,162,.16);color:#7FC2A2;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #26282C"><span style="font:800 16px 'Pretendard',sans-serif;color:#7FC2A2;width:20px">3</span><span style="font:400 11px 'Pretendard',sans-serif;color:#6FBF9B;width:30px">▲ 5</span><span style="font-family:'Black Han Sans',sans-serif;font-size:21px;color:#EDEDEA;flex:1">검은고딕</span><span style="font:500 11px 'Pretendard',sans-serif;color:#8A8E90">8,640</span><span style="padding:2px 8px;background:rgba(127,194,162,.16);color:#7FC2A2;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #26282C"><span style="font:800 16px 'Pretendard',sans-serif;color:#7FC2A2;width:20px">4</span><span style="font:400 11px 'Pretendard',sans-serif;color:#C77A72;width:30px">▼ 1</span><span style="font-family:'Jua',sans-serif;font-size:21px;color:#EDEDEA;flex:1">배민 주아</span><span style="font:500 11px 'Pretendard',sans-serif;color:#8A8E90">7,905</span><span style="padding:2px 8px;background:rgba(127,194,162,.16);color:#7FC2A2;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #26282C"><span style="font:800 16px 'Pretendard',sans-serif;color:#7FC2A2;width:20px">5</span><span style="font:400 11px 'Pretendard',sans-serif;color:#6FBF9B;width:30px">▲ 1</span><span style="font-family:'Gowun Batang',serif;font-size:21px;color:#EDEDEA;flex:1">고운바탕</span><span style="font:500 11px 'Pretendard',sans-serif;color:#8A8E90">6,730</span><span style="padding:2px 8px;background:rgba(127,194,162,.16);color:#7FC2A2;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #26282C"><span style="font:800 16px 'Pretendard',sans-serif;color:#7FC2A2;width:20px">6</span><span style="font:400 11px 'Pretendard',sans-serif;color:#8A8E90;width:30px">—</span><span style="font-family:'Nanum Myeongjo',serif;font-weight:700;font-size:21px;color:#EDEDEA;flex:1">나눔명조</span><span style="font:500 11px 'Pretendard',sans-serif;color:#8A8E90">6,120</span><span style="padding:2px 8px;background:rgba(127,194,162,.16);color:#7FC2A2;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+          </div>
+          <div style="height:84px;border:1px dashed #2E3034;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#191B1E;margin-top:22px"><span style="font:500 12px 'Pretendard',sans-serif;color:#5A5E60">광고 · 높이 사전 확보로 로딩 밀림(CLS) 방지</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="dv-turn" id="t3">
+  <div class="dv-thd"><a class="dv-tid" href="#t3">3</a><span class="dv-tname">확정: 홈 <a class="dv-oid" href="#1d">1d</a> 딥 그린 · 타입 캔버스는 전용 화면으로</span></div>
+  <div class="dv-opts">
+
+    <!-- ===================== 3a TYPE CANVAS — STANDALONE SCREEN ===================== -->
+    <div class="dv-opt" id="3a">
+      <div class="dv-olabel"><a class="dv-oid" href="#3a">3a</a>타입 캔버스 (/playground) — 한 글자를 모든 폰트로 · 딥 그린</div>
+      <div class="card" style="width:1180px">
+        <header style="display:flex;align-items:center;justify-content:space-between;padding:16px 32px;border-bottom:1px solid #E6E6E2;background:#FAFAF8">
+          <div style="display:flex;align-items:center;gap:10px">
+            <svg width="22" height="22" viewBox="0 0 72 72" fill="none"><path d="M36 14 60 58H12L36 14Z" stroke="#2C5545" stroke-width="4" stroke-linejoin="round"/><path d="M30 57 36 47 42 57Z" stroke="#2C5545" stroke-width="4" fill="none" stroke-linejoin="round"/></svg>
+            <span style="font:800 21px/1 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.03em">Font<span style="color:#2C5545">A</span>git</span>
+            <span style="font:500 12px/1 'Pretendard',sans-serif;color:#6B6B6B">폰트 아지트</span>
+          </div>
+          <nav style="display:flex;align-items:center;gap:26px"><a href="#1f" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">폰트</a><a href="#1h" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">트렌드</a><a href="#3a" style="font:600 13.5px 'Pretendard',sans-serif;color:#2C5545">캔버스</a><a href="#1d" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">컬렉션</a></nav>
+        </header>
+        <!-- title + input + presets -->
+        <div style="padding:34px 32px 26px;border-bottom:1px solid #E6E6E2;background:#FAFAF8">
+          <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:18px">
+            <h1 style="margin:0;font:800 24px 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.02em">타입 캔버스</h1>
+            <span style="font:400 13px 'Pretendard',sans-serif;color:#6B6B6B">아무 글자나 입력하면 모든 폰트가 그 글자로 바뀝니다</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:0 20px;height:60px;background:#fff;border:1.5px solid #2C5545;border-radius:14px;max-width:720px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h10M4 17h13" stroke="#2C5545" stroke-width="2" stroke-linecap="round"/></svg>
+            <input value="{{ canvas }}" onChange="{{ onCanvas }}" placeholder="아지트" style="flex:1;border:none;outline:none;background:transparent;font:600 20px 'Pretendard',sans-serif;color:#1A1A1A">
+            <span onClick="{{ fillClear }}" style="font:500 12px 'Pretendard',sans-serif;color:#9A9A96;cursor:pointer">지우기</span>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+            <span onClick="{{ fillPangram }}" style="padding:7px 14px;border:1px solid #E6E6E2;border-radius:20px;font:500 12.5px 'Pretendard',sans-serif;color:#3a3a3a;cursor:pointer;background:#fff">다람쥐 헌 쳇바퀴에 타고파</span>
+            <span onClick="{{ fillBrand }}" style="padding:7px 14px;border:1px solid #E6E6E2;border-radius:20px;font:500 12.5px 'Pretendard',sans-serif;color:#3a3a3a;cursor:pointer;background:#fff">당신의 폰트 아지트</span>
+            <span onClick="{{ fillAbc }}" style="padding:7px 14px;border:1px solid #E6E6E2;border-radius:20px;font:500 12.5px 'Pretendard',sans-serif;color:#3a3a3a;cursor:pointer;background:#fff">가나다라 ABC 0123</span>
+          </div>
+        </div>
+        <!-- big hero specimen -->
+        <div style="padding:44px 32px;border-bottom:1px solid #E6E6E2;background:#fff">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px"><span style="font:600 12px 'Pretendard',sans-serif;color:#9A9A96">대표 · 프리텐다드 · 96px</span><a href="#1g" style="font:600 12px 'Pretendard',sans-serif;color:#2C5545">상세 →</a></div>
+          <div style="font-family:'Pretendard',sans-serif;font-weight:800;font-size:96px;line-height:1;color:#1A1A1A;letter-spacing:-.03em;word-break:break-all">{{ canvasText }}</div>
+        </div>
+        <!-- font grid, all live -->
+        <div style="padding:28px 32px 36px;background:#FAFAF8">
+          <div style="font:700 13px 'Pretendard',sans-serif;color:#1A1A1A;margin-bottom:16px">전체 폰트에서 보기 <span style="font:400 12px 'Pretendard',sans-serif;color:#9A9A96">· 248종 중 10</span></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div style="border:1px solid #E6E6E2;border-radius:12px;background:#fff;padding:18px 20px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span style="font:600 13px 'Pretendard',sans-serif;color:#1A1A1A">노토 산스 KR</span><div style="display:flex;gap:10px;align-items:center"><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10px 'Pretendard',sans-serif">무료</span><a href="#1g" style="font:500 11px 'Pretendard',sans-serif;color:#9A9A96">상세</a></div></div><div style="font-family:'Noto Sans KR',sans-serif;font-weight:500;font-size:36px;color:#1A1A1A;line-height:1.1;word-break:break-all">{{ canvasText }}</div></div>
+            <div style="border:1px solid #E6E6E2;border-radius:12px;background:#fff;padding:18px 20px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span style="font:600 13px 'Pretendard',sans-serif;color:#1A1A1A">검은고딕</span><div style="display:flex;gap:10px;align-items:center"><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10px 'Pretendard',sans-serif">무료</span><a href="#1g" style="font:500 11px 'Pretendard',sans-serif;color:#9A9A96">상세</a></div></div><div style="font-family:'Black Han Sans',sans-serif;font-size:38px;color:#1A1A1A;line-height:1.1;word-break:break-all">{{ canvasText }}</div></div>
+            <div style="border:1px solid #E6E6E2;border-radius:12px;background:#fff;padding:18px 20px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span style="font:600 13px 'Pretendard',sans-serif;color:#1A1A1A">고운바탕</span><div style="display:flex;gap:10px;align-items:center"><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10px 'Pretendard',sans-serif">무료</span><a href="#1g" style="font:500 11px 'Pretendard',sans-serif;color:#9A9A96">상세</a></div></div><div style="font-family:'Gowun Batang',serif;font-size:36px;color:#1A1A1A;line-height:1.15;word-break:break-all">{{ canvasText }}</div></div>
+            <div style="border:1px solid #E6E6E2;border-radius:12px;background:#fff;padding:18px 20px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span style="font:600 13px 'Pretendard',sans-serif;color:#1A1A1A">배민 주아</span><div style="display:flex;gap:10px;align-items:center"><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10px 'Pretendard',sans-serif">무료</span><a href="#1g" style="font:500 11px 'Pretendard',sans-serif;color:#9A9A96">상세</a></div></div><div style="font-family:'Jua',sans-serif;font-size:38px;color:#1A1A1A;line-height:1.1;word-break:break-all">{{ canvasText }}</div></div>
+            <div style="border:1px solid #E6E6E2;border-radius:12px;background:#fff;padding:18px 20px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span style="font:600 13px 'Pretendard',sans-serif;color:#1A1A1A">나눔명조</span><div style="display:flex;gap:10px;align-items:center"><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10px 'Pretendard',sans-serif">무료</span><a href="#1g" style="font:500 11px 'Pretendard',sans-serif;color:#9A9A96">상세</a></div></div><div style="font-family:'Nanum Myeongjo',serif;font-weight:700;font-size:36px;color:#1A1A1A;line-height:1.15;word-break:break-all">{{ canvasText }}</div></div>
+            <div style="border:1px solid #E6E6E2;border-radius:12px;background:#fff;padding:18px 20px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span style="font:600 13px 'Pretendard',sans-serif;color:#1A1A1A">배민 도현</span><div style="display:flex;gap:10px;align-items:center"><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10px 'Pretendard',sans-serif">무료</span><a href="#1g" style="font:500 11px 'Pretendard',sans-serif;color:#9A9A96">상세</a></div></div><div style="font-family:'Do Hyeon',sans-serif;font-size:36px;color:#1A1A1A;line-height:1.1;word-break:break-all">{{ canvasText }}</div></div>
+            <div style="border:1px solid #E6E6E2;border-radius:12px;background:#fff;padding:18px 20px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span style="font:600 13px 'Pretendard',sans-serif;color:#1A1A1A">개구체</span><div style="display:flex;gap:10px;align-items:center"><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10px 'Pretendard',sans-serif">무료</span><a href="#1g" style="font:500 11px 'Pretendard',sans-serif;color:#9A9A96">상세</a></div></div><div style="font-family:'Gaegu',cursive;font-size:38px;color:#1A1A1A;line-height:1.1;word-break:break-all">{{ canvasText }}</div></div>
+            <div style="border:1px solid #E6E6E2;border-radius:12px;background:#fff;padding:18px 20px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span style="font:600 13px 'Pretendard',sans-serif;color:#1A1A1A">기랑해랑</span><div style="display:flex;gap:10px;align-items:center"><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10px 'Pretendard',sans-serif">무료</span><a href="#1g" style="font:500 11px 'Pretendard',sans-serif;color:#9A9A96">상세</a></div></div><div style="font-family:'Kirang Haerang',cursive;font-size:40px;color:#1A1A1A;line-height:1.1;word-break:break-all">{{ canvasText }}</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <p style="margin:26px 0 0;font:12px/1.6 'Pretendard',sans-serif;color:rgba(0,0,0,.5)">다음으로: "<a class="dv-oid" href="#3a">3a</a>에 글자 크기 슬라이더 추가" · "<a class="dv-oid" href="#3a">3a</a> 모바일 버전" · "폰트 비교(2~3개 나란히) 모드" · "홈에서 캔버스로 가는 진입점 보여줘"</p>
+</section>
+
+<section class="dv-turn" id="t2">
+  <div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">홈 재구성 — 뻔한 공식 버리기 · 로고 <a class="dv-oid" href="#1c">1c</a> 텐트 확정</span></div>
+  <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:-10px 0 24px">
+    <span style="font:600 11px 'Pretendard',sans-serif;color:#6B6B6B;letter-spacing:.04em">포인트색 후보</span>
+    <span style="display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border:1px solid #E6E6E2;border-radius:20px;font:500 11.5px 'Pretendard',sans-serif;color:#1A1A1A"><span style="width:13px;height:13px;border-radius:50%;background:#2C5545"></span>딥 그린 #2C5545</span>
+    <span style="display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border:1px solid #E6E6E2;border-radius:20px;font:500 11.5px 'Pretendard',sans-serif;color:#1A1A1A"><span style="width:13px;height:13px;border-radius:50%;background:#2C2E6B"></span>딥 인디고 #2C2E6B</span>
+    <span style="display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border:1px solid #E6E6E2;border-radius:20px;font:500 11.5px 'Pretendard',sans-serif;color:#1A1A1A"><span style="width:13px;height:13px;border-radius:50%;background:#6E2233"></span>옥스블러드 #6E2233</span>
+    <span style="display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border:1px solid #E6E6E2;border-radius:20px;font:500 11.5px 'Pretendard',sans-serif;color:#1A1A1A"><span style="width:13px;height:13px;border-radius:50%;background:#B96A34"></span>엠버 #B96A34</span>
+    <span style="display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border:1px solid #E6E6E2;border-radius:20px;font:500 11.5px 'Pretendard',sans-serif;color:#1A1A1A"><span style="width:13px;height:13px;border-radius:50%;background:#4C4470"></span>슬레이트 바이올렛 #4C4470</span>
+    <span style="display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border:1px solid #E6E6E2;border-radius:20px;font:500 11.5px 'Pretendard',sans-serif;color:#1A1A1A"><span style="width:13px;height:13px;border-radius:50%;background:#1A1A1A"></span>모노 잉크</span>
+    <span style="font:400 11px 'Pretendard',sans-serif;color:#9A9A96">— "2a를 슬레이트로" 처럼 섞어서 말해주세요</span>
+  </div>
+  <div class="dv-opts">
+
+    <!-- ===================== 2a RISO EDITORIAL INDEX ===================== -->
+    <div class="dv-opt" id="2a">
+      <div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a>순위표가 곧 히어로 — 편집 매거진 인덱스 (옥스블러드)</div>
+      <div class="card" style="width:1180px;background:#F7F3EE;border-color:#E4DED4">
+        <!-- masthead -->
+        <div style="padding:18px 34px 0">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:2px solid #1F1A1A">
+            <div style="display:flex;align-items:center;gap:12px">
+              <svg width="26" height="26" viewBox="0 0 72 72" fill="none"><path d="M36 14 60 58H12L36 14Z" stroke="#6E2233" stroke-width="4" stroke-linejoin="round"/><path d="M30 57 36 47 42 57Z" stroke="#6E2233" stroke-width="4" fill="none" stroke-linejoin="round"/></svg>
+              <span style="font:800 20px/1 'Pretendard',sans-serif;color:#1F1A1A;letter-spacing:-.03em">Font<span style="color:#6E2233">A</span>git</span>
+              <span style="font:500 12px/1 'Pretendard',sans-serif;color:#8a8078">폰트 아지트</span>
+            </div>
+            <span style="font:500 12px 'Pretendard',sans-serif;color:#8a8078;letter-spacing:.03em">2026 · 28주차 · 이동 클릭 기준</span>
+          </div>
+        </div>
+        <!-- editorial headline + slim search -->
+        <div style="padding:30px 34px 22px;display:flex;align-items:flex-end;justify-content:space-between;gap:30px">
+          <div>
+            <div style="font-family:'Song Myung',serif;font-size:15px;color:#6E2233;letter-spacing:.06em;margin-bottom:2px">THIS WEEK IN TYPE</div>
+            <h1 style="margin:0;font-family:'Song Myung',serif;font-size:52px;color:#1F1A1A;line-height:1;letter-spacing:-.01em">이번 주 뜨는 폰트</h1>
+          </div>
+          <div style="display:flex;align-items:center;gap:0;height:44px;border:1.5px solid #1F1A1A;border-radius:0;background:#fff;min-width:280px">
+            <span style="padding:0 14px;font:400 13px 'Pretendard',sans-serif;color:#9A9A96;flex:1">폰트 이름 검색</span>
+            <button style="height:100%;padding:0 18px;background:#6E2233;color:#fff;border:none;font:600 13px 'Pretendard',sans-serif;cursor:pointer">→</button>
+          </div>
+        </div>
+        <!-- leaderboard -->
+        <div style="padding:0 34px 30px">
+          <!-- featured #1 -->
+          <div style="display:flex;align-items:center;gap:26px;padding:22px 0;border-top:1px solid #1F1A1A;border-bottom:1px solid #D8D0C4">
+            <span style="font-family:'Song Myung',serif;font-size:70px;color:#6E2233;line-height:.8;width:80px">1</span>
+            <div style="flex:1"><div style="font-family:'Pretendard',sans-serif;font-size:46px;color:#1F1A1A;line-height:1">프리텐다드</div><div style="font:500 12px 'Pretendard',sans-serif;color:#8a8078;margin-top:6px">고딕 · 본문 · 이동 12,480 · <span style="color:#2C7A5B">▲ 2</span></div></div>
+            <span style="padding:3px 11px;border:1px solid #6E2233;color:#6E2233;font:600 11px 'Pretendard',sans-serif">무료</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 40px">
+            <div style="display:flex;align-items:baseline;gap:16px;padding:15px 0;border-bottom:1px solid #E4DED4"><span style="font-family:'Song Myung',serif;font-size:26px;color:#6E2233;width:30px">2</span><span style="font-family:'Noto Sans KR',sans-serif;font-weight:500;font-size:24px;color:#1F1A1A;flex:1">노토 산스 KR</span><span style="font:500 11px 'Pretendard',sans-serif;color:#8a8078">9,210</span></div>
+            <div style="display:flex;align-items:baseline;gap:16px;padding:15px 0;border-bottom:1px solid #E4DED4"><span style="font-family:'Song Myung',serif;font-size:26px;color:#6E2233;width:30px">3</span><span style="font-family:'Black Han Sans',sans-serif;font-size:25px;color:#1F1A1A;flex:1">검은고딕</span><span style="font:500 11px 'Pretendard',sans-serif;color:#8a8078">8,640</span></div>
+            <div style="display:flex;align-items:baseline;gap:16px;padding:15px 0;border-bottom:1px solid #E4DED4"><span style="font-family:'Song Myung',serif;font-size:26px;color:#6E2233;width:30px">4</span><span style="font-family:'Jua',sans-serif;font-size:25px;color:#1F1A1A;flex:1">배민 주아</span><span style="font:500 11px 'Pretendard',sans-serif;color:#8a8078">7,905</span></div>
+            <div style="display:flex;align-items:baseline;gap:16px;padding:15px 0;border-bottom:1px solid #E4DED4"><span style="font-family:'Song Myung',serif;font-size:26px;color:#6E2233;width:30px">5</span><span style="font-family:'Gowun Batang',serif;font-size:25px;color:#1F1A1A;flex:1">고운바탕</span><span style="font:500 11px 'Pretendard',sans-serif;color:#8a8078">6,730</span></div>
+            <div style="display:flex;align-items:baseline;gap:16px;padding:15px 0;border-bottom:1px solid #E4DED4"><span style="font-family:'Song Myung',serif;font-size:26px;color:#6E2233;width:30px">6</span><span style="font-family:'Nanum Myeongjo',serif;font-weight:700;font-size:25px;color:#1F1A1A;flex:1">나눔명조</span><span style="font:500 11px 'Pretendard',sans-serif;color:#8a8078">6,120</span></div>
+            <div style="display:flex;align-items:baseline;gap:16px;padding:15px 0;border-bottom:1px solid #E4DED4"><span style="font-family:'Song Myung',serif;font-size:26px;color:#6E2233;width:30px">7</span><span style="font-family:'Do Hyeon',sans-serif;font-size:24px;color:#1F1A1A;flex:1">배민 도현</span><span style="font:500 11px 'Pretendard',sans-serif;color:#8a8078">5,480</span></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:22px;flex-wrap:wrap"><span style="font:500 12px 'Pretendard',sans-serif;color:#6E2233;border-bottom:1px solid #6E2233;padding-bottom:2px">한글</span><span style="font:500 12px 'Pretendard',sans-serif;color:#8a8078">고딕</span><span style="font:500 12px 'Pretendard',sans-serif;color:#8a8078">명조</span><span style="font:500 12px 'Pretendard',sans-serif;color:#8a8078">손글씨</span><span style="font:500 12px 'Pretendard',sans-serif;color:#8a8078">무료</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== 2b THE SHELF ===================== -->
+    <div class="dv-opt" id="2b">
+      <div class="dv-olabel"><a class="dv-oid" href="#2b">2b</a>큐레이션 선반 — 아지트 벽면처럼 (엠버 + 다크 패널)</div>
+      <div class="card" style="width:1180px;border-color:#E4DED4">
+        <div style="display:grid;grid-template-columns:340px 1fr">
+          <!-- dark cozy panel -->
+          <div style="background:#23201B;padding:40px 32px;display:flex;flex-direction:column;justify-content:space-between;min-height:560px">
+            <div>
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:44px">
+                <svg width="24" height="24" viewBox="0 0 72 72" fill="none"><path d="M36 14 60 58H12L36 14Z" stroke="#D8933F" stroke-width="4" stroke-linejoin="round"/><path d="M30 57 36 47 42 57Z" stroke="#D8933F" stroke-width="4" fill="none" stroke-linejoin="round"/></svg>
+                <span style="font:800 19px/1 'Pretendard',sans-serif;color:#F3EEE4;letter-spacing:-.03em">Font<span style="color:#D8933F">A</span>git</span>
+              </div>
+              <h1 style="margin:0 0 14px;font:800 34px/1.2 'Pretendard',sans-serif;color:#F3EEE4;letter-spacing:-.02em">당신의<br>폰트 아지트</h1>
+              <p style="margin:0;font:400 13.5px/1.7 'Pretendard',sans-serif;color:#A79E90">골라둔 폰트를 선반에서 꺼내 보세요. 좋은 폰트는 늘 여기 있어요.</p>
+            </div>
+            <div>
+              <div style="display:flex;align-items:center;gap:10px;padding:0 14px;height:46px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:10px;margin-bottom:18px">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#A79E90" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="#A79E90" stroke-width="2" stroke-linecap="round"/></svg>
+                <span style="font:400 13px 'Pretendard',sans-serif;color:#8a8175">폰트 검색</span>
+              </div>
+              <div style="display:flex;gap:7px;flex-wrap:wrap"><span style="padding:6px 12px;background:#D8933F;color:#23201B;border-radius:16px;font:600 11.5px 'Pretendard',sans-serif">전체</span><span style="padding:6px 12px;border:1px solid rgba(255,255,255,.18);color:#A79E90;border-radius:16px;font:500 11.5px 'Pretendard',sans-serif">고딕</span><span style="padding:6px 12px;border:1px solid rgba(255,255,255,.18);color:#A79E90;border-radius:16px;font:500 11.5px 'Pretendard',sans-serif">명조</span><span style="padding:6px 12px;border:1px solid rgba(255,255,255,.18);color:#A79E90;border-radius:16px;font:500 11.5px 'Pretendard',sans-serif">손글씨</span></div>
+            </div>
+          </div>
+          <!-- shelves -->
+          <div style="background:#FAF6EF;padding:34px 36px">
+            <!-- shelf 1 -->
+            <div style="margin-bottom:34px">
+              <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><span style="font:700 13px 'Pretendard',sans-serif;color:#B96A34">이번 주 인기</span><span style="font:400 11px 'Pretendard',sans-serif;color:#B0A896">이동 클릭 기준</span></div>
+              <div style="display:flex;align-items:flex-end;gap:34px;padding-bottom:14px;border-bottom:2px solid #E0D8CB">
+                <span style="font-family:'Pretendard',sans-serif;font-size:44px;color:#221E19;line-height:.9">프리텐다드</span>
+                <span style="font-family:'Black Han Sans',sans-serif;font-size:46px;color:#221E19;line-height:.9">검은고딕</span>
+                <span style="font-family:'Gowun Batang',serif;font-size:40px;color:#221E19;line-height:.9">고운바탕</span>
+              </div>
+            </div>
+            <!-- shelf 2 -->
+            <div style="margin-bottom:34px">
+              <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><span style="font:700 13px 'Pretendard',sans-serif;color:#B96A34">새로 들어온</span></div>
+              <div style="display:flex;align-items:flex-end;gap:34px;padding-bottom:14px;border-bottom:2px solid #E0D8CB">
+                <span style="font-family:'Song Myung',serif;font-size:40px;color:#221E19;line-height:.9">송명체</span>
+                <span style="font-family:'Do Hyeon',sans-serif;font-size:40px;color:#221E19;line-height:.9">배민 도현</span>
+                <span style="font-family:'Nanum Myeongjo',serif;font-weight:800;font-size:40px;color:#221E19;line-height:.9">나눔명조</span>
+              </div>
+            </div>
+            <!-- shelf 3 -->
+            <div>
+              <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><span style="font:700 13px 'Pretendard',sans-serif;color:#B96A34">손끝 감성</span></div>
+              <div style="display:flex;align-items:flex-end;gap:34px;padding-bottom:14px;border-bottom:2px solid #E0D8CB">
+                <span style="font-family:'Nanum Brush Script',cursive;font-size:46px;color:#221E19;line-height:.9">나눔손글씨</span>
+                <span style="font-family:'Gaegu',cursive;font-size:42px;color:#221E19;line-height:.9">개구체</span>
+                <span style="font-family:'Kirang Haerang',cursive;font-size:42px;color:#221E19;line-height:.9">기랑해랑</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== 2c TYPE CANVAS ===================== -->
+    <div class="dv-opt" id="2c">
+      <div class="dv-olabel"><a class="dv-oid" href="#2c">2c</a>타입 캔버스 — 검색 대신 놀이터, 색을 뺀 모노 (입력해 보세요)</div>
+      <div class="card" style="width:1180px;background:#F6F5F2;border-color:#E6E6E2">
+        <header style="display:flex;align-items:center;justify-content:space-between;padding:18px 34px;border-bottom:1px solid #E2E1DC">
+          <div style="display:flex;align-items:center;gap:10px">
+            <svg width="22" height="22" viewBox="0 0 72 72" fill="none"><path d="M36 14 60 58H12L36 14Z" stroke="#1A1A1A" stroke-width="4" stroke-linejoin="round"/><path d="M30 57 36 47 42 57Z" stroke="#1A1A1A" stroke-width="4" fill="none" stroke-linejoin="round"/></svg>
+            <span style="font:800 19px/1 'Pretendard',sans-serif;color:#111;letter-spacing:-.03em">Font<span style="opacity:.55">A</span>git</span>
+            <span style="font:500 12px/1 'Pretendard',sans-serif;color:#8a8a86">폰트 아지트</span>
+          </div>
+          <nav style="display:flex;gap:22px"><a href="#2c" style="font:500 13px 'Pretendard',sans-serif;color:#111">폰트</a><a href="#2c" style="font:500 13px 'Pretendard',sans-serif;color:#8a8a86">트렌드</a><a href="#2c" style="font:500 13px 'Pretendard',sans-serif;color:#8a8a86">컬렉션</a></nav>
+        </header>
+        <div style="display:grid;grid-template-columns:1fr 400px;min-height:520px">
+          <!-- playground -->
+          <div style="padding:56px 40px;display:flex;flex-direction:column;justify-content:center;border-right:1px solid #E2E1DC">
+            <div style="font:500 12px 'Pretendard',sans-serif;color:#8a8a86;letter-spacing:.04em;margin-bottom:20px">아무 글자나 입력하면 모든 폰트가 그 글자로 바뀝니다</div>
+            <div style="font-family:'Pretendard',sans-serif;font-weight:800;font-size:104px;line-height:.95;color:#111;letter-spacing:-.03em;margin-bottom:28px;word-break:break-all">{{ canvasText }}</div>
+            <div style="display:flex;align-items:center;gap:12px;border-bottom:2px solid #111;padding-bottom:10px;max-width:440px">
+              <input value="{{ canvas }}" onChange="{{ onCanvas }}" placeholder="아지트" style="flex:1;border:none;outline:none;background:transparent;font:400 20px 'Pretendard',sans-serif;color:#111">
+              <span style="font:400 11px 'Pretendard',sans-serif;color:#8a8a86">실시간 반영</span>
+            </div>
+          </div>
+          <!-- filmstrip -->
+          <div style="padding:20px 0;overflow:hidden">
+            <div style="padding:0 28px 12px;font:600 11px 'Pretendard',sans-serif;color:#8a8a86;letter-spacing:.04em">이번 주 이동 TOP · 세로 필름</div>
+            <div style="display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:16px;padding:16px 28px;border-top:1px solid #E2E1DC"><span style="font:700 11px ui-monospace,monospace;color:#111;width:22px">#1</span><div style="flex:1"><div style="font:500 10.5px 'Pretendard',sans-serif;color:#8a8a86;margin-bottom:3px">프리텐다드</div><div style="font-family:'Pretendard',sans-serif;font-weight:700;font-size:30px;color:#111;line-height:1">{{ canvasText }}</div></div></div>
+              <div style="display:flex;align-items:center;gap:16px;padding:16px 28px;border-top:1px solid #E2E1DC"><span style="font:700 11px ui-monospace,monospace;color:#111;width:22px">#3</span><div style="flex:1"><div style="font:500 10.5px 'Pretendard',sans-serif;color:#8a8a86;margin-bottom:3px">검은고딕</div><div style="font-family:'Black Han Sans',sans-serif;font-size:31px;color:#111;line-height:1">{{ canvasText }}</div></div></div>
+              <div style="display:flex;align-items:center;gap:16px;padding:16px 28px;border-top:1px solid #E2E1DC"><span style="font:700 11px ui-monospace,monospace;color:#111;width:22px">#5</span><div style="flex:1"><div style="font:500 10.5px 'Pretendard',sans-serif;color:#8a8a86;margin-bottom:3px">고운바탕</div><div style="font-family:'Gowun Batang',serif;font-size:30px;color:#111;line-height:1">{{ canvasText }}</div></div></div>
+              <div style="display:flex;align-items:center;gap:16px;padding:16px 28px;border-top:1px solid #E2E1DC"><span style="font:700 11px ui-monospace,monospace;color:#111;width:22px">#4</span><div style="flex:1"><div style="font:500 10.5px 'Pretendard',sans-serif;color:#8a8a86;margin-bottom:3px">배민 주아</div><div style="font-family:'Jua',sans-serif;font-size:31px;color:#111;line-height:1">{{ canvasText }}</div></div></div>
+              <div style="display:flex;align-items:center;gap:16px;padding:16px 28px;border-top:1px solid #E2E1DC;border-bottom:1px solid #E2E1DC"><span style="font:700 11px ui-monospace,monospace;color:#111;width:22px">#9</span><div style="flex:1"><div style="font:500 10.5px 'Pretendard',sans-serif;color:#8a8a86;margin-bottom:3px">기랑해랑</div><div style="font-family:'Kirang Haerang',cursive;font-size:32px;color:#111;line-height:1">{{ canvasText }}</div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <p style="margin:26px 0 0;font:12px/1.6 'Pretendard',sans-serif;color:rgba(0,0,0,.5)">다음으로: "<a class="dv-oid" href="#2a">2a</a>로 홈 확정" · "<a class="dv-oid" href="#2b">2b</a>를 딥그린으로" · "<a class="dv-oid" href="#2c">2c</a> 필름을 10개로" · "<a class="dv-oid" href="#2a">2a</a> 모바일 버전" · "더 과감한 방향 하나 더"</p>
+</section>
+
+<section class="dv-turn" id="t1">
+  <div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">로고 방향 · 색 비교 · 전체 화면 세트</span></div>
+  <div class="dv-opts">
+
+    <!-- ===================== 1a LOGO LAMP ===================== -->
+    <div class="dv-opt" id="1a">
+      <div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>로고 — 등불(아지트의 불빛)</div>
+      <div class="card" style="width:320px;padding:34px 30px;display:flex;flex-direction:column;gap:26px;align-items:center">
+        <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
+          <path d="M36 8v6" stroke="#2C5545" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M26 20h20l-2.5-6h-15L26 20Z" stroke="#2C5545" stroke-width="2.4" stroke-linejoin="round"/>
+          <path d="M27 20h18l3 30a4 4 0 0 1-4 4H28a4 4 0 0 1-4-4l3-30Z" stroke="#2C5545" stroke-width="2.4" stroke-linejoin="round"/>
+          <circle cx="36" cy="38" r="7" fill="#2C5545" fill-opacity="0.14"/>
+          <path d="M36 31v14M31 38h10" stroke="#2C5545" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+          <span style="font:800 30px/1 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.03em">Font<span style="color:#2C5545">A</span>git</span>
+          <span style="font:500 13px/1 'Pretendard',sans-serif;color:#6B6B6B;letter-spacing:.02em">폰트 아지트</span>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;padding-top:6px;border-top:1px solid #E6E6E2;width:100%;justify-content:center">
+          <span style="width:26px;height:26px;border-radius:6px;background:#2C5545;display:inline-flex;align-items:center;justify-content:center">
+            <svg width="14" height="14" viewBox="0 0 72 72" fill="none"><path d="M27 20h18l3 30a4 4 0 0 1-4 4H28a4 4 0 0 1-4-4l3-30Z" stroke="#fff" stroke-width="4" stroke-linejoin="round"/></svg>
+          </span>
+          <span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">파비콘 · 켠 등불로 축약</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== 1b LOGO ARCH ===================== -->
+    <div class="dv-opt" id="1b">
+      <div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>로고 — 아치형 입구(門)</div>
+      <div class="card" style="width:320px;padding:34px 30px;display:flex;flex-direction:column;gap:26px;align-items:center">
+        <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
+          <path d="M16 60V34a20 20 0 0 1 40 0v26" stroke="#2C5545" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M27 60V37a9 9 0 0 1 18 0v23" stroke="#2C5545" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M12 60h48" stroke="#2C5545" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M36 47v6" stroke="#2C5545" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+          <span style="font:800 30px/1 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.03em">Font<span style="color:#2C5545">A</span>git</span>
+          <span style="font:500 13px/1 'Pretendard',sans-serif;color:#6B6B6B;letter-spacing:.02em">폰트 아지트</span>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;padding-top:6px;border-top:1px solid #E6E6E2;width:100%;justify-content:center">
+          <span style="width:26px;height:26px;border-radius:6px;background:#2C5545;display:inline-flex;align-items:center;justify-content:center">
+            <svg width="14" height="14" viewBox="0 0 72 72" fill="none"><path d="M18 58V34a18 18 0 0 1 36 0v24" stroke="#fff" stroke-width="5" stroke-linecap="round"/></svg>
+          </span>
+          <span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">파비콘 · 들어서는 입구</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== 1c LOGO TENT ===================== -->
+    <div class="dv-opt" id="1c">
+      <div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>로고 — 텐트(작은 근거지)</div>
+      <div class="card" style="width:320px;padding:34px 30px;display:flex;flex-direction:column;gap:26px;align-items:center">
+        <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
+          <path d="M36 12 60 58H12L36 12Z" stroke="#2C5545" stroke-width="2.4" stroke-linejoin="round"/>
+          <path d="M36 20v38" stroke="#2C5545" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M36 58c-4-9-4-16 0-22 4 6 4 13 0 22Z" fill="#2C5545" fill-opacity="0.14" stroke="#2C5545" stroke-width="2" stroke-linejoin="round"/>
+        </svg>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+          <span style="font:800 30px/1 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.03em">Font<span style="color:#2C5545">A</span>git</span>
+          <span style="font:500 13px/1 'Pretendard',sans-serif;color:#6B6B6B;letter-spacing:.02em">폰트 아지트</span>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;padding-top:6px;border-top:1px solid #E6E6E2;width:100%;justify-content:center">
+          <span style="width:26px;height:26px;border-radius:6px;background:#2C5545;display:inline-flex;align-items:center;justify-content:center">
+            <svg width="14" height="14" viewBox="0 0 72 72" fill="none"><path d="M36 16 58 56H14L36 16Z" stroke="#fff" stroke-width="5" stroke-linejoin="round"/></svg>
+          </span>
+          <span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">파비콘 · 삼각 실루엣</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== 1d HOME — DEEP GREEN ===================== -->
+    <div class="dv-opt" id="1d">
+      <div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a>홈 — 딥 그린 #2C5545 (기본 추천)</div>
+      <div class="card" style="width:1180px">
+        <!-- nav -->
+        <header style="display:flex;align-items:center;justify-content:space-between;padding:16px 32px;border-bottom:1px solid #E6E6E2;background:#FAFAF8">
+          <div style="display:flex;align-items:baseline;gap:11px">
+            <span style="font:800 21px/1 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.03em">Font<span style="color:#2C5545">A</span>git</span>
+            <span style="font:500 12px/1 'Pretendard',sans-serif;color:#6B6B6B">폰트 아지트</span>
+          </div>
+          <nav style="display:flex;align-items:center;gap:26px">
+            <a href="#1f" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">폰트</a>
+            <a href="#1h" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">트렌드</a>
+            <a href="#1d" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">컬렉션</a>
+            <a href="#1d" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">등록</a>
+            <span style="width:34px;height:34px;border-radius:8px;border:1px solid #E6E6E2;display:inline-flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#6B6B6B" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="#6B6B6B" stroke-width="2" stroke-linecap="round"/></svg></span>
+          </nav>
+        </header>
+        <!-- hero -->
+        <div style="padding:64px 32px 52px;text-align:center;background:#FAFAF8">
+          <h1 style="margin:0 0 8px;font:800 42px/1.15 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.03em">당신의 폰트 아지트</h1>
+          <p style="margin:0 0 30px;font:400 15px/1.6 'Pretendard',sans-serif;color:#6B6B6B">설치 없이, 웹에서. 좋은 폰트를 골라두고 지금 뜨는 흐름까지 챙겨드려요.</p>
+          <div style="max-width:620px;margin:0 auto;display:flex;gap:10px">
+            <div style="flex:1;display:flex;align-items:center;gap:12px;padding:0 18px;height:56px;background:#fff;border:1px solid #E6E6E2;border-radius:12px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#9A9A96" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="#9A9A96" stroke-width="2" stroke-linecap="round"/></svg>
+              <span style="font:400 15px 'Pretendard',sans-serif;color:#9A9A96">폰트 이름을 검색하세요 (예: 프리텐다드)</span>
+            </div>
+            <button style="height:56px;padding:0 30px;background:#2C5545;color:#fff;border:none;border-radius:12px;font:600 15px 'Pretendard',sans-serif;cursor:pointer">검색</button>
+          </div>
+          <div style="display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin-top:22px">
+            <span style="padding:8px 15px;border:1px solid #2C5545;color:#2C5545;border-radius:20px;font:500 13px 'Pretendard',sans-serif">한글</span>
+            <span style="padding:8px 15px;border:1px solid #E6E6E2;color:#6B6B6B;border-radius:20px;font:500 13px 'Pretendard',sans-serif">고딕</span>
+            <span style="padding:8px 15px;border:1px solid #E6E6E2;color:#6B6B6B;border-radius:20px;font:500 13px 'Pretendard',sans-serif">명조</span>
+            <span style="padding:8px 15px;border:1px solid #E6E6E2;color:#6B6B6B;border-radius:20px;font:500 13px 'Pretendard',sans-serif">손글씨</span>
+            <span style="padding:8px 15px;border:1px solid #E6E6E2;color:#6B6B6B;border-radius:20px;font:500 13px 'Pretendard',sans-serif">무료</span>
+            <span style="padding:8px 15px;border:1px solid #E6E6E2;color:#6B6B6B;border-radius:20px;font:500 13px 'Pretendard',sans-serif">유료</span>
+          </div>
+        </div>
+        <!-- TREND — the one prominent block -->
+        <div style="padding:36px 32px;background:rgba(44,85,69,.045);border-top:1px solid rgba(44,85,69,.12);border-bottom:1px solid rgba(44,85,69,.12)">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:20px">
+            <div style="display:flex;align-items:baseline;gap:12px">
+              <span style="font:800 20px/1 'Pretendard',sans-serif;color:#2C5545">이번 주 인기 TOP 10</span>
+              <span style="font:400 12px 'Pretendard',sans-serif;color:#6B6B6B">이동 클릭 기준 · 매주 갱신</span>
+            </div>
+            <a href="#1h" style="font:600 13px 'Pretendard',sans-serif;color:#2C5545">전체 →</a>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 34px">
+            <div style="display:flex;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(44,85,69,.1)"><span style="font:800 16px 'Pretendard',sans-serif;color:#2C5545;width:20px">1</span><span style="font:400 11px 'Pretendard',sans-serif;color:#2C7A5B;width:30px">▲ 2</span><span style="font-family:'Pretendard',sans-serif;font-size:20px;color:#1A1A1A;flex:1">프리텐다드</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">12,480</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(44,85,69,.1)"><span style="font:800 16px 'Pretendard',sans-serif;color:#2C5545;width:20px">2</span><span style="font:400 11px 'Pretendard',sans-serif;color:#9A9A96;width:30px">—</span><span style="font-family:'Noto Sans KR',sans-serif;font-weight:500;font-size:20px;color:#1A1A1A;flex:1">노토 산스 KR</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">9,210</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(44,85,69,.1)"><span style="font:800 16px 'Pretendard',sans-serif;color:#2C5545;width:20px">3</span><span style="font:400 11px 'Pretendard',sans-serif;color:#2C7A5B;width:30px">▲ 5</span><span style="font-family:'Black Han Sans',sans-serif;font-size:21px;color:#1A1A1A;flex:1">검은고딕</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">8,640</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(44,85,69,.1)"><span style="font:800 16px 'Pretendard',sans-serif;color:#2C5545;width:20px">4</span><span style="font:400 11px 'Pretendard',sans-serif;color:#B4564B;width:30px">▼ 1</span><span style="font-family:'Jua',sans-serif;font-size:21px;color:#1A1A1A;flex:1">배민 주아</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">7,905</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(44,85,69,.1)"><span style="font:800 16px 'Pretendard',sans-serif;color:#2C5545;width:20px">5</span><span style="font:400 11px 'Pretendard',sans-serif;color:#2C7A5B;width:30px">▲ 1</span><span style="font-family:'Gowun Batang',serif;font-size:21px;color:#1A1A1A;flex:1">고운바탕</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">6,730</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(44,85,69,.1)"><span style="font:800 16px 'Pretendard',sans-serif;color:#2C5545;width:20px">6</span><span style="font:400 11px 'Pretendard',sans-serif;color:#9A9A96;width:30px">—</span><span style="font-family:'Nanum Myeongjo',serif;font-weight:700;font-size:21px;color:#1A1A1A;flex:1">나눔명조</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">6,120</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(44,85,69,.1)"><span style="font:800 16px 'Pretendard',sans-serif;color:#2C5545;width:20px">7</span><span style="font:400 11px 'Pretendard',sans-serif;color:#B4564B;width:30px">▼ 2</span><span style="font-family:'Do Hyeon',sans-serif;font-size:20px;color:#1A1A1A;flex:1">배민 도현</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">5,480</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(44,85,69,.1)"><span style="font:800 16px 'Pretendard',sans-serif;color:#2C5545;width:20px">8</span><span style="font:400 11px 'Pretendard',sans-serif;color:#2C7A5B;width:30px">▲ 3</span><span style="font-family:'Gowun Dodum',sans-serif;font-size:20px;color:#1A1A1A;flex:1">고운돋움</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">4,910</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(44,85,69,.1)"><span style="font:800 16px 'Pretendard',sans-serif;color:#2C5545;width:20px">9</span><span style="font:700 9px 'Pretendard',sans-serif;color:#2C5545;width:30px;letter-spacing:.03em">NEW</span><span style="font-family:'Kirang Haerang',cursive;font-size:22px;color:#1A1A1A;flex:1">기랑해랑</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">4,330</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(44,85,69,.1)"><span style="font:800 16px 'Pretendard',sans-serif;color:#2C5545;width:20px">10</span><span style="font:400 11px 'Pretendard',sans-serif;color:#B4564B;width:30px">▼ 1</span><span style="font-family:'Nanum Brush Script',cursive;font-size:24px;color:#1A1A1A;flex:1">나눔손글씨 붓</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">3,980</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+          </div>
+        </div>
+        <!-- collections + new -->
+        <div style="padding:40px 32px;background:#FAFAF8;display:grid;grid-template-columns:1.6fr 1fr;gap:36px">
+          <div>
+            <h3 style="margin:0 0 16px;font:700 15px 'Pretendard',sans-serif;color:#1A1A1A">추천 컬렉션</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+              <div style="border:1px solid #E6E6E2;border-radius:10px;padding:18px;background:#fff"><div style="font-family:'Gowun Batang',serif;font-size:26px;color:#1A1A1A;margin-bottom:12px;line-height:1.2">가나다</div><div style="font:600 13px 'Pretendard',sans-serif;color:#1A1A1A">새벽 감성 명조</div><div style="font:400 11.5px 'Pretendard',sans-serif;color:#6B6B6B;margin-top:3px">8종</div></div>
+              <div style="border:1px solid #E6E6E2;border-radius:10px;padding:18px;background:#fff"><div style="font-family:'Black Han Sans',sans-serif;font-size:26px;color:#1A1A1A;margin-bottom:12px;line-height:1.2">가나다</div><div style="font:600 13px 'Pretendard',sans-serif;color:#1A1A1A">브랜딩용 굵은 고딕</div><div style="font:400 11.5px 'Pretendard',sans-serif;color:#6B6B6B;margin-top:3px">12종</div></div>
+              <div style="border:1px solid #E6E6E2;border-radius:10px;padding:18px;background:#fff"><div style="font-family:'Gaegu',cursive;font-size:26px;color:#1A1A1A;margin-bottom:12px;line-height:1.2">가나다</div><div style="font:600 13px 'Pretendard',sans-serif;color:#1A1A1A">따뜻한 손글씨</div><div style="font:400 11.5px 'Pretendard',sans-serif;color:#6B6B6B;margin-top:3px">6종</div></div>
+            </div>
+          </div>
+          <div>
+            <h3 style="margin:0 0 16px;font:700 15px 'Pretendard',sans-serif;color:#1A1A1A">신규 등록</h3>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:11px;border-bottom:1px solid #E6E6E2"><span style="font-family:'Song Myung',serif;font-size:17px;color:#1A1A1A">송명체</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">3일 전</span></div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:11px;border-bottom:1px solid #E6E6E2"><span style="font-family:'Do Hyeon',sans-serif;font-size:17px;color:#1A1A1A">배민 도현</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">5일 전</span></div>
+              <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-family:'Gaegu',cursive;font-size:18px;color:#1A1A1A">개구체</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">1주 전</span></div>
+            </div>
+          </div>
+        </div>
+        <!-- ad slot -->
+        <div style="padding:0 32px 36px;background:#FAFAF8">
+          <div style="height:90px;border:1px dashed #D8D8D2;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#F4F4F0"><span style="font:500 12px 'Pretendard',sans-serif;color:#B0B0AA;letter-spacing:.02em">광고 · 높이 사전 확보로 로딩 밀림(CLS) 방지</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== 1e HOME — DEEP INDIGO ===================== -->
+    <div class="dv-opt" id="1e">
+      <div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a>홈 — 딥 인디고 #2C2E6B (안전 대안)</div>
+      <div class="card" style="width:1180px">
+        <header style="display:flex;align-items:center;justify-content:space-between;padding:16px 32px;border-bottom:1px solid #E6E6E2;background:#FAFAF8">
+          <div style="display:flex;align-items:baseline;gap:11px">
+            <span style="font:800 21px/1 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.03em">Font<span style="color:#2C2E6B">A</span>git</span>
+            <span style="font:500 12px/1 'Pretendard',sans-serif;color:#6B6B6B">폰트 아지트</span>
+          </div>
+          <nav style="display:flex;align-items:center;gap:26px">
+            <a href="#1e" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">폰트</a>
+            <a href="#1e" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">트렌드</a>
+            <a href="#1e" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">컬렉션</a>
+            <a href="#1e" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">등록</a>
+            <span style="width:34px;height:34px;border-radius:8px;border:1px solid #E6E6E2;display:inline-flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#6B6B6B" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="#6B6B6B" stroke-width="2" stroke-linecap="round"/></svg></span>
+          </nav>
+        </header>
+        <div style="padding:64px 32px 52px;text-align:center;background:#FAFAF8">
+          <h1 style="margin:0 0 8px;font:800 42px/1.15 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.03em">당신의 폰트 아지트</h1>
+          <p style="margin:0 0 30px;font:400 15px/1.6 'Pretendard',sans-serif;color:#6B6B6B">설치 없이, 웹에서. 좋은 폰트를 골라두고 지금 뜨는 흐름까지 챙겨드려요.</p>
+          <div style="max-width:620px;margin:0 auto;display:flex;gap:10px">
+            <div style="flex:1;display:flex;align-items:center;gap:12px;padding:0 18px;height:56px;background:#fff;border:1px solid #E6E6E2;border-radius:12px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#9A9A96" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="#9A9A96" stroke-width="2" stroke-linecap="round"/></svg>
+              <span style="font:400 15px 'Pretendard',sans-serif;color:#9A9A96">폰트 이름을 검색하세요 (예: 프리텐다드)</span>
+            </div>
+            <button style="height:56px;padding:0 30px;background:#2C2E6B;color:#fff;border:none;border-radius:12px;font:600 15px 'Pretendard',sans-serif;cursor:pointer">검색</button>
+          </div>
+          <div style="display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin-top:22px">
+            <span style="padding:8px 15px;border:1px solid #2C2E6B;color:#2C2E6B;border-radius:20px;font:500 13px 'Pretendard',sans-serif">한글</span>
+            <span style="padding:8px 15px;border:1px solid #E6E6E2;color:#6B6B6B;border-radius:20px;font:500 13px 'Pretendard',sans-serif">고딕</span>
+            <span style="padding:8px 15px;border:1px solid #E6E6E2;color:#6B6B6B;border-radius:20px;font:500 13px 'Pretendard',sans-serif">명조</span>
+            <span style="padding:8px 15px;border:1px solid #E6E6E2;color:#6B6B6B;border-radius:20px;font:500 13px 'Pretendard',sans-serif">손글씨</span>
+            <span style="padding:8px 15px;border:1px solid #E6E6E2;color:#6B6B6B;border-radius:20px;font:500 13px 'Pretendard',sans-serif">무료</span>
+            <span style="padding:8px 15px;border:1px solid #E6E6E2;color:#6B6B6B;border-radius:20px;font:500 13px 'Pretendard',sans-serif">유료</span>
+          </div>
+        </div>
+        <div style="padding:36px 32px;background:rgba(44,46,107,.045);border-top:1px solid rgba(44,46,107,.12);border-bottom:1px solid rgba(44,46,107,.12)">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:20px">
+            <div style="display:flex;align-items:baseline;gap:12px">
+              <span style="font:800 20px/1 'Pretendard',sans-serif;color:#2C2E6B">이번 주 인기 TOP 10</span>
+              <span style="font:400 12px 'Pretendard',sans-serif;color:#6B6B6B">이동 클릭 기준 · 매주 갱신</span>
+            </div>
+            <a href="#1e" style="font:600 13px 'Pretendard',sans-serif;color:#2C2E6B">전체 →</a>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 34px">
+            <div style="display:flex;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(44,46,107,.1)"><span style="font:800 16px 'Pretendard',sans-serif;color:#2C2E6B;width:20px">1</span><span style="font:400 11px 'Pretendard',sans-serif;color:#2C7A5B;width:30px">▲ 2</span><span style="font-family:'Pretendard',sans-serif;font-size:20px;color:#1A1A1A;flex:1">프리텐다드</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">12,480</span><span style="padding:2px 8px;background:rgba(44,46,107,.1);color:#2C2E6B;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(44,46,107,.1)"><span style="font:800 16px 'Pretendard',sans-serif;color:#2C2E6B;width:20px">2</span><span style="font:400 11px 'Pretendard',sans-serif;color:#9A9A96;width:30px">—</span><span style="font-family:'Noto Sans KR',sans-serif;font-weight:500;font-size:20px;color:#1A1A1A;flex:1">노토 산스 KR</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">9,210</span><span style="padding:2px 8px;background:rgba(44,46,107,.1);color:#2C2E6B;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(44,46,107,.1)"><span style="font:800 16px 'Pretendard',sans-serif;color:#2C2E6B;width:20px">3</span><span style="font:400 11px 'Pretendard',sans-serif;color:#2C7A5B;width:30px">▲ 5</span><span style="font-family:'Black Han Sans',sans-serif;font-size:21px;color:#1A1A1A;flex:1">검은고딕</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">8,640</span><span style="padding:2px 8px;background:rgba(44,46,107,.1);color:#2C2E6B;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(44,46,107,.1)"><span style="font:800 16px 'Pretendard',sans-serif;color:#2C2E6B;width:20px">4</span><span style="font:400 11px 'Pretendard',sans-serif;color:#B4564B;width:30px">▼ 1</span><span style="font-family:'Jua',sans-serif;font-size:21px;color:#1A1A1A;flex:1">배민 주아</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">7,905</span><span style="padding:2px 8px;background:rgba(44,46,107,.1);color:#2C2E6B;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(44,46,107,.1)"><span style="font:800 16px 'Pretendard',sans-serif;color:#2C2E6B;width:20px">5</span><span style="font:400 11px 'Pretendard',sans-serif;color:#2C7A5B;width:30px">▲ 1</span><span style="font-family:'Gowun Batang',serif;font-size:21px;color:#1A1A1A;flex:1">고운바탕</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">6,730</span><span style="padding:2px 8px;background:rgba(44,46,107,.1);color:#2C2E6B;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(44,46,107,.1)"><span style="font:800 16px 'Pretendard',sans-serif;color:#2C2E6B;width:20px">6</span><span style="font:400 11px 'Pretendard',sans-serif;color:#9A9A96;width:30px">—</span><span style="font-family:'Nanum Myeongjo',serif;font-weight:700;font-size:21px;color:#1A1A1A;flex:1">나눔명조</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">6,120</span><span style="padding:2px 8px;background:rgba(44,46,107,.1);color:#2C2E6B;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(44,46,107,.1)"><span style="font:800 16px 'Pretendard',sans-serif;color:#2C2E6B;width:20px">7</span><span style="font:400 11px 'Pretendard',sans-serif;color:#B4564B;width:30px">▼ 2</span><span style="font-family:'Do Hyeon',sans-serif;font-size:20px;color:#1A1A1A;flex:1">배민 도현</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">5,480</span><span style="padding:2px 8px;background:rgba(44,46,107,.1);color:#2C2E6B;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(44,46,107,.1)"><span style="font:800 16px 'Pretendard',sans-serif;color:#2C2E6B;width:20px">8</span><span style="font:400 11px 'Pretendard',sans-serif;color:#2C7A5B;width:30px">▲ 3</span><span style="font-family:'Gowun Dodum',sans-serif;font-size:20px;color:#1A1A1A;flex:1">고운돋움</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">4,910</span><span style="padding:2px 8px;background:rgba(44,46,107,.1);color:#2C2E6B;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(44,46,107,.1)"><span style="font:800 16px 'Pretendard',sans-serif;color:#2C2E6B;width:20px">9</span><span style="font:700 9px 'Pretendard',sans-serif;color:#2C2E6B;width:30px;letter-spacing:.03em">NEW</span><span style="font-family:'Kirang Haerang',cursive;font-size:22px;color:#1A1A1A;flex:1">기랑해랑</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">4,330</span><span style="padding:2px 8px;background:rgba(44,46,107,.1);color:#2C2E6B;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(44,46,107,.1)"><span style="font:800 16px 'Pretendard',sans-serif;color:#2C2E6B;width:20px">10</span><span style="font:400 11px 'Pretendard',sans-serif;color:#B4564B;width:30px">▼ 1</span><span style="font-family:'Nanum Brush Script',cursive;font-size:24px;color:#1A1A1A;flex:1">나눔손글씨 붓</span><span style="font:500 11px 'Pretendard',sans-serif;color:#6B6B6B">3,980</span><span style="padding:2px 8px;background:rgba(44,46,107,.1);color:#2C2E6B;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+          </div>
+        </div>
+        <div style="padding:26px 32px;background:#FAFAF8;text-align:center">
+          <span style="font:400 12.5px 'Pretendard',sans-serif;color:#6B6B6B">↑ 같은 홈, 포인트색만 인디고로. 신뢰·전문 느낌은 강하지만 폰트 사이트에서 흔한 편입니다.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== 1f FONT LIST ===================== -->
+    <div class="dv-opt" id="1f">
+      <div class="dv-olabel"><a class="dv-oid" href="#1f">1f</a>폰트 목록 — 필터 + 카드 그리드</div>
+      <div class="card" style="width:1180px">
+        <header style="display:flex;align-items:center;justify-content:space-between;padding:16px 32px;border-bottom:1px solid #E6E6E2;background:#FAFAF8">
+          <div style="display:flex;align-items:baseline;gap:11px"><span style="font:800 21px/1 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.03em">Font<span style="color:#2C5545">A</span>git</span><span style="font:500 12px/1 'Pretendard',sans-serif;color:#6B6B6B">폰트 아지트</span></div>
+          <nav style="display:flex;align-items:center;gap:26px"><a href="#1f" style="font:600 13.5px 'Pretendard',sans-serif;color:#2C5545">폰트</a><a href="#1h" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">트렌드</a><a href="#1f" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">컬렉션</a><a href="#1f" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">등록</a></nav>
+        </header>
+        <div style="display:grid;grid-template-columns:220px 1fr">
+          <!-- filters -->
+          <aside style="padding:28px 24px;border-right:1px solid #E6E6E2;background:#FAFAF8">
+            <div style="margin-bottom:24px"><div style="font:700 12px 'Pretendard',sans-serif;color:#1A1A1A;margin-bottom:11px">분류</div><div style="display:flex;flex-direction:column;gap:9px;font:400 13px 'Pretendard',sans-serif;color:#3a3a3a"><label style="display:flex;gap:8px;align-items:center"><span style="width:15px;height:15px;border:1.5px solid #2C5545;border-radius:4px;background:#2C5545;display:inline-flex;align-items:center;justify-content:center"><svg width="9" height="9" viewBox="0 0 12 12"><path d="M2 6l3 3 5-6" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>고딕</label><label style="display:flex;gap:8px;align-items:center"><span style="width:15px;height:15px;border:1.5px solid #D8D8D2;border-radius:4px"></span>명조</label><label style="display:flex;gap:8px;align-items:center"><span style="width:15px;height:15px;border:1.5px solid #D8D8D2;border-radius:4px"></span>손글씨</label><label style="display:flex;gap:8px;align-items:center"><span style="width:15px;height:15px;border:1.5px solid #D8D8D2;border-radius:4px"></span>디스플레이</label></div></div>
+            <div style="margin-bottom:24px"><div style="font:700 12px 'Pretendard',sans-serif;color:#1A1A1A;margin-bottom:11px">가격</div><div style="display:flex;flex-direction:column;gap:9px;font:400 13px 'Pretendard',sans-serif;color:#3a3a3a"><label style="display:flex;gap:8px;align-items:center"><span style="width:15px;height:15px;border:1.5px solid #D8D8D2;border-radius:4px"></span>무료</label><label style="display:flex;gap:8px;align-items:center"><span style="width:15px;height:15px;border:1.5px solid #D8D8D2;border-radius:4px"></span>유료</label></div></div>
+            <div><div style="font:700 12px 'Pretendard',sans-serif;color:#1A1A1A;margin-bottom:11px">용도</div><div style="display:flex;flex-wrap:wrap;gap:7px"><span style="padding:5px 11px;border:1px solid #E6E6E2;border-radius:16px;font:400 11.5px 'Pretendard',sans-serif;color:#6B6B6B">본문</span><span style="padding:5px 11px;border:1px solid #E6E6E2;border-radius:16px;font:400 11.5px 'Pretendard',sans-serif;color:#6B6B6B">제목</span><span style="padding:5px 11px;border:1px solid #E6E6E2;border-radius:16px;font:400 11.5px 'Pretendard',sans-serif;color:#6B6B6B">로고</span></div></div>
+          </aside>
+          <!-- grid -->
+          <div style="padding:24px 28px;background:#FAFAF8">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px"><span style="font:400 13px 'Pretendard',sans-serif;color:#6B6B6B">한글 폰트 <b style="color:#1A1A1A">248</b>종</span><div style="display:flex;gap:6px"><span style="padding:6px 13px;border:1px solid #2C5545;color:#2C5545;border-radius:8px;font:500 12px 'Pretendard',sans-serif">인기순</span><span style="padding:6px 13px;border:1px solid #E6E6E2;color:#6B6B6B;border-radius:8px;font:500 12px 'Pretendard',sans-serif">최신순</span></div></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+              <div style="border:1px solid #E6E6E2;border-radius:10px;padding:20px;background:#fff"><div style="font-family:'Pretendard',sans-serif;font-size:30px;color:#1A1A1A;line-height:1.25;margin-bottom:16px">다람쥐 헌<br>쳇바퀴</div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font:600 13.5px 'Pretendard',sans-serif;color:#1A1A1A">프리텐다드</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div></div>
+              <div style="border:1px solid #E6E6E2;border-radius:10px;padding:20px;background:#fff"><div style="font-family:'Black Han Sans',sans-serif;font-size:31px;color:#1A1A1A;line-height:1.25;margin-bottom:16px">다람쥐 헌<br>쳇바퀴</div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font:600 13.5px 'Pretendard',sans-serif;color:#1A1A1A">검은고딕</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div></div>
+              <div style="border:1px solid #E6E6E2;border-radius:10px;padding:20px;background:#fff"><div style="font-family:'Gowun Batang',serif;font-size:30px;color:#1A1A1A;line-height:1.25;margin-bottom:16px">다람쥐 헌<br>쳇바퀴</div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font:600 13.5px 'Pretendard',sans-serif;color:#1A1A1A">고운바탕</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div></div>
+              <div style="border:1px solid #E6E6E2;border-radius:10px;padding:20px;background:#fff"><div style="font-family:'Jua',sans-serif;font-size:31px;color:#1A1A1A;line-height:1.25;margin-bottom:16px">다람쥐 헌<br>쳇바퀴</div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font:600 13.5px 'Pretendard',sans-serif;color:#1A1A1A">배민 주아</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div></div>
+              <div style="border:1px solid #E6E6E2;border-radius:10px;padding:20px;background:#fff"><div style="font-family:'Nanum Myeongjo',serif;font-weight:700;font-size:30px;color:#1A1A1A;line-height:1.25;margin-bottom:16px">다람쥐 헌<br>쳇바퀴</div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font:600 13.5px 'Pretendard',sans-serif;color:#1A1A1A">나눔명조</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div></div>
+              <div style="border:1px solid #E6E6E2;border-radius:10px;padding:20px;background:#fff"><div style="font-family:'Do Hyeon',sans-serif;font-size:30px;color:#1A1A1A;line-height:1.25;margin-bottom:16px">다람쥐 헌<br>쳇바퀴</div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font:600 13.5px 'Pretendard',sans-serif;color:#1A1A1A">배민 도현</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div></div>
+              <div style="border:1px solid #E6E6E2;border-radius:10px;padding:20px;background:#fff"><div style="font-family:'Gaegu',cursive;font-size:31px;color:#1A1A1A;line-height:1.25;margin-bottom:16px">다람쥐 헌<br>쳇바퀴</div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font:600 13.5px 'Pretendard',sans-serif;color:#1A1A1A">개구체</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div></div>
+              <div style="border:1px solid #E6E6E2;border-radius:10px;padding:20px;background:#fff"><div style="font-family:'Song Myung',serif;font-size:30px;color:#1A1A1A;line-height:1.25;margin-bottom:16px">다람쥐 헌<br>쳇바퀴</div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font:600 13.5px 'Pretendard',sans-serif;color:#1A1A1A">송명체</span><span style="padding:2px 8px;background:#F1F1EE;color:#6B6B6B;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">유료</span></div><div style="font:400 10px 'Pretendard',sans-serif;color:#B0B0AA;margin-top:5px;font-style:italic">견본은 유사 서체로 대체 표시</div></div>
+              <div style="border:1px solid #E6E6E2;border-radius:10px;padding:20px;background:#fff"><div style="font-family:'Gowun Dodum',sans-serif;font-size:30px;color:#1A1A1A;line-height:1.25;margin-bottom:16px">다람쥐 헌<br>쳇바퀴</div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font:600 13.5px 'Pretendard',sans-serif;color:#1A1A1A">고운돋움</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== 1g DETAIL ===================== -->
+    <div class="dv-opt" id="1g">
+      <div class="dv-olabel"><a class="dv-oid" href="#1g">1g</a>폰트 상세 — 견본 + 미리보기 입력 + 라이선스</div>
+      <div class="card" style="width:1180px">
+        <header style="display:flex;align-items:center;justify-content:space-between;padding:16px 32px;border-bottom:1px solid #E6E6E2;background:#FAFAF8">
+          <div style="display:flex;align-items:baseline;gap:11px"><span style="font:800 21px/1 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.03em">Font<span style="color:#2C5545">A</span>git</span><span style="font:500 12px/1 'Pretendard',sans-serif;color:#6B6B6B">폰트 아지트</span></div>
+          <nav style="display:flex;align-items:center;gap:26px"><a href="#1f" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">폰트</a><a href="#1h" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">트렌드</a><a href="#1g" style="font:500 13.5px 'Pretendard',sans-serif;color:#3a3a3a">컬렉션</a></nav>
+        </header>
+        <div style="padding:20px 32px 0;background:#FAFAF8"><span style="font:400 12px 'Pretendard',sans-serif;color:#9A9A96"><a href="#1f" style="color:#9A9A96">폰트</a> › 명조 › 나눔명조</span></div>
+        <div style="display:grid;grid-template-columns:1fr 360px;gap:0;background:#FAFAF8">
+          <!-- left: sample -->
+          <div style="padding:28px 32px 40px">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px"><h1 style="margin:0;font:800 30px 'Pretendard',sans-serif;color:#1A1A1A">나눔명조</h1><span style="padding:3px 10px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:6px;font:600 12px 'Pretendard',sans-serif">무료</span></div>
+            <p style="margin:0 0 24px;font:400 13px 'Pretendard',sans-serif;color:#6B6B6B">네이버 · 3가지 굵기 · 이동 6,120회</p>
+            <!-- preview input (live) -->
+            <div style="display:flex;align-items:center;gap:10px;padding:0 16px;height:48px;background:#fff;border:1px solid #E6E6E2;border-radius:10px;margin-bottom:22px">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h10M4 17h13" stroke="#9A9A96" stroke-width="2" stroke-linecap="round"/></svg>
+              <input value="{{ preview }}" onChange="{{ onPreview }}" placeholder="미리보기 텍스트를 입력하세요" style="flex:1;border:none;outline:none;background:transparent;font:400 14px 'Pretendard',sans-serif;color:#1A1A1A">
+            </div>
+            <div style="border:1px solid #E6E6E2;border-radius:12px;background:#fff;overflow:hidden">
+              <div style="padding:32px;border-bottom:1px solid #F1F1EE"><div style="font:400 11px 'Pretendard',sans-serif;color:#9A9A96;margin-bottom:12px">Regular · 28px</div><div style="font-family:'Nanum Myeongjo',serif;font-weight:400;font-size:28px;color:#1A1A1A;line-height:1.5">{{ displayText }}</div></div>
+              <div style="padding:32px;border-bottom:1px solid #F1F1EE"><div style="font:400 11px 'Pretendard',sans-serif;color:#9A9A96;margin-bottom:12px">Bold · 40px</div><div style="font-family:'Nanum Myeongjo',serif;font-weight:700;font-size:40px;color:#1A1A1A;line-height:1.4">{{ displayText }}</div></div>
+              <div style="padding:32px"><div style="font:400 11px 'Pretendard',sans-serif;color:#9A9A96;margin-bottom:12px">ExtraBold · 15px 본문</div><div style="font-family:'Nanum Myeongjo',serif;font-weight:800;font-size:15px;color:#1A1A1A;line-height:1.9">좋은 폰트는 말을 걸지 않고 뜻을 전한다. 무료부터 유료까지, 국내외 폰트를 한 번에 찾고 지금 뜨는 흐름까지 챙기는 폰트 아지트에서 오늘의 서체를 골라보세요. ABCDabcd 0123456789</div></div>
+            </div>
+          </div>
+          <!-- right: license + action -->
+          <div style="padding:28px 32px 40px 0">
+            <div style="border:1px solid #E6E6E2;border-radius:12px;background:#fff;padding:22px;position:sticky;top:20px">
+              <div style="font:700 13px 'Pretendard',sans-serif;color:#1A1A1A;margin-bottom:4px">라이선스 요약</div>
+              <div style="font:400 11px 'Pretendard',sans-serif;color:#9A9A96;margin-bottom:16px">SIL Open Font License · 확인일 2026-07-12</div>
+              <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:18px">
+                <div style="display:flex;align-items:center;gap:10px"><span style="width:20px;height:20px;border-radius:5px;background:rgba(44,85,69,.12);display:inline-flex;align-items:center;justify-content:center"><svg width="11" height="11" viewBox="0 0 12 12"><path d="M2 6l3 3 5-6" stroke="#2C5545" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span style="font:500 13px 'Pretendard',sans-serif;color:#1A1A1A;flex:1">상업적 사용</span><span style="font:600 12px 'Pretendard',sans-serif;color:#2C5545">가능</span></div>
+                <div style="display:flex;align-items:center;gap:10px"><span style="width:20px;height:20px;border-radius:5px;background:rgba(44,85,69,.12);display:inline-flex;align-items:center;justify-content:center"><svg width="11" height="11" viewBox="0 0 12 12"><path d="M2 6l3 3 5-6" stroke="#2C5545" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span style="font:500 13px 'Pretendard',sans-serif;color:#1A1A1A;flex:1">웹폰트 사용</span><span style="font:600 12px 'Pretendard',sans-serif;color:#2C5545">가능</span></div>
+                <div style="display:flex;align-items:center;gap:10px"><span style="width:20px;height:20px;border-radius:5px;background:rgba(44,85,69,.12);display:inline-flex;align-items:center;justify-content:center"><svg width="11" height="11" viewBox="0 0 12 12"><path d="M2 6l3 3 5-6" stroke="#2C5545" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span style="font:500 13px 'Pretendard',sans-serif;color:#1A1A1A;flex:1">수정</span><span style="font:600 12px 'Pretendard',sans-serif;color:#2C5545">가능</span></div>
+                <div style="display:flex;align-items:center;gap:10px"><span style="width:20px;height:20px;border-radius:5px;background:rgba(196,150,60,.16);display:inline-flex;align-items:center;justify-content:center"><span style="font:800 12px 'Pretendard',sans-serif;color:#B4863C;line-height:1">!</span></span><span style="font:500 13px 'Pretendard',sans-serif;color:#1A1A1A;flex:1">재배포</span><span style="font:600 12px 'Pretendard',sans-serif;color:#B4863C">조건부</span></div>
+              </div>
+              <div style="padding:12px 14px;background:#FAFAF8;border:1px solid #F1F1EE;border-radius:8px;font:400 11.5px/1.6 'Pretendard',sans-serif;color:#6B6B6B;margin-bottom:18px">주의: 폰트 파일 단독 판매 불가. 재배포 시 OFL 라이선스 고지 필요.</div>
+              <a href="#1g" style="display:flex;flex-direction:column;gap:2px;align-items:center;padding:14px;background:#2C5545;color:#fff;border-radius:10px;text-decoration:none"><span style="font:600 14px 'Pretendard',sans-serif;color:#fff">공식 페이지에서 다운로드</span><span style="font:400 11px 'Pretendard',sans-serif;color:rgba(255,255,255,.7)">이동 → hangeul.naver.com</span></a>
+              <div style="margin-top:16px;padding-top:16px;border-top:1px solid #F1F1EE;font:400 11px/1.6 'Pretendard',sans-serif;color:#9A9A96">유료 폰트라면 이 자리에 <b style="color:#6B6B6B">비슷한 무료 대안 3개</b>가 함께 표시됩니다.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== 1h TRENDS ===================== -->
+    <div class="dv-opt" id="1h">
+      <div class="dv-olabel"><a class="dv-oid" href="#1h">1h</a>트렌드 — TOP 10 확장 (주간/월간)</div>
+      <div class="card" style="width:760px">
+        <header style="display:flex;align-items:center;justify-content:space-between;padding:16px 28px;border-bottom:1px solid #E6E6E2;background:#FAFAF8">
+          <div style="display:flex;align-items:baseline;gap:11px"><span style="font:800 20px/1 'Pretendard',sans-serif;color:#1A1A1A;letter-spacing:-.03em">Font<span style="color:#2C5545">A</span>git</span></div>
+          <nav style="display:flex;align-items:center;gap:22px"><a href="#1f" style="font:500 13px 'Pretendard',sans-serif;color:#3a3a3a">폰트</a><a href="#1h" style="font:600 13px 'Pretendard',sans-serif;color:#2C5545">트렌드</a></nav>
+        </header>
+        <div style="padding:32px 28px">
+          <h1 style="margin:0 0 4px;font:800 26px 'Pretendard',sans-serif;color:#1A1A1A">이번 주 인기 폰트</h1>
+          <p style="margin:0 0 20px;font:400 13px 'Pretendard',sans-serif;color:#6B6B6B">이동 클릭 기준 인기 순위입니다 (다운로드 순위 아님).</p>
+          <div style="display:flex;gap:8px;margin-bottom:22px"><span style="padding:8px 18px;background:#2C5545;color:#fff;border-radius:8px;font:600 13px 'Pretendard',sans-serif">주간</span><span style="padding:8px 18px;border:1px solid #E6E6E2;color:#6B6B6B;border-radius:8px;font:600 13px 'Pretendard',sans-serif">월간</span></div>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:18px;padding:16px 18px;border:1px solid #E6E6E2;border-radius:12px;background:#fff"><span style="font:800 22px 'Pretendard',sans-serif;color:#2C5545;width:26px">1</span><span style="font:500 12px 'Pretendard',sans-serif;color:#2C7A5B;width:34px">▲ 2</span><div style="flex:1"><div style="font-family:'Pretendard',sans-serif;font-size:26px;color:#1A1A1A;line-height:1.2">프리텐다드</div></div><div style="text-align:right"><div style="font:700 14px 'Pretendard',sans-serif;color:#1A1A1A">12,480</div><div style="font:400 10.5px 'Pretendard',sans-serif;color:#9A9A96">이동</div></div><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:18px;padding:16px 18px;border:1px solid #E6E6E2;border-radius:12px;background:#fff"><span style="font:800 22px 'Pretendard',sans-serif;color:#2C5545;width:26px">2</span><span style="font:500 12px 'Pretendard',sans-serif;color:#9A9A96;width:34px">—</span><div style="flex:1"><div style="font-family:'Noto Sans KR',sans-serif;font-weight:500;font-size:26px;color:#1A1A1A;line-height:1.2">노토 산스 KR</div></div><div style="text-align:right"><div style="font:700 14px 'Pretendard',sans-serif;color:#1A1A1A">9,210</div><div style="font:400 10.5px 'Pretendard',sans-serif;color:#9A9A96">이동</div></div><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:18px;padding:16px 18px;border:1px solid #E6E6E2;border-radius:12px;background:#fff"><span style="font:800 22px 'Pretendard',sans-serif;color:#2C5545;width:26px">3</span><span style="font:500 12px 'Pretendard',sans-serif;color:#2C7A5B;width:34px">▲ 5</span><div style="flex:1"><div style="font-family:'Black Han Sans',sans-serif;font-size:28px;color:#1A1A1A;line-height:1.2">검은고딕</div></div><div style="text-align:right"><div style="font:700 14px 'Pretendard',sans-serif;color:#1A1A1A">8,640</div><div style="font:400 10.5px 'Pretendard',sans-serif;color:#9A9A96">이동</div></div><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:18px;padding:16px 18px;border:1px solid #E6E6E2;border-radius:12px;background:#fff"><span style="font:800 22px 'Pretendard',sans-serif;color:#2C5545;width:26px">4</span><span style="font:500 12px 'Pretendard',sans-serif;color:#B4564B;width:34px">▼ 1</span><div style="flex:1"><div style="font-family:'Jua',sans-serif;font-size:28px;color:#1A1A1A;line-height:1.2">배민 주아</div></div><div style="text-align:right"><div style="font:700 14px 'Pretendard',sans-serif;color:#1A1A1A">7,905</div><div style="font:400 10.5px 'Pretendard',sans-serif;color:#9A9A96">이동</div></div><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+            <div style="display:flex;align-items:center;gap:18px;padding:16px 18px;border:1px solid #E6E6E2;border-radius:12px;background:#fff"><span style="font:800 22px 'Pretendard',sans-serif;color:#2C5545;width:26px">5</span><span style="font:500 12px 'Pretendard',sans-serif;color:#2C7A5B;width:34px">▲ 1</span><div style="flex:1"><div style="font-family:'Gowun Batang',serif;font-size:28px;color:#1A1A1A;line-height:1.2">고운바탕</div></div><div style="text-align:right"><div style="font:700 14px 'Pretendard',sans-serif;color:#1A1A1A">6,730</div><div style="font:400 10.5px 'Pretendard',sans-serif;color:#9A9A96">이동</div></div><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10.5px 'Pretendard',sans-serif">무료</span></div>
+          </div>
+          <div style="height:90px;border:1px dashed #D8D8D2;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#F4F4F0;margin-top:16px"><span style="font:500 12px 'Pretendard',sans-serif;color:#B0B0AA">광고 · 높이 사전 확보</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== 1i SYSTEM PAGES ===================== -->
+    <div class="dv-opt" id="1i">
+      <div class="dv-olabel"><a class="dv-oid" href="#1i">1i</a>시스템 페이지 — 아지트지기 인격이 드러나는 곳</div>
+      <div style="display:flex;gap:20px;flex-wrap:wrap">
+        <div class="card" style="width:420px;padding:48px 40px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:18px">
+          <svg width="52" height="52" viewBox="0 0 72 72" fill="none"><path d="M27 20h18l3 30a4 4 0 0 1-4 4H28a4 4 0 0 1-4-4l3-30Z" stroke="#2C5545" stroke-width="2.4" stroke-linejoin="round"/><circle cx="36" cy="38" r="7" fill="#2C5545" fill-opacity="0.14"/><path d="M36 31v14M31 38h10" stroke="#2C5545" stroke-width="2" stroke-linecap="round"/><path d="M26 20h20l-2.5-6h-15L26 20Z" stroke="#2C5545" stroke-width="2.4" stroke-linejoin="round"/></svg>
+          <div style="font:800 40px 'Pretendard',sans-serif;color:#1A1A1A">404</div>
+          <div style="font:600 16px 'Pretendard',sans-serif;color:#1A1A1A">길을 잘못 드셨어요</div>
+          <p style="margin:0;font:400 13.5px/1.7 'Pretendard',sans-serif;color:#6B6B6B">찾으시던 페이지가 아지트에 없네요.<br>입구로 다시 모실게요.</p>
+          <a href="#1d" style="margin-top:6px;padding:12px 26px;background:#2C5545;color:#fff;border-radius:10px;font:600 13px 'Pretendard',sans-serif;text-decoration:none">아지트 입구로</a>
+        </div>
+        <div class="card" style="width:420px;padding:48px 40px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px">
+          <svg width="46" height="46" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#C8C8C2" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="#C8C8C2" stroke-width="2" stroke-linecap="round"/></svg>
+          <div style="font:600 16px 'Pretendard',sans-serif;color:#1A1A1A;margin-top:4px">아직 그 폰트는 아지트에 없네요</div>
+          <p style="margin:0 0 8px;font:400 13.5px/1.7 'Pretendard',sans-serif;color:#6B6B6B">'모나코체'로 찾은 결과가 없어요.<br>다른 이름으로 찾아보실래요?</p>
+          <div style="width:100%;text-align:left;border-top:1px solid #F1F1EE;padding-top:16px">
+            <div style="font:600 12px 'Pretendard',sans-serif;color:#9A9A96;margin-bottom:12px">대신 이런 폰트는 어때요</div>
+            <div style="display:flex;flex-direction:column;gap:11px">
+              <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-family:'Pretendard',sans-serif;font-size:18px;color:#1A1A1A">프리텐다드</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10px 'Pretendard',sans-serif">무료</span></div>
+              <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-family:'Gowun Dodum',sans-serif;font-size:18px;color:#1A1A1A">고운돋움</span><span style="padding:2px 8px;background:rgba(44,85,69,.1);color:#2C5545;border-radius:5px;font:600 10px 'Pretendard',sans-serif">무료</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <p style="margin:26px 0 0;font:12px/1.6 'Pretendard',sans-serif;color:rgba(0,0,0,.5)">다음으로: "포인트색 <a class="dv-oid" href="#1d">1d</a> 딥그린으로 확정" · "로고는 <a class="dv-oid" href="#1a">1a</a> 등불로" · "상세 <a class="dv-oid" href="#1g">1g</a>에 유료 폰트 버전도" · "모바일 화면도 보여줘" · "다크모드도"</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { preview: '', canvas: '' };
+  renderVals() {
+    const preview = this.state.preview;
+    const canvas = this.state.canvas;
+    return {
+      preview,
+      displayText: preview && preview.length ? preview : '다람쥐 헌 쳇바퀴에 타고파',
+      onPreview: (e) => this.setState({ preview: e.target.value }),
+      canvas,
+      canvasText: canvas && canvas.length ? canvas : '아지트',
+      onCanvas: (e) => this.setState({ canvas: e.target.value }),
+      fillPangram: () => this.setState({ canvas: '다람쥐 헌 쳇바퀴에 타고파' }),
+      fillBrand: () => this.setState({ canvas: '당신의 폰트 아지트' }),
+      fillAbc: () => this.setState({ canvas: '가나다라 ABC 0123' }),
+      fillClear: () => this.setState({ canvas: '' }),
+    };
+  }
+}
+</script>
+</body>
+</html>
