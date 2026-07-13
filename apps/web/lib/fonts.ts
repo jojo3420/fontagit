@@ -60,15 +60,10 @@ const gaegu = Gaegu({
   variable: "--font-gaegu",
 });
 
+// Song_Myung: next/font/google 타입이 subsets, preload 미지원 — 생략
 const songMyung = Song_Myung({
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore Song_Myung type doesn't include subsets but it's supported at runtime
-  subsets: ["latin"],
   weight: "400",
   display: "swap",
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore Song_Myung type doesn't include preload but it's supported at runtime
-  preload: false,
   variable: "--font-song-myung",
 });
 
