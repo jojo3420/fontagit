@@ -94,9 +94,10 @@ test('header collections link navigates without 404', async ({ page }) => {
   await expect(page.getByRole('heading', { name: '컬렉션', level: 1 })).toBeVisible();
 });
 
-test('submit form is non-submitting', async ({ page }) => {
-  await page.goto('/submit', { waitUntil: 'networkidle' });
-  const submitButton = page.getByRole('button', { name: '신청 보내기' });
-  await submitButton.click();
-  await expect(page).toHaveURL(/\/submit\/?$/);
+
+test('submit form is a non-submitting mockup', async ({ page }) => {
+  await page.goto('/submit/', { waitUntil: 'networkidle' });
+  await expect(page.getByRole('heading', { name: '폰트 등록 신청' })).toBeVisible();
+  await page.getByRole('button', { name: '신청 보내기' }).click();
+  await expect(page).toHaveURL(/\/submit\/?$/); // preventDefault로 제출/네비게이션 없음
 });

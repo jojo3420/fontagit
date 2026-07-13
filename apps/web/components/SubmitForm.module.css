@@ -1,92 +1,10 @@
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-  max-width: 600px;
-  margin: 0 auto;
-}
-
-.title {
-  font-size: 1.75rem;
-  font-weight: 600;
-  margin: 0;
-  color: var(--text-primary);
-}
-
-.subtitle {
-  font-size: 1rem;
-  color: var(--text-secondary);
-  margin: 0;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.label {
-  font-size: 0.9375rem;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.req {
-  color: var(--text-danger);
-}
-
-.input {
-  padding: 0.75rem;
-  font-size: 1rem;
-  border: 1px solid var(--border-color);
-  border-radius: 0.5rem;
-  background: var(--bg-input);
-  color: var(--text-primary);
-  font-family: inherit;
-}
-
-.input::placeholder {
-  color: var(--text-tertiary);
-}
-
-.textarea {
-  padding: 0.75rem;
-  font-size: 1rem;
-  border: 1px solid var(--border-color);
-  border-radius: 0.5rem;
-  background: var(--bg-input);
-  color: var(--text-primary);
-  font-family: inherit;
-  resize: vertical;
-  min-height: 120px;
-}
-
-.textarea::placeholder {
-  color: var(--text-tertiary);
-}
-
-.chips {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.submit {
-  padding: 0.875rem 1.5rem;
-  font-size: 1rem;
-  font-weight: 600;
-  background: var(--btn-primary-bg);
-  color: var(--btn-primary-text);
-  border: none;
-  border-radius: 0.5rem;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-
-.submit:hover {
-  background-color: var(--btn-primary-bg-hover);
-}
-
-.submit:active {
-  background-color: var(--btn-primary-bg-active);
-}
+.form { display: flex; flex-direction: column; gap: 16px; }
+.field { display: flex; flex-direction: column; gap: 7px; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.label { font-size: 12px; font-weight: 600; color: var(--ink); }
+.req { color: var(--point); }
+.input { height: 44px; border: 1px solid var(--border); border-radius: var(--radius-btn); background: var(--surface); padding: 0 14px; font-family: inherit; font-size: 13px; color: var(--ink); }
+.input::placeholder { color: var(--sub-2); }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.submit { height: 48px; margin-top: 6px; background: var(--point); color: var(--on-point); border: none; border-radius: 11px; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+@media (max-width: 480px) { .row { grid-template-columns: 1fr; } }
