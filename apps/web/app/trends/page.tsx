@@ -1,4 +1,4 @@
-import TrendTable from "@/components/TrendTable";
+import { TrendTable } from "@/components/TrendTable";
 import { weeklyTrends, monthlyTrends } from "@/data/trends";
 import { FilterChip } from "@/components/FilterChip";
 import styles from "./page.module.css";

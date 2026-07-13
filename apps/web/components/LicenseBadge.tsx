@@ -7,7 +7,7 @@ interface LicenseBadgeProps {
 
 const COMMERCIAL_MAP = {
   yes: { cls: "yes", label: "가능", icon: "✓" },
-  conditional: { cls: "conditional", label: "조건부", icon: "⚡" },
+  conditional: { cls: "conditional", label: "조건부", icon: "!" },
   no: { cls: "no", label: "불가", icon: "✕" },
 } as const;
 

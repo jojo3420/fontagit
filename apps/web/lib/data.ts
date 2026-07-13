@@ -1,6 +1,18 @@
 import { fonts } from "@/data/fonts";
 import type { Font, FontKey } from "@/types/font";
 
+export const FONT_KEYS: FontKey[] = [
+  "pretendard",
+  "blackHanSans",
+  "jua",
+  "doHyeon",
+  "gowunBatang",
+  "nanumMyeongjo",
+  "kirangHaerang",
+  "gaegu",
+  "songMyung",
+];
+
 export function getFontBySlug(slug: string): Font | undefined {
   return fonts.find((f) => f.slug === slug);
 }
@@ -35,3 +47,6 @@ export function assertDataIntegrity(validKeys: FontKey[]): void {
     }
   }
 }
+
+// Validate mock data at build time
+assertDataIntegrity(FONT_KEYS);

@@ -11,7 +11,7 @@ const LABEL: Record<TrendItem["change"], (n?: number) => string> = {
   new: () => "NEW",
 };
 
-export default function TrendRow({ item }: { item: TrendItem }) {
+export function TrendRow({ item }: { item: TrendItem }) {
   return (
     <Link href={`/fonts/${item.font.slug}`} className={styles.row}>
       <span className={styles.rank}>{item.rank}</span>

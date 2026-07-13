@@ -1,8 +1,8 @@
 import type { TrendItem } from "@/types/font";
-import TrendRow from "./TrendRow";
+import { TrendRow } from "./TrendRow";
 import styles from "./TrendTable.module.css";
 
-export default function TrendTable({
+export function TrendTable({
   title,
   items,
 }: {

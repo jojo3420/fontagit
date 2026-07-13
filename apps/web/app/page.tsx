@@ -1,5 +1,5 @@
 import { Hero } from "@/components/Hero";
-import TrendTable from "@/components/TrendTable";
+import { TrendTable } from "@/components/TrendTable";
 import { AdSlot } from "@/components/AdSlot";
 import { weeklyTrends } from "@/data/trends";
 import styles from "./page.module.css";

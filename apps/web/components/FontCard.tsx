@@ -21,7 +21,7 @@ export function FontCard({ font }: FontCardProps) {
         <p className={styles.meta}>
           <span>{font.foundry}</span>
           <span>{weightCount}가지 굵기</span>
-          <span>{font.moves.toLocaleString()}회 이동</span>
+          <span>이동 {font.moves.toLocaleString()}회</span>
         </p>
         <div className={styles.foot}>
           <TierChip tier={font.tier} />

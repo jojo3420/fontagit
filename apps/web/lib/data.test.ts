@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getFontBySlug, getAllSlugs, resolveFreeAlternatives, assertDataIntegrity } from "@/lib/data";
-import type { FontKey } from "@/types/font";
-
-const KEYS: FontKey[] = ["pretendard", "blackHanSans", "jua", "doHyeon", "gowunBatang", "nanumMyeongjo", "kirangHaerang", "gaegu", "songMyung"];
+import { getFontBySlug, getAllSlugs, resolveFreeAlternatives, assertDataIntegrity, FONT_KEYS } from "@/lib/data";
 
 describe("data helpers", () => {
   it("finds a font by slug", () => {
@@ -20,6 +17,6 @@ describe("data helpers", () => {
     expect(alts.map((f) => f.slug)).toContain("pretendard");
   });
   it("passes integrity check", () => {
-    expect(() => assertDataIntegrity(KEYS)).not.toThrow();
+    expect(() => assertDataIntegrity(FONT_KEYS)).not.toThrow();
   });
 });
