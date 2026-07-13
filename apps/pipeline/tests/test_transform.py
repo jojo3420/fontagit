@@ -25,6 +25,18 @@ def test_normalize_variants_maps_regular_and_italic():
     ]
 
 
+def test_normalize_variants_handles_all_italic_weights():
+    """모든 italic 가중치 (100italic, 300italic, 500italic, 900italic 등)를 정규화한다."""
+    variants = ["100", "100italic", "300italic", "500italic", "900italic"]
+    result = normalize_variants(variants)
+    assert "100" in result
+    assert "100 italic" in result
+    assert "300 italic" in result
+    assert "500 italic" in result
+    assert "900 italic" in result
+    assert result == ["100", "100 italic", "300 italic", "500 italic", "900 italic"]
+
+
 def test_build_official_url_replaces_spaces_with_plus():
     assert (
         build_official_url("Noto Sans KR")
@@ -75,6 +87,46 @@ def test_merge_dedup_korean_first_then_latin_not_in_korean(webfonts_sample):
     latin = select_latin_top(webfonts_sample, limit=100)
     result = merge_dedup(korean, latin)
     families = [font.family for font in result]
+    assert families == ["Noto Sans KR", "Roboto"]
+    assert len(families) == len(set(families))
+
+
+def test_merge_dedup_removes_duplicates_within_korean():
+    """한국어 리스트 내의 중복도 제거한다."""
+    korean_dup = [
+        GoogleFontRaw(
+            family="Noto Sans KR",
+            variants=["regular"],
+            subsets=["korean"],
+            version="v1",
+            lastModified="2024-01-01",
+            files={"regular": "https://x/noto1.ttf"},
+            category="sans-serif",
+        ),
+        GoogleFontRaw(
+            family="Noto Sans KR",  # 중복
+            variants=["regular"],
+            subsets=["korean"],
+            version="v1",
+            lastModified="2024-01-01",
+            files={"regular": "https://x/noto1.ttf"},
+            category="sans-serif",
+        ),
+    ]
+    latin = [
+        GoogleFontRaw(
+            family="Roboto",
+            variants=["regular"],
+            subsets=["latin"],
+            version="v1",
+            lastModified="2024-01-01",
+            files={"regular": "https://x/roboto.ttf"},
+            category="sans-serif",
+        ),
+    ]
+    result = merge_dedup(korean_dup, latin)
+    families = [font.family for font in result]
+    # 중복된 "Noto Sans KR"은 한 번만 나타나야 함
     assert families == ["Noto Sans KR", "Roboto"]
     assert len(families) == len(set(families))
 

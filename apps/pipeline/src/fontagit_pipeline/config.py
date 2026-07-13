@@ -1,5 +1,6 @@
 """환경 설정 로드."""
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,6 +13,14 @@ class Settings(BaseSettings):
     google_fonts_api_key: str
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @field_validator("google_fonts_api_key")
+    @classmethod
+    def validate_api_key_not_empty(cls, v: str) -> str:
+        """API 키는 공백만으로 이루어져 있을 수 없다."""
+        if not v.strip():
+            raise ValueError("google_fonts_api_key는 비워둘 수 없습니다")
+        return v
 
 
 def load_settings() -> Settings:
