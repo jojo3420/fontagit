@@ -24,7 +24,7 @@ export default function TrendRow({ item }: { item: TrendItem }) {
       >
         {item.font.nameKo}
       </span>
-      <span className={styles.moves}>{item.moves} moves</span>
+      <span className={styles.moves}>이동 {item.moves.toLocaleString()}회</span>
       <TierChip tier={item.font.tier} />
     </Link>
   );
