@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getFontBySlug, getAllSlugs, resolveFreeAlternatives, assertDataIntegrity, FONT_KEYS, getCollectionBySlug, getAllCollectionSlugs } from "@/lib/data";
+import { getFontBySlug, getAllSlugs, resolveFreeAlternatives, assertDataIntegrity, checkIntegrity, FONT_KEYS, getCollectionBySlug, getAllCollectionSlugs, fonts } from "@/lib/data";
 
 describe("data helpers", () => {
   it("finds a font by slug", () => {
@@ -36,3 +36,22 @@ describe("data helpers", () => {
     }
   });
 });
+  it("checkIntegrity throws on collection referencing a non-existent font", () => {
+    const badCollections = [{ slug: "x", title: "x", intro: "x", items: [{ fontSlug: "nope", comment: "c" }] }];
+    expect(() => checkIntegrity(fonts, badCollections, FONT_KEYS)).toThrow();
+  });
+  it("checkIntegrity throws on duplicate collection slug", () => {
+    const badCollections = [
+      { slug: "x", title: "x1", intro: "x1", items: [{ fontSlug: "pretendard", comment: "c" }] },
+      { slug: "x", title: "x2", intro: "x2", items: [{ fontSlug: "pretendard", comment: "c" }] },
+    ];
+    expect(() => checkIntegrity(fonts, badCollections, FONT_KEYS)).toThrow();
+  });
+  it("checkIntegrity throws on empty collection items", () => {
+    const badCollections = [{ slug: "x", title: "x", intro: "x", items: [] }];
+    expect(() => checkIntegrity(fonts, badCollections, FONT_KEYS)).toThrow();
+  });
+  it("checkIntegrity does not throw on valid inputs", () => {
+    const goodCollections = [{ slug: "x", title: "x", intro: "x", items: [{ fontSlug: "pretendard", comment: "c" }] }];
+    expect(() => checkIntegrity(fonts, goodCollections, FONT_KEYS)).not.toThrow();
+  });
