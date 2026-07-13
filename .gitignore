@@ -16,6 +16,8 @@ eggs/
 .eggs/
 lib/
 lib64/
+# Exception for web app source code
+!apps/web/lib/
 parts/
 sdist/
 var/
