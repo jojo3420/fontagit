@@ -14,6 +14,16 @@ FontAgit(폰트 아지트)는 국내외 무료-유료 폰트를 검색-비교하
 
 ## 진행 기록
 
+## 2026-07-13 - 웹 Phase 3-4 확장 화면 + 마감
+
+- 상태: 구현 완료, PR 대기
+- 완료한 일: Phase 1-2 토대 위에 확장 화면 5개(타입 캔버스 `/playground`, 비교 `/compare`, 컬렉션 목록-상세 `/collections`, 창작자 등록 `/submit`, 빈 상태 `EmptyState`)와 마감 3개(모바일 하단 탭바 `MobileTabBar` + safe-area, 다크모드 토글 `ThemeToggle`, 파비콘 + OG 이미지)를 디자인 95% 재현으로 구현. 헤더 nav 404 블로커 해소, 컬렉션 빌드타임 무결성 검증 추가.
+- 커밋/PR: 웹 커밋 16개(`63332e2`..`1b89f43`, 각 Task feat + 리뷰 fix). Base `413e3fb`(계획 + Codex 리뷰 반영). PR 대기.
+- 결정사항: Phase 1-2 결정 승계(CSS Modules, 정적 export, 목업 데이터, 인터랙션 핵심만 동작). 비교는 폰트 슬롯 3개 고정 + select 교체. OG는 satori에 한글 폰트(Pretendard-Bold.otf) 임베드(미임베드 시 한글이 네모로 깨짐). 다크 토글은 `useSyncExternalStore`로 FOUC 스크립트가 설정한 `data-theme`를 구독(setState-in-effect 회피).
+- 남은 일: 배포 도메인 확정 후 `layout.tsx` metadata에 `metadataBase` 설정(현재 og:image 절대 URL이 localhost). 필터/검색/등록폼은 여전히 비동작 목업. 실데이터 파이프라인 연동은 후속.
+- 관련 문서: `docs/superpowers/plans/2026-07-13-fontagit-web-phase3-4.md`, `docs/review/review-result-20260713-145158.md`(Codex + Claude 크로스 리뷰)
+- 상세 히스토리: progress-002.md
+
 ## 2026-07-13 - 웹 프론트엔드 토대 + 핵심 화면 구축 (Phase 1-2)
 
 - 상태: 완료
