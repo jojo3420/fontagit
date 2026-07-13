@@ -1,0 +1,1 @@
+.slot { height: 90px; border: 1px dashed var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--sub-2); font-size: 12px; background: var(--surface-2); }
