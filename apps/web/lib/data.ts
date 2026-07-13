@@ -1,5 +1,6 @@
 import { fonts } from "@/data/fonts";
-import type { Font, FontKey } from "@/types/font";
+import { collections } from "@/data/collections";
+import type { Collection, Font, FontKey } from "@/types/font";
 
 export const FONT_KEYS: FontKey[] = [
   "pretendard",
@@ -28,6 +29,14 @@ export function resolveFreeAlternatives(font: Font): Font[] {
     .slice(0, 3);
 }
 
+export function getCollectionBySlug(slug: string): Collection | undefined {
+  return collections.find((c) => c.slug === slug);
+}
+
+export function getAllCollectionSlugs(): string[] {
+  return collections.map((c) => c.slug);
+}
+
 export function assertDataIntegrity(validKeys: FontKey[]): void {
   const keySet = new Set<string>(validKeys);
   const slugs = new Set<string>();
@@ -44,6 +53,15 @@ export function assertDataIntegrity(validKeys: FontKey[]): void {
       const target = getFontBySlug(alt);
       if (!target) throw new Error(`freeAlternatives 참조 오류: ${f.slug} -> ${alt}`);
       if (target.tier !== "free") throw new Error(`freeAlternatives가 유료: ${f.slug} -> ${alt}`);
+    }
+  }
+  const collectionSlugs = new Set<string>();
+  for (const c of collections) {
+    if (collectionSlugs.has(c.slug)) throw new Error(`중복 컬렉션 slug: ${c.slug}`);
+    collectionSlugs.add(c.slug);
+    if (c.items.length === 0) throw new Error(`빈 컬렉션: ${c.slug}`);
+    for (const it of c.items) {
+      if (!getFontBySlug(it.fontSlug)) throw new Error(`컬렉션 폰트 참조 오류: ${c.slug} -> ${it.fontSlug}`);
     }
   }
 }

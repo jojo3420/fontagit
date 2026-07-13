@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getFontBySlug, getAllSlugs, resolveFreeAlternatives, assertDataIntegrity, FONT_KEYS } from "@/lib/data";
+import { getFontBySlug, getAllSlugs, resolveFreeAlternatives, assertDataIntegrity, FONT_KEYS, getCollectionBySlug, getAllCollectionSlugs } from "@/lib/data";
 
 describe("data helpers", () => {
   it("finds a font by slug", () => {
@@ -18,5 +18,21 @@ describe("data helpers", () => {
   });
   it("passes integrity check", () => {
     expect(() => assertDataIntegrity(FONT_KEYS)).not.toThrow();
+  });
+  it("finds a collection by slug", () => {
+    expect(getCollectionBySlug("dawn-serif")?.title).toBe("새벽 감성 명조 모음");
+    expect(getCollectionBySlug("nope")).toBeUndefined();
+  });
+  it("lists all collection slugs", () => {
+    expect(getAllCollectionSlugs().length).toBeGreaterThanOrEqual(3);
+  });
+  it("every collection item references a real font", () => {
+    for (const slug of getAllCollectionSlugs()) {
+      const c = getCollectionBySlug(slug)!;
+      expect(c.items.length).toBeGreaterThan(0);
+      for (const it of c.items) {
+        expect(getFontBySlug(it.fontSlug)).toBeDefined();
+      }
+    }
   });
 });
