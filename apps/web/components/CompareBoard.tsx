@@ -14,74 +14,61 @@ const DEFAULT_SLOTS = ["pretendard", "gowun-batang", "black-han-sans"];
 export function CompareBoard() {
   const [text, setText] = useState("아지트");
   const [slots, setSlots] = useState<string[]>(DEFAULT_SLOTS);
+  const shown = text || " ";
 
-  const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setText(e.currentTarget.value);
-  };
-
-  const handleFontChange = (index: number, newSlug: string) => {
-    setSlots((prev) => {
-      const updated = [...prev];
-      updated[index] = newSlug;
-      return updated;
-    });
-  };
+  function change(index: number, slug: string) {
+    setSlots((prev) => prev.map((v, i) => (i === index ? slug : v)));
+  }
 
   return (
     <div className={styles.wrap}>
       <div className={styles.head}>
         <h1 className={styles.title}>폰트 비교</h1>
-        <p className={styles.subtitle}>문장을 입력해 3개 폰트를 비교해보세요.</p>
+        <span className={styles.subtitle}>
+          같은 문장으로 나란히 놓고 결정하세요
+        </span>
       </div>
-
       <div className={styles.inputRow}>
-        <label className={styles.inputLabel}>문장</label>
+        <span className={styles.inputLabel}>문장</span>
         <input
-          type="text"
+          className={styles.input}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
           placeholder="아지트"
           aria-label="비교 문장 입력"
-          value={text}
-          onChange={handleTextChange}
-          className={styles.input}
         />
       </div>
-
       <div className={styles.board}>
-        {slots.map((slug, index) => {
+        {slots.map((slug, i) => {
           const f = fonts.find((x) => x.slug === slug)!;
           const family = fontKeyToVar[f.fontKey];
-
           return (
-            <div key={index} className={styles.col}>
+            <div key={i} className={styles.col}>
               <div className={styles.colHead}>
-                <div>
-                  <div className={styles.nameEn}>{f.nameEn}</div>
-                  <div className={styles.nameKo}>{f.nameKo}</div>
-                </div>
+                <select
+                  className={styles.select}
+                  value={slug}
+                  onChange={(e) => change(i, e.target.value)}
+                  aria-label={`${i + 1}번 폰트 선택`}
+                >
+                  {OPTIONS.map((o) => (
+                    <option key={o.slug} value={o.slug}>
+                      {o.nameKo}
+                    </option>
+                  ))}
+                </select>
                 <TierChip tier={f.tier} />
               </div>
-
-              <select
-                aria-label={`${index + 1}번 폰트 선택`}
-                value={slug}
-                onChange={(e) => handleFontChange(index, e.currentTarget.value)}
-                className={styles.select}
-              >
-                {OPTIONS.map((opt) => (
-                  <option key={opt.slug} value={opt.slug}>
-                    {opt.nameKo}
-                  </option>
-                ))}
-              </select>
-
               <div
                 className={styles.specimen}
                 style={{ fontFamily: family }}
               >
-                {text || SAMPLE}
+                {shown}
               </div>
-
-              <div className={styles.sample} style={{ fontFamily: family }}>
+              <div
+                className={styles.sample}
+                style={{ fontFamily: family }}
+              >
                 {SAMPLE}
               </div>
             </div>
