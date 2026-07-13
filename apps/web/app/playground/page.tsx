@@ -3,7 +3,7 @@ import { PlaygroundCanvas } from "@/components/PlaygroundCanvas";
 import styles from "./page.module.css";
 
 export const metadata: Metadata = {
-  title: "타입 캔버스 FontAgit",
+  title: "타입 캔버스 - FontAgit",
 };
 
 export default function PlaygroundPage() {

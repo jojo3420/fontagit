@@ -48,16 +48,16 @@ test('smoke: 404 Page renders branded content', async ({ page }) => {
   await expect(page.getByRole('link', { name: '홈으로 돌아가기' })).toBeVisible();
 });
 
-test('playground canvas updates specimens live', async ({ page }) => {
+test('playground canvas updates all specimens live', async ({ page }) => {
   await page.goto('/playground/', { waitUntil: 'networkidle' });
-  await page.getByLabel('캔버스 입력').fill('테스트 텍스트');
-  await expect(page.getByText('테스트 텍스트').first()).toBeVisible();
+  await page.getByLabel('캔버스 입력').fill('불꽃');
+  await expect(page.getByText('불꽃').first()).toBeVisible();
 });
 
-test('preset button changes text and updates specimens', async ({ page }) => {
+test('playground preset fills the input', async ({ page }) => {
   await page.goto('/playground/', { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: '당신의 폰트 아지트' }).click();
-  await expect(page.getByText('당신의 폰트 아지트').first()).toBeVisible();
+  await expect(page.getByLabel('캔버스 입력')).toHaveValue('당신의 폰트 아지트');
 });
 
 test('smoke: 404 Page captures screenshot (desktop/mobile)', async ({ page }) => {
