@@ -51,6 +51,10 @@ describe("data helpers", () => {
     const badCollections = [{ slug: "x", title: "x", intro: "x", items: [] }];
     expect(() => checkIntegrity(fonts, badCollections, FONT_KEYS)).toThrow();
   });
+  it("checkIntegrity throws on duplicate fontSlug within a collection", () => {
+    const badCollections = [{ slug: "x", title: "x", intro: "x", items: [{ fontSlug: "pretendard", comment: "c1" }, { fontSlug: "pretendard", comment: "c2" }] }];
+    expect(() => checkIntegrity(fonts, badCollections, FONT_KEYS)).toThrow();
+  });
   it("checkIntegrity does not throw on valid inputs", () => {
     const goodCollections = [{ slug: "x", title: "x", intro: "x", items: [{ fontSlug: "pretendard", comment: "c" }] }];
     expect(() => checkIntegrity(fonts, goodCollections, FONT_KEYS)).not.toThrow();

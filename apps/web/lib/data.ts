@@ -60,7 +60,10 @@ export function checkIntegrity(fontList: Font[], collectionList: Collection[], v
     if (collectionSlugs.has(c.slug)) throw new Error(`중복 컬렉션 slug: ${c.slug}`);
     collectionSlugs.add(c.slug);
     if (c.items.length === 0) throw new Error(`빈 컬렉션: ${c.slug}`);
+    const itemSlugs = new Set<string>();
     for (const it of c.items) {
+      if (itemSlugs.has(it.fontSlug)) throw new Error(`컬렉션 내 중복 fontSlug: ${c.slug} -> ${it.fontSlug}`);
+      itemSlugs.add(it.fontSlug);
       if (!fontList.find((font) => font.slug === it.fontSlug)) throw new Error(`컬렉션 폰트 참조 오류: ${c.slug} -> ${it.fontSlug}`);
     }
   }
