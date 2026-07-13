@@ -36,6 +36,7 @@ export default async function FontDetail({ params }: { params: Promise<{ slug: s
           <LicenseBadge commercial={font.license.commercial} />
           <span>{specimenWeights.length}가지 굵기</span>
           <span>{font.foundry}</span>
+          <span>확인일 {font.license.verifiedAt}</span>
         </div>
       </header>
 

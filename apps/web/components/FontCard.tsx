@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Font } from "@/types/font";
 import { fontKeyToVar } from "@/lib/fonts";
 import { TierChip } from "./TierChip";
@@ -12,7 +13,7 @@ export function FontCard({ font }: FontCardProps) {
   const weightCount = font.availableWeights.length;
 
   return (
-    <article className={styles.card}>
+    <Link href={`/fonts/${font.slug}`} className={styles.card}>
       <div className={styles.specimen} style={{ fontFamily: fontKeyToVar[font.fontKey] }}>
         한글
       </div>
@@ -28,6 +29,6 @@ export function FontCard({ font }: FontCardProps) {
           <LicenseBadge commercial={font.license.commercial} />
         </div>
       </div>
-    </article>
+    </Link>
   );
 }

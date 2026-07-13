@@ -6,6 +6,8 @@
   background-color: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
+  text-decoration: none;
+  color: inherit;
 }
 
 .specimen {
