@@ -4,29 +4,77 @@ import {
 } from "next/font/google";
 import type { FontKey } from "@/types/font";
 
-const base = { subsets: ["latin"] as const, display: "swap" as const, preload: false };
+const blackHanSans = Black_Han_Sans({
+  subsets: ["latin"],
+  weight: "400",
+  display: "swap",
+  preload: false,
+  variable: "--font-black-han-sans",
+});
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const blackHanSans = Black_Han_Sans({ ...base, weight: "400", variable: "--font-black-han-sans" } as any);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const jua = Jua({ ...base, weight: "400", variable: "--font-jua" } as any);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const doHyeon = Do_Hyeon({ ...base, weight: "400", variable: "--font-do-hyeon" } as any);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const gowunBatang = Gowun_Batang({ ...base, weight: ["400", "700"], variable: "--font-gowun-batang" } as any);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const nanumMyeongjo = Nanum_Myeongjo({ ...base, weight: ["400", "700", "800"], variable: "--font-nanum-myeongjo" } as any);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const kirangHaerang = Kirang_Haerang({ ...base, weight: "400", variable: "--font-kirang-haerang" } as any);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const gaegu = Gaegu({ ...base, weight: ["300", "400", "700"], variable: "--font-gaegu" } as any);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const songMyung = Song_Myung({ ...base, weight: "400", variable: "--font-song-myung" } as any);
+const jua = Jua({
+  subsets: ["latin"],
+  weight: "400",
+  display: "swap",
+  preload: false,
+  variable: "--font-jua",
+});
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const doHyeon = Do_Hyeon({
+  subsets: ["latin"],
+  weight: "400",
+  display: "swap",
+  preload: false,
+  variable: "--font-do-hyeon",
+});
+
+const gowunBatang = Gowun_Batang({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  display: "swap",
+  preload: false,
+  variable: "--font-gowun-batang",
+});
+
+const nanumMyeongjo = Nanum_Myeongjo({
+  subsets: ["latin"],
+  weight: ["400", "700", "800"],
+  display: "swap",
+  preload: false,
+  variable: "--font-nanum-myeongjo",
+});
+
+const kirangHaerang = Kirang_Haerang({
+  subsets: ["latin"],
+  weight: "400",
+  display: "swap",
+  preload: false,
+  variable: "--font-kirang-haerang",
+});
+
+const gaegu = Gaegu({
+  subsets: ["latin"],
+  weight: ["300", "400", "700"],
+  display: "swap",
+  preload: false,
+  variable: "--font-gaegu",
+});
+
+const songMyung = Song_Myung({
+  weight: "400",
+  display: "swap",
+  variable: "--font-song-myung",
+});
+
 export const fontClassNames = [
-  (blackHanSans as any).variable, (jua as any).variable, (doHyeon as any).variable, (gowunBatang as any).variable,
-  (nanumMyeongjo as any).variable, (kirangHaerang as any).variable, (gaegu as any).variable, (songMyung as any).variable,
+  blackHanSans.variable,
+  jua.variable,
+  doHyeon.variable,
+  gowunBatang.variable,
+  nanumMyeongjo.variable,
+  kirangHaerang.variable,
+  gaegu.variable,
+  songMyung.variable,
 ].join(" ");
 
 export const fontKeyToVar: Record<FontKey, string> = {
