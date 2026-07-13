@@ -6,6 +6,7 @@ const routes = [
   { path: '/fonts/pretendard', name: 'Pretendard Detail' },
   { path: '/fonts/sandoll-gothic-neo', name: 'Sandoll Gothic Neo Detail' },
   { path: '/trends', name: 'Trends' },
+  { path: '/playground', name: 'Playground' },
 ];
 
 routes.forEach((route) => {
@@ -45,6 +46,18 @@ test('smoke: 404 Page renders branded content', async ({ page }) => {
 
   // Assert home button exists
   await expect(page.getByRole('link', { name: '홈으로 돌아가기' })).toBeVisible();
+});
+
+test('playground canvas updates specimens live', async ({ page }) => {
+  await page.goto('/playground/', { waitUntil: 'networkidle' });
+  await page.getByLabel('캔버스 입력').fill('테스트 텍스트');
+  await expect(page.getByText('테스트 텍스트').first()).toBeVisible();
+});
+
+test('preset button changes text and updates specimens', async ({ page }) => {
+  await page.goto('/playground/', { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: '당신의 폰트 아지트' }).click();
+  await expect(page.getByText('당신의 폰트 아지트').first()).toBeVisible();
 });
 
 test('smoke: 404 Page captures screenshot (desktop/mobile)', async ({ page }) => {
