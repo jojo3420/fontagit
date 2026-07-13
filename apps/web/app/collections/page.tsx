@@ -12,8 +12,10 @@ export default function CollectionsPage() {
       <p className={styles.lead}>테마별로 묶은 폰트 모음이에요.</p>
       {collections.length === 0 ? (
         <EmptyState
-          title="컬렉션이 없어요"
-          description="첫 번째 컬렉션을 만들어보세요."
+          title="아직 컬렉션이 없어요"
+          description="곧 테마별 폰트 모음을 준비할게요. 먼저 폰트를 둘러보시겠어요?"
+          actionHref="/fonts"
+          actionLabel="폰트 둘러보기"
         />
       ) : (
         <div className={styles.grid}>
