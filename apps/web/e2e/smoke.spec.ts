@@ -107,3 +107,12 @@ test('mobile tab bar shows on small viewport', async ({ page }) => {
   await page.goto('/', { waitUntil: 'networkidle' });
   await expect(page.getByRole('navigation', { name: '모바일 탭' })).toBeVisible();
 });
+
+test('theme toggle switches data-theme', async ({ page }) => {
+  await page.goto('/', { waitUntil: 'networkidle' });
+  const html = page.locator('html');
+  const before = await html.getAttribute('data-theme');
+  await page.getByRole('button', { name: '다크모드 전환' }).click();
+  const after = await html.getAttribute('data-theme');
+  expect(before).not.toBe(after);
+});

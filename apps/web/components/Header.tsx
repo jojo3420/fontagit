@@ -1,5 +1,6 @@
 import Link from "next/link";
 import styles from "./Header.module.css";
+import { ThemeToggle } from "./ThemeToggle";
 
 export function Header() {
   return (
@@ -17,6 +18,7 @@ export function Header() {
         <Link href="/submit">등록</Link>
       </nav>
       <div className={styles.actions}>
+        <ThemeToggle />
         <button type="button" className={styles.iconBtn} aria-label="검색">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
         </button>
