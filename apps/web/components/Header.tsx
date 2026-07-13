@@ -1,5 +1,6 @@
 import Link from "next/link";
 import styles from "./Header.module.css";
+import { ThemeToggle } from "./ThemeToggle";
 
 export function Header() {
   return (
@@ -13,11 +14,11 @@ export function Header() {
       <nav className={styles.nav}>
         <Link href="/fonts">폰트</Link>
         <Link href="/trends">트렌드</Link>
-        <Link href="/collections" prefetch={false}>컬렉션</Link>
-        {/* Phase 3 페이지 미구현 — prefetch 비활성(콘솔 404 방지) */}
-        <Link href="/submit" prefetch={false}>등록</Link>
+        <Link href="/collections">컬렉션</Link>
+        <Link href="/submit">등록</Link>
       </nav>
       <div className={styles.actions}>
+        <ThemeToggle />
         <button type="button" className={styles.iconBtn} aria-label="검색">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
         </button>

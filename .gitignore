@@ -227,3 +227,4 @@ out/
 # env & 파이프라인 산출물
 .env
 apps/pipeline/output/
+.idea
