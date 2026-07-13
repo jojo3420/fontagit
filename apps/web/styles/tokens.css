@@ -1,0 +1,14 @@
+:root {
+  --bg: #FAFAF8; --ink: #1A1A1A; --sub: #6B6B6B; --sub-2: #9A9A96;
+  --border: #E6E6E2; --surface: #FFFFFF; --surface-2: #F4F4F0;
+  --point: #2C5545; --point-weak: rgba(44, 85, 69, .1); --on-point: #FFFFFF;
+  --up: #2C7A5B; --down: #B4564B; --hold: #9A9A96; --warn: #B4863C;
+  --radius-card: 12px; --radius-btn: 10px; --radius-pill: 20px;
+  --pad-page: 40px;
+}
+:root[data-theme="dark"] {
+  --bg: #16171A; --ink: #EDEDEA; --sub: #B9BCBD; --sub-2: #8A8E90;
+  --border: #2A2C30; --surface: #1D1F22; --surface-2: #202226;
+  --point: #7FC2A2; --point-weak: rgba(127, 194, 162, .14); --on-point: #16171A;
+}
+@media (max-width: 620px) { :root { --pad-page: 20px; } }

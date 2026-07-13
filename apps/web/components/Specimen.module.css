@@ -1,0 +1,4 @@
+.wrap { display: flex; flex-direction: column; gap: 20px; }
+.note { font-size: 13px; color: var(--muted); padding: 12px 16px; background: var(--surface); border-radius: 8px; }
+.line { display: block; font-size: 16px; line-height: 1.5; color: var(--ink); word-break: break-word; }
+.cap { font-size: 12px; color: var(--muted); }

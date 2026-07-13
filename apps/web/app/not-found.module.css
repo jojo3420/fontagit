@@ -1,0 +1,30 @@
+.main {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--pad-page);
+}
+
+.container {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+}
+
+.h1 {
+  font-size: 72px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+  line-height: 1;
+}
+
+.message {
+  font-size: 18px;
+  color: var(--ink);
+  margin: 0;
+  line-height: 1.5;
+}

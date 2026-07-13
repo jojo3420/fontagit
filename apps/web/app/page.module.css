@@ -1,0 +1,4 @@
+.main { width: 100%; }
+.section { padding: 40px var(--pad-page); border-top: 1px solid var(--border); }
+.container { max-width: 1200px; margin: 0 auto; }
+.adSection { padding: 40px var(--pad-page); background: var(--surface-2); }

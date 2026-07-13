@@ -1,0 +1,22 @@
+.main {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--pad-page);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.h1 {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--ink);
+  margin: 0;
+}
+
+.filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
