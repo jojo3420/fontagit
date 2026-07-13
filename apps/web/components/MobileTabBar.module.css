@@ -1,0 +1,33 @@
+.bar {
+  display: none;
+}
+
+@media (max-width: 620px) {
+  .bar {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom);
+    z-index: 100;
+  }
+
+  .tab,
+  .active {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--sub-2);
+    transition: color 0.2s;
+  }
+
+  .active {
+    color: var(--point);
+  }
+}

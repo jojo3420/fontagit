@@ -13,3 +13,7 @@ body {
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; }
 img, svg { max-width: 100%; display: block; }
+
+@media (max-width: 620px) {
+  body { padding-bottom: calc(56px + env(safe-area-inset-bottom)); }
+}

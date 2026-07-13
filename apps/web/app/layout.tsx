@@ -3,6 +3,7 @@ import "./globals.css";
 import { fontClassNames } from "@/lib/fonts";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { MobileTabBar } from "@/components/MobileTabBar";
 
 export const metadata: Metadata = {
   title: "FontAgit 폰트 아지트",
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <Header />
         {children}
         <Footer />
+        <MobileTabBar />
       </body>
     </html>
   );

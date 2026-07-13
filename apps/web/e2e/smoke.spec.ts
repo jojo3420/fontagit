@@ -101,3 +101,9 @@ test('submit form is a non-submitting mockup', async ({ page }) => {
   await page.getByRole('button', { name: '신청 보내기' }).click();
   await expect(page).toHaveURL(/\/submit\/?$/); // preventDefault로 제출/네비게이션 없음
 });
+
+test('mobile tab bar shows on small viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/', { waitUntil: 'networkidle' });
+  await expect(page.getByRole('navigation', { name: '모바일 탭' })).toBeVisible();
+});
