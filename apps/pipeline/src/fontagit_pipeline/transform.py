@@ -130,7 +130,8 @@ def to_record(raw: GoogleFontRaw, license_map: dict[str, str]) -> FontRecord:
     """GoogleFontRaw를 FontRecord로 변환. license_type 판별 및 상태 결정."""
     license_type = resolve_license_type(raw.family, license_map)
     verified = license_type is not None
-    
+    variants = normalize_variants(raw.variants)
+
     return FontRecord(
         slug=build_slug(raw.family),
         name_en=raw.family,
@@ -138,8 +139,8 @@ def to_record(raw: GoogleFontRaw, license_map: dict[str, str]) -> FontRecord:
         category_ko=map_category_ko(raw.category),
         category_google=raw.category,
         subsets=raw.subsets,
-        variants=normalize_variants(raw.variants),
-        weights=extract_weights(raw.variants),
+        variants=variants,
+        weights=extract_weights(variants),
         official_url=build_official_url(raw.family),
         is_commercial_free=verified,
         license=None,
@@ -156,7 +157,7 @@ def to_record(raw: GoogleFontRaw, license_map: dict[str, str]) -> FontRecord:
 def build_records(
     fonts: list[GoogleFontRaw], license_map: dict[str, str], latin_limit: int = 100
 ) -> list[FontRecord]:
-    """병합·중복제거 후 FontRecord 리스트 반환. 변환 실패 시 건너뜀."""
+    """병합-중복제거 후 FontRecord 리스트 반환. 변환 실패 시 건너뜀."""
     merged = merge_dedup(filter_korean(fonts), select_latin_top(fonts, latin_limit))
     records: list[FontRecord] = []
     for raw in merged:
