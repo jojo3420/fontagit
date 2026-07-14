@@ -8,6 +8,7 @@ const TABS = [
   { href: "/fonts", label: "폰트" },
   { href: "/trends", label: "트렌드" },
   { href: "/playground", label: "캔버스" },
+  { href: "/compare", label: "비교" },
 ];
 
 export function MobileTabBar() {
@@ -15,7 +16,7 @@ export function MobileTabBar() {
   return (
     <nav className={styles.bar} aria-label="모바일 탭">
       {TABS.map((t) => {
-        const active = t.href === "/" ? pathname === "/" : pathname.startsWith(t.href);
+        const active = t.href === "/" ? pathname === "/" : (pathname === t.href || pathname.startsWith(`${t.href}/`));
         return (
           <Link key={t.href} href={t.href} className={active ? styles.active : styles.tab} aria-current={active ? "page" : undefined}>
             {t.label}
