@@ -19,24 +19,24 @@ class GoogleFontRaw(BaseModel):
 class FontRecord(BaseModel):
     """처리된 폰트 레코드."""
 
+    slug: str
     name_en: str
     name_ko: str | None = None
-    slug: str
     source_tier: str = "A"
+    category_ko: str
     category_google: str
-    category_ko: str | None = None
     subsets: list[str]
     variants: list[str]
-    weights: list[str] | None = None
+    weights: list[int]
     official_url: str
-    is_commercial_free: bool | None = None
+    is_commercial_free: bool = False
     license: str | None = None
     license_type: str | None = None
     license_verified: bool = False
+    status: str = "draft"
     aliases: list[str]
     version: str
     last_modified: str
-    status: str | None = None
 
     @model_validator(mode="after")
     def validate_license_requires_verification(self) -> "FontRecord":
