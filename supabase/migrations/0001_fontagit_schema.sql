@@ -56,6 +56,7 @@ create table fontagit.collection_items (
 );
 
 grant select on all tables in schema fontagit to anon, authenticated;
+grant select, insert, update, delete on all tables in schema fontagit to service_role;
 
 alter table fontagit.fonts enable row level security;
 alter table fontagit.aliases enable row level security;
