@@ -117,3 +117,13 @@ test('theme toggle switches data-theme', async ({ page }) => {
   expect(after).not.toBe(before);
   expect(['light', 'dark']).toContain(after);
 });
+
+test('header nav contains canvas and compare links (desktop)', async ({ page }) => {
+  page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto('/', { waitUntil: 'networkidle' });
+  const nav = page.getByRole('navigation').first();
+  await expect(nav.getByRole('link', { name: '캔버스' })).toBeVisible();
+  await expect(nav.getByRole('link', { name: '캔버스' })).toHaveAttribute('href', /\/playground\/?/);
+  await expect(nav.getByRole('link', { name: '비교' })).toBeVisible();
+  await expect(nav.getByRole('link', { name: '비교' })).toHaveAttribute('href', /\/compare\/?/);
+});

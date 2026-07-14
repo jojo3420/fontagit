@@ -81,4 +81,8 @@
   .nav a {
     font-size: 13px;
   }
+
+  .nav a.toolLink {
+    display: none;
+  }
 }
