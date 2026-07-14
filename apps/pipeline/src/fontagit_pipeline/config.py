@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     """
 
     google_fonts_api_key: str
+    supabase_url: str | None = None
+    supabase_secret_key: str | None = None
+    github_token: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
