@@ -33,7 +33,7 @@ def test_build_document_creates_output_document():
     generated_at = datetime.now(timezone.utc).isoformat()
 
     # Act
-    doc = build_document(fonts, generated_at)
+    doc = build_document(fonts, {}, generated_at)
 
     # Assert
     assert isinstance(doc, OutputDocument)
@@ -61,18 +61,33 @@ def test_build_document_respects_latin_limit():
     generated_at = datetime.now(timezone.utc).isoformat()
 
     # Act
-    doc = build_document(fonts, generated_at, latin_limit=50)
+    doc = build_document(fonts, {}, generated_at, latin_limit=50)
 
     # Assert (latin_limit이 50이므로 정확히 50개여야 함)
     assert doc.record_count == 50
     assert len(doc.fonts) == 50
 
 
+def test_build_document_passes_license_map():
+    """build_document는 license_map을 전달받아 처리한다."""
+    from fontagit_pipeline.models import GoogleFontRaw
+    from fontagit_pipeline.__main__ import build_document
+
+    raw = GoogleFontRaw(
+        family="Jua", variants=["regular"], subsets=["korean"],
+        version="v1", lastModified="2024-01-01", files={}, category="display",
+    )
+    doc = build_document([raw], {"jua": "OFL"}, "2026-07-14T00:00:00Z")
+    assert doc.record_count == 1
+    assert doc.fonts[0].status == "published"
+    assert doc.fonts[0].category_ko == "장식"
+
+
 def test_main_returns_3_on_empty_record_count(tmp_path):
     """record_count가 0일 때 main은 3을 반환하고 파일을 쓰지 않는다."""
     fonts_empty = []
     generated_at = datetime.now(timezone.utc).isoformat()
-    doc = build_document(fonts_empty, generated_at)
+    doc = build_document(fonts_empty, {}, generated_at)
 
     # record_count가 0이면 main이 exit 3를 반환해야 함
     assert doc.record_count == 0
