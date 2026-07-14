@@ -16,7 +16,7 @@ export function MobileTabBar() {
   return (
     <nav className={styles.bar} aria-label="모바일 탭">
       {TABS.map((t) => {
-        const active = t.href === "/" ? pathname === "/" : pathname.startsWith(t.href);
+        const active = t.href === "/" ? pathname === "/" : (pathname === t.href || pathname.startsWith(`${t.href}/`));
         return (
           <Link key={t.href} href={t.href} className={active ? styles.active : styles.tab} aria-current={active ? "page" : undefined}>
             {t.label}
