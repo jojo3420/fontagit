@@ -7,6 +7,8 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+_GH_API = "https://api.github.com"
+_TIMEOUT = httpx.Timeout(10.0, connect=10.0)
 _LICENSE_DIRS = {
     "ofl": "OFL",
     "apache": "Apache-2.0",
@@ -61,8 +63,19 @@ def resolve_license_type(
     return license_map.get(normalize_family_dir(name_en))
 
 
-async def fetch_license_map(github_token: str | None = None) -> dict[str, str]:
-    """google/fonts에서 라이선스 매핑을 조회한다.
+def _get_tree_sha(client: httpx.Client, headers: dict[str, str]) -> dict[str, str]:
+    """루트 트리에서 ofl/apache/ufl 디렉토리의 sha를 얻는다."""
+    r = client.get(f"{_GH_API}/repos/google/fonts/git/trees/main", headers=headers)
+    r.raise_for_status()
+    shas: dict[str, str] = {}
+    for entry in r.json()["tree"]:
+        if entry["path"] in _LICENSE_DIRS and entry["type"] == "tree":
+            shas[entry["path"]] = entry["sha"]
+    return shas
+
+
+def fetch_license_map(github_token: str | None = None) -> dict[str, str]:
+    """google/fonts에서 라이선스 매핑을 조회한다. 실패 시 빈 dict(전부 draft).
 
     Args:
         github_token: GitHub API 토큰 (선택)
@@ -70,4 +83,20 @@ async def fetch_license_map(github_token: str | None = None) -> dict[str, str]:
     Returns:
         폰트명→라이선스 타입 매핑
     """
-    pass
+    headers = {"Accept": "application/vnd.github+json"}
+    if github_token:
+        headers["Authorization"] = f"Bearer {github_token}"
+    trees: dict[str, list[dict[str, Any]]] = {}
+    try:
+        with httpx.Client(timeout=_TIMEOUT) as client:
+            shas = _get_tree_sha(client, headers)
+            for dir_key, sha in shas.items():
+                r = client.get(
+                    f"{_GH_API}/repos/google/fonts/git/trees/{sha}", headers=headers
+                )
+                r.raise_for_status()
+                trees[dir_key] = r.json()["tree"]
+    except httpx.HTTPError as exc:
+        logger.warning("라이선스 매핑 조회 실패, 전부 draft 처리: %s", exc.__class__.__name__)
+        return {}
+    return parse_license_map(trees)
