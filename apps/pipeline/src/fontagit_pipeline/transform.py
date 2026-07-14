@@ -95,68 +95,34 @@ def merge_dedup(
     return result
 
 
-def map_category_ko(google_category: str) -> str:
-    """구글 카테고리를 한글 4분류로 매핑한다.
+_CATEGORY_KO_MAP = {
+    "sans-serif": "고딕",
+    "serif": "명조",
+    "handwriting": "손글씨",
+    "display": "장식",
+    "monospace": "고딕",
+}
 
-    매핑:
-    - "sans-serif" → "고딕"
-    - "serif" → "명조"
-    - "monospace" → "고정폭"
-    - "display" → "특수"
-    기타 값은 그대로 반환.
-    """
-    mapping = {
-        "sans-serif": "고딕",
-        "serif": "명조",
-        "monospace": "고정폭",
-        "display": "특수",
-    }
-    return mapping.get(google_category, google_category)
+
+def map_category_ko(google_category: str) -> str:
+    """구글 카테고리를 한글 4분류로 매핑한다(미지정은 고딕)."""
+    return _CATEGORY_KO_MAP.get(google_category, "고딕")
 
 
 def build_slug(name_en: str) -> str:
-    """영문 폰트명을 URL slug로 변환한다.
-
-    규칙:
-    - 소문자 변환
-    - 공백을 하이픈으로 변환 (연속 공백은 하이픈 하나)
-    - 특수문자를 제거하거나 하이픈으로 변환
-    - 결과는 ASCII만 포함
-    """
-    slug = name_en.lower()
-    # 연속된 공백을 하이픈으로 변환
-    slug = re.sub(r'\s+', '-', slug)
-    # 특수문자를 하이픈으로 변환 (알파벳, 숫자, 하이픈만 유지)
-    slug = re.sub(r'[^a-z0-9\-]', '-', slug)
-    # 연속된 하이픈을 하나로 정리
-    slug = re.sub(r'-+', '-', slug)
-    # 양쪽 하이픈 제거
-    slug = slug.strip('-')
+    """영문명을 URL 슬러그로 변환한다(소문자, 비영숫자 하이픈, 양끝 정리)."""
+    slug = re.sub(r"[^a-z0-9]+", "-", name_en.lower()).strip("-")
     return slug
 
 
 def extract_weights(variants: list[str]) -> list[int]:
-    """정규화된 variants 목록에서 weight 숫자를 추출한다.
-
-    각 variant의 첫 단어를 숫자로 파싱하고, 중복을 제거하며, 첫 등장 순서를 유지한다.
-    """
-    weights: list[int] = []
-    seen: set[int] = set()
-
-    for variant in variants:
-        # 첫 단어 추출 (공백 기준)
-        parts = variant.split()
-        if parts:
-            try:
-                weight = int(parts[0])
-                if weight not in seen:
-                    weights.append(weight)
-                    seen.add(weight)
-            except ValueError:
-                # 숫자로 파싱 불가하면 건너뜀
-                pass
-
-    return weights
+    """정규화 variants에서 숫자 weight만 추출한다(중복 제거, 오름차순)."""
+    weights: set[int] = set()
+    for v in variants:
+        head = v.split(" ")[0]
+        if head.isdigit():
+            weights.add(int(head))
+    return sorted(weights)
 
 
 def to_record(raw: GoogleFontRaw) -> FontRecord:

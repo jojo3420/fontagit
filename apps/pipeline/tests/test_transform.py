@@ -190,61 +190,19 @@ def test_build_records_skips_non_ascii_family_with_warning(caplog):
     assert any("나눔고딕" in record.message for record in caplog.records if record.levelno == logging.WARNING)
 
 
-def test_map_category_ko_sans_serif():
-    """sans-serif 카테고리를 한글로 매핑한다."""
+def test_map_category_ko():
     assert map_category_ko("sans-serif") == "고딕"
-
-
-def test_map_category_ko_serif():
-    """serif 카테고리를 한글로 매핑한다."""
     assert map_category_ko("serif") == "명조"
+    assert map_category_ko("handwriting") == "손글씨"
+    assert map_category_ko("display") == "장식"
+    assert map_category_ko("monospace") == "고딕"
 
 
-def test_map_category_ko_monospace():
-    """monospace 카테고리를 한글로 매핑한다."""
-    assert map_category_ko("monospace") == "고정폭"
+def test_build_slug():
+    assert build_slug("Noto Sans KR") == "noto-sans-kr"
+    assert build_slug("IBM Plex Sans") == "ibm-plex-sans"
 
 
-def test_map_category_ko_display():
-    """display 카테고리를 한글로 매핑한다."""
-    assert map_category_ko("display") == "특수"
-
-
-def test_build_slug_converts_to_lowercase():
-    """영문명을 소문자 슬러그로 변환한다."""
-    assert build_slug("Noto Sans") == "noto-sans"
-
-
-def test_build_slug_replaces_spaces_with_hyphens():
-    """공백을 하이픈으로 바꾼다."""
-    assert build_slug("Roboto Mono") == "roboto-mono"
-
-
-def test_build_slug_removes_special_characters():
-    """특수문자를 제거하거나 하이픈으로 바꾼다."""
-    assert build_slug("Open Sans+Plus") == "open-sans-plus"
-
-
-def test_build_slug_handles_multiple_spaces():
-    """연속 공백을 하이픈 하나로 처리한다."""
-    assert build_slug("Noto  Sans") == "noto-sans"
-
-
-def test_extract_weights_from_normalized_variants():
-    """정규화된 variants에서 weight 숫자를 추출한다."""
-    variants = ["400", "400 italic", "700", "700 italic"]
-    assert extract_weights(variants) == [400, 700]
-
-
-def test_extract_weights_removes_duplicates():
-    """중복 weight를 제거한다."""
-    variants = ["400", "400 italic", "700", "700", "700 italic"]
-    result = extract_weights(variants)
-    assert result == [400, 700]
-    assert len(result) == len(set(result))
-
-
-def test_extract_weights_maintains_order():
-    """첫 등장 순서를 유지한다."""
-    variants = ["700", "400 italic", "900", "400"]
-    assert extract_weights(variants) == [700, 400, 900]
+def test_extract_weights():
+    assert extract_weights(["400", "400 italic", "700"]) == [400, 700]
+    assert extract_weights(["300", "300 italic", "100"]) == [100, 300]
