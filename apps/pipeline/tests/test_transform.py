@@ -71,6 +71,15 @@ def webfonts_sample() -> list[GoogleFontRaw]:
     return [GoogleFontRaw(**item) for item in data]
 
 
+@pytest.fixture
+def license_map() -> dict[str, str]:
+    """라이선스 맵 테스트 픽스처."""
+    return {
+        "Noto Sans KR": "OFL",
+        "Roboto": "Apache 2.0",
+    }
+
+
 def test_filter_korean_keeps_fonts_with_korean_subset_in_order(webfonts_sample):
     result = filter_korean(webfonts_sample)
     families = [font.family for font in result]
@@ -134,23 +143,23 @@ def test_merge_dedup_removes_duplicates_within_korean():
     assert len(families) == len(set(families))
 
 
-def test_to_record_creates_record_with_license_none_and_verified_false(webfonts_sample):
+def test_to_record_creates_record_with_license_none_and_verified_false(webfonts_sample, license_map):
     raw = webfonts_sample[0]
-    rec = to_record(raw)
+    rec = to_record(raw, license_map)
     assert rec.name_en == "Noto Sans KR"
     assert rec.license is None
     assert rec.license_verified is False
 
 
-def test_to_record_uses_build_official_url_and_normalize_variants(webfonts_sample):
+def test_to_record_uses_build_official_url_and_normalize_variants(webfonts_sample, license_map):
     raw = webfonts_sample[1]
-    rec = to_record(raw)
+    rec = to_record(raw, license_map)
     assert rec.official_url == "https://fonts.google.com/specimen/Roboto"
     assert rec.variants == ["400", "700"]
 
 
-def test_build_records_merges_dedup_and_converts(webfonts_sample):
-    records = build_records(webfonts_sample, latin_limit=100)
+def test_build_records_merges_dedup_and_converts(webfonts_sample, license_map):
+    records = build_records(webfonts_sample, license_map, latin_limit=100)
     families = [rec.name_en for rec in records]
     assert families == ["Noto Sans KR", "Roboto"]
     assert len(families) == len(set(families))
@@ -159,7 +168,7 @@ def test_build_records_merges_dedup_and_converts(webfonts_sample):
         assert rec.license_verified is False
 
 
-def test_build_records_skips_non_ascii_family_with_warning(caplog):
+def test_build_records_skips_non_ascii_family_with_warning(caplog, license_map):
     """비ASCII family는 build_official_url의 ValueError에 의해 건너뛰고 로그한다."""
     caplog.set_level(logging.WARNING)
     fonts = [
@@ -182,7 +191,7 @@ def test_build_records_skips_non_ascii_family_with_warning(caplog):
             category="sans-serif",
         ),
     ]
-    records = build_records(fonts, latin_limit=100)
+    records = build_records(fonts, license_map, latin_limit=100)
     families = [rec.name_en for rec in records]
     assert "Noto Sans KR" in families
     assert "나눔고딕" not in families

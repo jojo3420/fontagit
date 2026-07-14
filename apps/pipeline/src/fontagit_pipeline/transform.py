@@ -3,6 +3,7 @@
 import logging
 import re
 
+from fontagit_pipeline.licenses import resolve_license_type
 from fontagit_pipeline.models import GoogleFontRaw, FontRecord
 
 logger = logging.getLogger(__name__)
@@ -125,33 +126,42 @@ def extract_weights(variants: list[str]) -> list[int]:
     return sorted(weights)
 
 
-def to_record(raw: GoogleFontRaw) -> FontRecord:
-    """GoogleFontRaw를 FontRecord로 변환한다 (license=None, license_verified=False)."""
+def to_record(raw: GoogleFontRaw, license_map: dict[str, str]) -> FontRecord:
+    """GoogleFontRaw를 FontRecord로 변환. license_type 판별 및 상태 결정."""
+    license_type = resolve_license_type(raw.family, license_map)
+    verified = license_type is not None
+    
     return FontRecord(
+        slug=build_slug(raw.family),
         name_en=raw.family,
-        name_ko=None,
-        tier="A",
-        category=raw.category,
+        source_tier="A",
+        category_ko=map_category_ko(raw.category),
+        category_google=raw.category,
         subsets=raw.subsets,
         variants=normalize_variants(raw.variants),
+        weights=extract_weights(raw.variants),
         official_url=build_official_url(raw.family),
+        is_commercial_free=verified,
         license=None,
-        license_verified=False,
+        license_type=license_type,
+        license_verified=verified,
+        status="published" if verified else "draft",
         aliases=build_aliases(raw.family),
         version=raw.version,
         last_modified=raw.lastModified,
     )
 
 
+
 def build_records(
-    fonts: list[GoogleFontRaw], latin_limit: int = 100
+    fonts: list[GoogleFontRaw], license_map: dict[str, str], latin_limit: int = 100
 ) -> list[FontRecord]:
-    """폰트 목록을 레코드로 변환한다 (한국어+라틴 통합, 중복 제거, 변환 실패 시 건너뜀)."""
+    """병합·중복제거 후 FontRecord 리스트 반환. 변환 실패 시 건너뜀."""
     merged = merge_dedup(filter_korean(fonts), select_latin_top(fonts, latin_limit))
     records: list[FontRecord] = []
     for raw in merged:
         try:
-            records.append(to_record(raw))
+            records.append(to_record(raw, license_map))
         except ValueError as exc:
             logger.warning("레코드 변환 건너뜀 (%s): %s", raw.family, exc)
     return records
