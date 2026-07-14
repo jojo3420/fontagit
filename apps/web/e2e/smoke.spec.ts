@@ -108,6 +108,26 @@ test('mobile tab bar shows on small viewport', async ({ page }) => {
   await expect(page.getByRole('navigation', { name: '모바일 탭' })).toBeVisible();
 });
 
+test('mobile viewport shows compare tab in tab bar and hides header tool links', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/', { waitUntil: 'networkidle' });
+
+  // Verify tab bar is visible and has 5 tabs
+  const tabBar = page.getByRole('navigation', { name: '모바일 탭' });
+  await expect(tabBar).toBeVisible();
+  const tabLinks = tabBar.getByRole('link');
+  await expect(tabLinks).toHaveCount(5);
+
+  // Verify compare tab is visible with correct href
+  await expect(tabBar.getByRole('link', { name: '비교' })).toBeVisible();
+  await expect(tabBar.getByRole('link', { name: '비교' })).toHaveAttribute('href', /^\/compare\/?$/);
+
+  // Verify header tool links (canvas and compare) are hidden on mobile
+  const headerNav = page.getByRole('navigation').first();
+  await expect(headerNav.getByRole('link', { name: '캔버스' })).toBeHidden();
+  await expect(headerNav.getByRole('link', { name: '비교' })).toBeHidden();
+});
+
 test('theme toggle switches data-theme', async ({ page }) => {
   await page.goto('/', { waitUntil: 'networkidle' });
   const html = page.locator('html');
@@ -119,11 +139,11 @@ test('theme toggle switches data-theme', async ({ page }) => {
 });
 
 test('header nav contains canvas and compare links (desktop)', async ({ page }) => {
-  page.setViewportSize({ width: 1024, height: 768 });
+  await page.setViewportSize({ width: 1024, height: 768 });
   await page.goto('/', { waitUntil: 'networkidle' });
   const nav = page.getByRole('navigation').first();
   await expect(nav.getByRole('link', { name: '캔버스' })).toBeVisible();
-  await expect(nav.getByRole('link', { name: '캔버스' })).toHaveAttribute('href', /\/playground\/?/);
+  await expect(nav.getByRole('link', { name: '캔버스' })).toHaveAttribute('href', /^\/playground\/?$/);
   await expect(nav.getByRole('link', { name: '비교' })).toBeVisible();
-  await expect(nav.getByRole('link', { name: '비교' })).toHaveAttribute('href', /\/compare\/?/);
+  await expect(nav.getByRole('link', { name: '비교' })).toHaveAttribute('href', /^\/compare\/?$/);
 });
