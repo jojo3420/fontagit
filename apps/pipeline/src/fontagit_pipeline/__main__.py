@@ -46,6 +46,8 @@ def main() -> int:
         3: API 조회 실패, 데이터 검증 실패, 또는 파일 저장 실패
     """
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    # httpx INFO 로그가 API 키 포함 URL을 평문 노출하므로 억제
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
     try:
         settings = load_settings()
