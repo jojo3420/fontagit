@@ -1,18 +1,26 @@
-import { TrendTable } from "@/components/TrendTable";
-import { weeklyTrends, monthlyTrends } from "@/data/trends";
+import { weeklyTrends } from "@/data/trends";
 import { FilterChip } from "@/components/FilterChip";
+import { TrendRankRow } from "@/components/TrendRankRow";
 import styles from "./page.module.css";
 
 export default function TrendsPage() {
   return (
     <main className={styles.main}>
-      <h1 className={styles.h1}>트렌드</h1>
-      <div className={styles.filters}>
-        <FilterChip active>주간</FilterChip>
-        <FilterChip>월간</FilterChip>
+      <div className={styles.head}>
+        <h1 className={styles.h1}>이번 주 인기 폰트</h1>
+        <p className={styles.lead}>이동 클릭 기준 인기 순위입니다 (다운로드 순위 아님).</p>
+        <div className={styles.filters}>
+          <FilterChip active>주간</FilterChip>
+          <FilterChip>월간</FilterChip>
+        </div>
       </div>
-      <TrendTable title="주간 트렌드" items={weeklyTrends} />
-      <TrendTable title="월간 트렌드" items={monthlyTrends} />
+      <ul className={styles.list}>
+        {weeklyTrends.map((item) => (
+          <li key={item.rank}>
+            <TrendRankRow item={item} />
+          </li>
+        ))}
+      </ul>
     </main>
   );
 }
