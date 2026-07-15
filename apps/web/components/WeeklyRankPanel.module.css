@@ -1,0 +1,6 @@
+.panel { background: rgba(44, 85, 69, .045); border: 1px solid rgba(44, 85, 69, .12); border-radius: var(--radius-card); padding: 20px; }
+.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.title { font-size: 15px; font-weight: 800; color: var(--ink); margin: 0; }
+.hint { font-size: 11px; color: var(--sub); margin: 4px 0 0; }
+.all { font-size: 12px; font-weight: 600; color: var(--point); white-space: nowrap; }
+.list { list-style: none; padding: 0; margin: 0; }

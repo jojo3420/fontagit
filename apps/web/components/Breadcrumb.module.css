@@ -1,0 +1,6 @@
+.wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--sub); }
+.item { display: inline-flex; align-items: center; gap: 6px; }
+.link { color: var(--sub); }
+.link:hover { color: var(--ink); }
+.current { color: var(--sub); }
+.sep { color: var(--sub-2); }

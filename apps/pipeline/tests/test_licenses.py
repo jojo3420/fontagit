@@ -67,6 +67,12 @@ class TestParseLicenseMap:
         assert result["notosanskr"] == "OFL"
         assert result["jua"] == "OFL"
 
+    def test_skip_entry_without_path(self):
+        """path 키 없는 항목은 KeyError 없이 건너뛴다."""
+        trees = {"ofl": [{"type": "tree"}, {"type": "tree", "path": "jua"}]}
+        result = parse_license_map(trees)
+        assert result == {"jua": "OFL"}
+
 
 class TestResolveLicenseType:
     """resolve_license_type 테스트."""
@@ -116,3 +122,28 @@ class TestFetchLicenseMap:
 
             with pytest.raises(LicenseFetchError):
                 fetch_license_map()
+
+    def test_fetch_license_map_raises_on_malformed_json(self):
+        """응답 본문 JSON 파싱 실패 시 LicenseFetchError로 감싼다."""
+        with patch("fontagit_pipeline.licenses.httpx.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client_class.return_value.__enter__.return_value = mock_client
+            mock_response = MagicMock()
+            mock_response.raise_for_status.return_value = None
+            mock_response.json.side_effect = ValueError("Invalid JSON")
+            mock_client.get.return_value = mock_response
+
+            with pytest.raises(LicenseFetchError):
+                fetch_license_map()
+
+    def test_fetch_license_map_missing_tree_key_returns_empty(self):
+        """루트 응답에 tree 키가 없으면 빈 매핑을 반환한다(죽지 않음)."""
+        with patch("fontagit_pipeline.licenses.httpx.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client_class.return_value.__enter__.return_value = mock_client
+            mock_response = MagicMock()
+            mock_response.raise_for_status.return_value = None
+            mock_response.json.return_value = {}
+            mock_client.get.return_value = mock_response
+
+            assert fetch_license_map() == {}

@@ -1,21 +1,22 @@
 import { fonts } from "@/data/fonts";
+import { FontFilters } from "@/components/FontFilters";
 import { FontGrid } from "@/components/FontGrid";
-import { FilterChip } from "@/components/FilterChip";
 import styles from "./page.module.css";
 
 export default function FontsPage() {
   return (
     <main className={styles.main}>
-      <h1 className={styles.h1}>폰트</h1>
-      <div className={styles.filters}>
-        <FilterChip active>전체</FilterChip>
-        <FilterChip>무료</FilterChip>
-        <FilterChip>유료</FilterChip>
-        <FilterChip>고딕</FilterChip>
-        <FilterChip>명조</FilterChip>
-        <FilterChip>손글씨</FilterChip>
+      <FontFilters />
+      <div className={styles.body}>
+        <div className={styles.toolbar}>
+          <span className={styles.count}>폰트 {fonts.length}종</span>
+          <div className={styles.sorts}>
+            <button type="button" className={`${styles.sort} ${styles.active}`}>인기순</button>
+            <button type="button" className={styles.sort}>최신순</button>
+          </div>
+        </div>
+        <FontGrid fonts={fonts} />
       </div>
-      <FontGrid fonts={fonts} />
     </main>
   );
 }

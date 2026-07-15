@@ -1,5 +1,14 @@
+from unittest.mock import patch, MagicMock
+
+import pytest
+
 from fontagit_pipeline.models import FontRecord
-from fontagit_pipeline.uploader import build_font_row, build_alias_rows, normalize_alias
+from fontagit_pipeline.uploader import (
+    build_font_row,
+    build_alias_rows,
+    normalize_alias,
+    upload_records,
+)
 
 
 def _rec():
@@ -27,7 +36,48 @@ def test_normalize_alias():
 
 
 def test_build_alias_rows_dedup_norm():
-    rows = build_alias_rows("fid-1", ["Noto Sans", "noto sans"])  # 정규화 동일
+    """정규화 후 중복인 별칭은 첫 원본만 유지."""
+    rows = build_alias_rows(["Noto Sans", "noto sans"])  # 정규화 동일
     assert len(rows) == 1
-    assert rows[0]["font_id"] == "fid-1"
+    assert rows[0]["alias"] == "Noto Sans"  # 원본
     assert rows[0]["alias_norm"] == "notosans"
+    assert "font_id" not in rows[0]
+
+
+def test_build_alias_rows_empty_alias():
+    """빈값/공백만인 별칭은 필터 제외."""
+    rows = build_alias_rows(["  ", ""])  # 빈값/공백만
+    assert len(rows) == 0
+
+
+def test_upload_records_calls_rpc_per_font():
+    """upload_records가 RPC upsert_font를 폰트당 1회 호출한다."""
+    with patch("fontagit_pipeline.uploader.create_client") as mock_create:
+        mock_client = MagicMock()
+        mock_create.return_value = mock_client
+        mock_schema = mock_client.schema.return_value
+
+        n = upload_records([_rec()], "https://x.supabase.co", "sb_secret")
+
+        assert n == 1
+        mock_client.schema.assert_called_once_with("fontagit")
+        mock_schema.rpc.assert_called_once()
+        name, payload = mock_schema.rpc.call_args.args
+        assert name == "upsert_font"
+        assert payload["p_font"]["slug"] == "noto-sans-kr"
+        assert "id" not in payload["p_font"]
+        assert payload["p_aliases"][0]["alias_norm"] == "notosanskr"
+        assert "font_id" not in payload["p_aliases"][0]
+        mock_schema.rpc.return_value.execute.assert_called_once()
+
+
+def test_upload_records_raises_on_rpc_failure():
+    """RPC 실패 시 예외가 전파된다."""
+    with patch("fontagit_pipeline.uploader.create_client") as mock_create:
+        mock_client = MagicMock()
+        mock_create.return_value = mock_client
+        mock_schema = mock_client.schema.return_value
+        mock_schema.rpc.return_value.execute.side_effect = RuntimeError("boom")
+
+        with pytest.raises(RuntimeError):
+            upload_records([_rec()], "https://x.supabase.co", "sb_secret")

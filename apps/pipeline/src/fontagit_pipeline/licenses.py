@@ -47,7 +47,7 @@ def parse_license_map(trees: dict[str, list[dict[str, Any]]]) -> dict[str, str]:
     for license_dir, license_type in _LICENSE_DIRS.items():
         if license_dir in trees:
             for entry in trees[license_dir]:
-                if entry.get("type") == "tree":
+                if entry.get("type") == "tree" and "path" in entry:
                     result[entry["path"]] = license_type
     return result
 
@@ -72,9 +72,13 @@ def _get_tree_sha(client: httpx.Client, headers: dict[str, str]) -> dict[str, st
     r = client.get(f"{_GH_API}/repos/google/fonts/git/trees/main", headers=headers)
     r.raise_for_status()
     shas: dict[str, str] = {}
-    for entry in r.json()["tree"]:
-        if entry["path"] in _LICENSE_DIRS and entry["type"] == "tree":
-            shas[entry["path"]] = entry["sha"]
+    data = r.json()
+    if "tree" not in data:
+        return shas
+    for entry in data["tree"]:
+        if "path" in entry and "sha" in entry and entry.get("type") == "tree":
+            if entry["path"] in _LICENSE_DIRS:
+                shas[entry["path"]] = entry["sha"]
     return shas
 
 
@@ -102,8 +106,13 @@ def fetch_license_map(github_token: str | None = None) -> dict[str, str]:
                     f"{_GH_API}/repos/google/fonts/git/trees/{sha}", headers=headers
                 )
                 r.raise_for_status()
-                trees[dir_key] = r.json()["tree"]
+                data = r.json()
+                if "tree" in data:
+                    trees[dir_key] = data["tree"]
     except httpx.HTTPError as exc:
         logger.warning("라이선스 매핑 조회 실패: %s", exc.__class__.__name__)
+        raise LicenseFetchError(str(exc)) from exc
+    except ValueError as exc:
+        logger.warning("라이선스 매핑 JSON 파싱 실패: %s", exc.__class__.__name__)
         raise LicenseFetchError(str(exc)) from exc
     return parse_license_map(trees)

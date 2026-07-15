@@ -35,7 +35,6 @@ describe("data helpers", () => {
       }
     }
   });
-});
   it("checkIntegrity throws on collection referencing a non-existent font", () => {
     const badCollections = [{ slug: "x", title: "x", intro: "x", items: [{ fontSlug: "nope", comment: "c" }] }];
     expect(() => checkIntegrity(fonts, badCollections, FONT_KEYS)).toThrow();
@@ -59,3 +58,19 @@ describe("data helpers", () => {
     const goodCollections = [{ slug: "x", title: "x", intro: "x", items: [{ fontSlug: "pretendard", comment: "c" }] }];
     expect(() => checkIntegrity(fonts, goodCollections, FONT_KEYS)).not.toThrow();
   });
+  it("모든 폰트에 라이선스 필드가 채워져 있다", () => {
+    for (const slug of getAllSlugs()) {
+      const f = getFontBySlug(slug)!;
+      expect(f.license.type.length).toBeGreaterThan(0);
+      expect(["included", "separate", "no"]).toContain(f.license.webfont);
+      expect(["yes", "no"]).toContain(f.license.redistribution);
+    }
+  });
+  it("유료 폰트 sandoll-gothic-neo는 구매 시/별도 구매/불가 + 가격", () => {
+    const p = getFontBySlug("sandoll-gothic-neo")!;
+    expect(p.license.commercial).toBe("conditional");
+    expect(p.license.webfont).toBe("separate");
+    expect(p.license.redistribution).toBe("no");
+    expect(p.priceFrom).toBe(99000);
+  });
+});

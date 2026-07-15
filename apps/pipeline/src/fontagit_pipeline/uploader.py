@@ -41,39 +41,37 @@ def build_font_row(rec: FontRecord) -> dict[str, Any]:
     return {col: data[col] for col in _FONT_COLS}
 
 
-def build_alias_rows(font_id: str, aliases: list[str]) -> list[dict[str, Any]]:
-    """aliases upsert용 행을 만든다(alias_norm 기준 중복 제거)."""
+def build_alias_rows(aliases: list[str]) -> list[dict[str, Any]]:
+    """aliases 행을 만든다(alias_norm 기준 중복/빈값 제거). font_id는 DB 함수가 채운다."""
     seen: set[str] = set()
     rows: list[dict[str, Any]] = []
     for alias in aliases:
         norm = normalize_alias(alias)
         if norm and norm not in seen:
             seen.add(norm)
-            rows.append({"font_id": font_id, "alias": alias, "alias_norm": norm})
+            rows.append({"alias": alias, "alias_norm": norm})
     return rows
 
 
 def upload_records(records: list[FontRecord], url: str, secret_key: str) -> int:
-    """레코드를 fontagit.fonts/aliases에 멱등 upsert하고 처리 건수를 반환한다."""
+    """레코드를 fontagit.upsert_font RPC로 폰트별 원자 업로드하고 처리 건수를 반환한다.
+
+    각 폰트는 단일 트랜잭션(fonts upsert + aliases 재삽입)으로 처리된다.
+    첫 실패 시 즉시 중단하며, 이미 처리된 폰트는 유지된다(파이프라인 멱등 재실행).
+    """
     client = create_client(url, secret_key)
-    table = client.schema("fontagit")
+    schema = client.schema("fontagit")
     count = 0
     for rec in records:
-        res = (
-            table.table("fonts")
-            .upsert(build_font_row(rec), on_conflict="slug")
-            .execute()
-        )
-        data: Any = res.data
-        if not data:
-            logger.error("fonts upsert 응답이 비어있음 (slug=%s)", rec.slug)
-            raise RuntimeError(f"fonts upsert 응답 없음: {rec.slug}")
-        font_id = str(data[0]["id"])
-        alias_rows = build_alias_rows(font_id, rec.aliases)
-        if alias_rows:
-            table.table("aliases").upsert(
-                alias_rows, on_conflict="font_id,alias_norm"
-            ).execute()
+        try:
+            rpc_params: dict[str, Any] = {
+                "p_font": build_font_row(rec),
+                "p_aliases": build_alias_rows(rec.aliases),
+            }
+            schema.rpc("upsert_font", rpc_params).execute()
+        except Exception:
+            logger.error("업로드 실패(중단): slug=%s", rec.slug)
+            raise
         count += 1
     logger.info("업로드 완료: %d개", count)
     return count

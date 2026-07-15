@@ -11,16 +11,37 @@ FontAgit(폰트 아지트)는 국내외 무료-유료 폰트를 검색-비교하
 - 인기 폰트 트렌드(주간/월간 TOP)
 - 홈 히어로 + 이번 주 TOP 10, 다크모드
 - 폰트 데이터 자동 수집-라이선스 판별-Supabase 적재 파이프라인(구글폰트 OFL/Apache/UFL 자동 공개, 서버 배치)
+- 폰트 비교(최대 3종 나란히 미리보기), 타입 캔버스(한 글자를 전체 폰트로), 테마별 컬렉션, 폰트 등록 신청 폼
 
 ## 진행 기록
+
+## 2026-07-15 - 디자인 정합 슬라이스 4~8 (트렌드/비교/캔버스/컬렉션/등록)
+
+- 상태: 완료 (디자인 목업 대비 정합 슬라이스 1~8 전체 완료)
+- 완료한 일: 트렌드 화면(/trends)을 목업과 맞춰 "이번 주 인기 폰트" 단일 주간 리스트 카드형으로 재구성. 비교-캔버스-컬렉션-등록 4개 화면은 이미 목업과 일치해 코드 변경 없이 시각검증만 수행(각 데스크톱/모바일/다크 3종 90점+ 확인).
+- 커밋/PR: `6e62212`(TrendRankRow 카드행), `962850d`(/trends 재조립+TrendTable 제거), `b9aa339`(슬라이스4 계획). PR ⚠️ 준비 중(develop→main).
+- 결정사항: 슬라이스 5~8은 기존 구현이 이미 정합이라 재작성 안 함(요청 최소 변경). 월간 트렌드 탭은 시각만(데이터는 보존). 등록 폼 광고 영역은 제외(수용한 차이).
+- 남은 일: (1) develop→main PR 생성. (2) ⚠️기술부채: 등록 폼(/submit) 제출-검증 로직 미구현(무동작) → 백로그 이슈. (3) 비교/캔버스/등록 폼 컴포넌트 테스트 부재.
+- 관련 문서: `docs/superpowers/plans/2026-07-15-design-fidelity-slice4-trends.md`, `docs/superpowers/specs/2026-07-15-design-fidelity-v2-design.md`, `.superpowers/sdd/progress.md`(SDD 원장)
+- 상세 히스토리: 없음 (SDD 원장에 태스크별 dense 기록)
+
+## 2026-07-15 - 파이프라인 업로드 원자성-stale alias 개선 (이슈 #8)
+
+- 상태: 부분 완료 (코드 완료 + sandbox DB 함수 적용, 실제 업로드 재검증-PR 미완)
+- 완료한 일: 폰트 업로드를 폰트 1건당 단일 트랜잭션(DB 함수 RPC)으로 묶어 "폰트는 저장됐는데 별칭이 없는" 불일치와, 이름 규칙 변경 시 남던 옛 별칭(stale alias)을 제거. 구글폰트 라이선스 조회 응답이 이상해도 죽지 않도록 방어 추가. 전체 테스트 75건 통과, sandbox Supabase에 DB 함수 적용 완료.
+- 커밋/PR: `060e827`(licenses 방어), `bfd1320`(upsert_font RPC + 실행권한 제한), `6bf73be`+`0227e2e`(업로더 RPC 재작성 + 테스트). PR ⚠️ 미생성.
+- 결정사항: 원자성=폰트별(전체 배치 아님), stale alias=삭제 후 재삽입(active 컬럼 아님). DB 함수는 SECURITY DEFINER라 실행 권한을 service_role로 제한(anon/authenticated 쓰기 차단).
+- 남은 일: (1) 실제 파이프라인 실행으로 멱등/stale/롤백 재검증. (2) PR 생성. (3) 이슈 #8 NICE 2건(license 필드 통합, GITHUB_TOKEN 설정).
+- 관련 문서: `docs/superpowers/plans/2026-07-15-upload-atomicity-alias-sync.md`, `docs/superpowers/specs/2026-07-15-upload-atomicity-alias-sync-design.md`, `docs/superpowers/handoff/2026-07-15-1348-upload-atomicity-issue8.md`
+- 상세 히스토리: 없음 (design/handoff/ledger에 dense 기록)
 
 ## 2026-07-15 - 데이터 파이프라인 Supabase 업로드 완성 (Slice 0)
 
 - 상태: 완료
-- 완료한 일: 구글폰트 수집 데이터를 라이선스 판별 후 Supabase(폰트 DB)에 자동 적재하는 파이프라인 완성. 실제 폰트 136개 적재(공개 가능 130개), 여러 번 실행해도 중복 없이 동일(멱등) 검증. 공개는 OFL/Apache/UFL처럼 라이선스가 확인된 폰트만 자동 게시.
-- 커밋/PR: `2c1c62a`(변환 버그+테스트 정정), `fd1a5b5`(Supabase 업로더), `b487c49`(수집-판별-업로드 오케스트레이션), `436c181`(비밀파일 gitignore), `0a8d0d0`(DB 권한 마이그레이션), `33bf12a`(API키 로그 노출 억제). PR: develop→main 생성 예정(다음 단계).
+- 완료한 일: 구글폰트 수집 데이터를 라이선스 판별 후 Supabase(폰트 DB)에 자동 적재하는 파이프라인 완성. 실제 폰트 136개 적재(공개 가능 130개), 여러 번 실행해도 중복 없이 동일(멱등) 검증. 공개는 OFL/Apache/UFL처럼 라이선스가 확인된 폰트만 자동 게시. PR #7 듀얼 리뷰(Codex)에서 라이선스 조회 실패 시 공개 폰트가 전부 비공개(draft)로 덮이는 데이터 손실 경로를 발견-수정한 뒤 main에 머지.
+- 커밋/PR: `2c1c62a`(변환 버그+테스트 정정), `fd1a5b5`(Supabase 업로더), `b487c49`(오케스트레이션), `436c181`(비밀파일 gitignore), `0a8d0d0`(DB 권한), `33bf12a`(API키 로그 억제), `a20641d`+`81e325a`(PR #7 리뷰 반영: 라이선스 실패 시 업로드 보류-published 규칙 강제-status Literal). PR #7 develop→main 머지 완료(https://github.com/jojo3420/fontagit/pull/7).
 - 결정사항: FontAgit 전용 신규 Supabase 프로젝트(ref zgxtfcpiokhkcrywlxmc, 서울 리전) 사용 — ollidam 공유 인스턴스 아님. license_verified=true인 폰트만 공개(라이선스 정직성).
-- 남은 일: (1) develop→main PR 생성-머지. (2) Slice 1 웹 실데이터 연동(Plan B).
+- 남은 일: (1) Slice 1 웹 실데이터 연동(Plan B). (2) 파이프라인 후속 개선 백로그 — 업로드 원자성-stale alias-GitHub 응답 방어 등(GitHub 이슈 #8).
 - 관련 문서: `docs/superpowers/plans/2026-07-14-slice-0-data-pipeline-upload.md`, `.superpowers/sdd/progress.md`(태스크별 상세)
 - 상세 히스토리: 없음 (.superpowers/sdd/progress.md에 태스크별 dense 기록)
 

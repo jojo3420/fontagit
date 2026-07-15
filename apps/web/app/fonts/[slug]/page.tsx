@@ -1,12 +1,11 @@
 import { notFound } from "next/navigation";
 import { getFontBySlug, getAllSlugs, resolveFreeAlternatives } from "@/lib/data";
 import { fontKeyToVar } from "@/lib/fonts";
+import { Breadcrumb } from "@/components/Breadcrumb";
+import { SpecimenBox } from "@/components/SpecimenBox";
+import { LicenseSummaryCard } from "@/components/LicenseSummaryCard";
+import { AlternativesCard } from "@/components/AlternativesCard";
 import { TierChip } from "@/components/TierChip";
-import { LicenseBadge } from "@/components/LicenseBadge";
-import { Button } from "@/components/Button";
-import { FontCard } from "@/components/FontCard";
-import { PreviewInput } from "@/components/PreviewInput";
-import { Specimen } from "@/components/Specimen";
 import styles from "./page.module.css";
 
 export const dynamicParams = false;
@@ -18,59 +17,40 @@ export function generateStaticParams() {
 export default async function FontDetail({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const font = getFontBySlug(slug);
-
-  if (!font) {
-    notFound();
-  }
+  if (!font) notFound();
 
   const family = fontKeyToVar[font.fontKey];
   const isPaid = font.tier === "paid";
-  const specimenWeights = font.availableWeights;
+  const alternatives = isPaid ? resolveFreeAlternatives(font) : [];
+  const caption = isPaid
+    ? "견본은 유사 서체로 대체 표시 — 실제 서체는 공식 페이지에서 확인하세요."
+    : undefined;
 
   return (
     <main className={styles.wrap}>
-      <header className={styles.header}>
-        <h1 className={styles.title}>{font.nameKo}</h1>
-        <div className={styles.meta}>
-          <TierChip tier={font.tier} />
-          <LicenseBadge commercial={font.license.commercial} />
-          <span>{specimenWeights.length}가지 굵기</span>
-          <span>{font.foundry}</span>
-          <span>확인일 {font.license.verifiedAt}</span>
-        </div>
-      </header>
-
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>미리보기</h2>
-        <PreviewInput fontFamily={family} />
-      </section>
-
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>견본</h2>
-        <Specimen fontFamily={family} weights={specimenWeights} substitute={isPaid} />
-      </section>
-
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>라이선스 및 다운로드</h2>
-        <div className={styles.actions}>
-          {isPaid ? (
-            <Button href={font.officialUrl}>구매 페이지로 이동</Button>
-          ) : (
-            <Button href={font.officialUrl}>공식 페이지에서 내려받기</Button>
-          )}
-        </div>
-      </section>
-
-      {isPaid && (
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>비슷한 무료 대안</h2>
-          <div className={styles.alternatives}>
-            {resolveFreeAlternatives(font).map((alt) => (
-              <FontCard key={alt.slug} font={alt} />
-            ))}
+      <Breadcrumb
+        items={[
+          { label: "폰트", href: "/fonts" },
+          { label: font.category, href: `/fonts?category=${encodeURIComponent(font.category)}` },
+          { label: font.nameKo },
+        ]}
+      />
+      <div className={styles.grid}>
+        <div className={styles.main}>
+          <div className={styles.titleRow}>
+            <h1 className={styles.title}>{font.nameKo}</h1>
+            <TierChip tier={font.tier} />
           </div>
-        </section>
-      )}
+          <p className={styles.meta}>
+            {font.foundry} {String.fromCharCode(183)} {font.availableWeights.length}가지 굵기 {String.fromCharCode(183)} 이동 {font.moves.toLocaleString()}회
+          </p>
+          <SpecimenBox fontFamily={family} editable={!isPaid} caption={caption} />
+        </div>
+        <div className={styles.side}>
+          <LicenseSummaryCard font={font} />
+          <AlternativesCard category={font.category} items={alternatives} />
+        </div>
+      </div>
     </main>
   );
 }
