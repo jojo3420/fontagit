@@ -1,5 +1,5 @@
 import { Hero } from "@/components/Hero";
-import { TrendTable } from "@/components/TrendTable";
+import { WeeklyRankPanel } from "@/components/WeeklyRankPanel";
 import { AdSlot } from "@/components/AdSlot";
 import { weeklyTrends } from "@/data/trends";
 import styles from "./page.module.css";
@@ -7,12 +7,10 @@ import styles from "./page.module.css";
 export default function Home() {
   return (
     <main className={styles.main}>
-      <Hero />
-      <section className={styles.section}>
-        <div className={styles.container}>
-          <TrendTable title="이번 주 인기 폰트" items={weeklyTrends} />
-        </div>
-      </section>
+      <div className={styles.grid}>
+        <Hero />
+        <WeeklyRankPanel items={weeklyTrends} />
+      </div>
       <section className={styles.adSection}>
         <div className={styles.container}>
           <AdSlot />
