@@ -25,16 +25,18 @@
 
 `fontagit.upsert_font(p_font jsonb, p_aliases jsonb) returns uuid` 함수 신설. 함수 본문이 단일 트랜잭션이라 아래 3동작이 폰트당 원자적:
 
-- `fonts`를 `slug` 기준 upsert(on conflict do update) → `font_id` 확보
+- `fonts`를 `slug` 기준 upsert(on conflict do update). 입력 계약 좁힘: `p_font`에서 `_FONT_COLS` 화이트리스트 컬럼만 명시 매핑(JSON 통째 신뢰 금지). do update 시 `updated_at = now()` 포함(0001에 update 트리거 없어 수동 갱신 필요) → `font_id` 확보
 - 그 `font_id`의 기존 `aliases` 전량 `delete` (stale 제거)
-- `p_aliases`(jsonb 배열, 각 `{alias, alias_norm}`)를 insert
+- `p_aliases`(jsonb 배열, 각 `{alias, alias_norm}`)를 insert. 빈 배열이면 delete만 하고 insert 스킵(alias 없음으로 간주)
 
-보안: `security definer` + `set search_path = fontagit, pg_temp` 고정(search_path 조작 차단). 호출은 secret key(service_role) 전용.
+보안:
+- `security definer` + `set search_path = fontagit, pg_temp` 고정(search_path 조작 차단)
+- [Must] EXECUTE 권한 제한: `revoke execute on function fontagit.upsert_font(jsonb, jsonb) from public, anon, authenticated;` 후 `grant execute ... to service_role;`. DEFINER 함수는 RLS를 우회하므로, PostgreSQL 기본 PUBLIC EXECUTE를 회수하지 않으면 anon(비로그인)도 쓰기 가능해짐 → 반드시 회수. 호출은 secret key(service_role) 전용.
 
 ### 2. `uploader.py` 재작성
 
 - `upload_records`: 폰트당 두 요청 → **RPC 1회**(`client.schema("fontagit").rpc("upsert_font", {"p_font": ..., "p_aliases": ...})`).
-- `build_alias_rows`: `font_id`를 앱이 정하지 않으므로 시그니처에서 `font_id` 제거, `{alias, alias_norm}`만 반환. DB 함수가 id 채움.
+- `build_alias_rows`: `font_id`를 앱이 정하지 않으므로 시그니처에서 `font_id` 제거, `{alias, alias_norm}`만 반환. DB 함수가 id 채움. 기존 중복/빈값 제거 로직(`if norm and norm not in seen`) 유지 — DB unique 충돌을 앱 단에서 선차단.
 - `build_font_row`는 그대로 재사용(slug 포함, id 제외).
 
 ### 3. `licenses.py` 방어 (독립 소작업)
@@ -43,7 +45,9 @@
 
 ## 에러 처리
 
-RPC 실패 시 해당 폰트만 실패, 앞서 커밋된 폰트는 유지(폰트별 원자). `__main__.py` 기존 업로드 실패 경로(`return 3`) 재사용.
+첫 RPC 실패 시 즉시 중단(예외 전파). 이미 커밋된 앞선 폰트는 유지(폰트별 원자), 실패 폰트의 slug를 포함해 에러 로그 후 `__main__.py` 기존 업로드 실패 경로(`return 3`)로 반환. 파이프라인은 멱등이라 재실행으로 이어감.
+
+동시성 전제: 파이프라인은 단일 프로세스 배치라 같은 slug 동시 업로드 시나리오 없음(`on conflict`가 row lock).
 
 ## 테스트
 
@@ -51,6 +55,7 @@ RPC 실패 시 해당 폰트만 실패, 앞서 커밋된 폰트는 유지(폰트
 - `upload_records`가 폰트당 RPC를 올바른 payload로 호출하는지 mock 검증.
 - `licenses.py` 방어: 깨진 응답 입력 시 죽지 않음.
 - RPC 원자성-stale 삭제는 통합 실행(psql 쓰기→읽기 재검증)에서 확인.
+- 원자성 롤백 케이스(통합): 의도적으로 alias insert를 실패(제약 위반)시켜 fonts upsert와 alias delete가 함께 롤백되는지 확인.
 
 ## 범위 밖
 
