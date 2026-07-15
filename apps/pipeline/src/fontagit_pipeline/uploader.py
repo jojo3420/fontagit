@@ -42,7 +42,7 @@ def build_font_row(rec: FontRecord) -> dict[str, Any]:
 
 
 def build_alias_rows(aliases: list[str]) -> list[dict[str, Any]]:
-    """aliases 배열을 만든다(alias_norm 기준 중복 제거)."""
+    """aliases 행을 만든다(alias_norm 기준 중복/빈값 제거). font_id는 DB 함수가 채운다."""
     seen: set[str] = set()
     rows: list[dict[str, Any]] = []
     for alias in aliases:
@@ -54,7 +54,11 @@ def build_alias_rows(aliases: list[str]) -> list[dict[str, Any]]:
 
 
 def upload_records(records: list[FontRecord], url: str, secret_key: str) -> int:
-    """RPC upsert_font로 레코드를 폰트당 원자 트랜잭션으로 업로드한다."""
+    """레코드를 fontagit.upsert_font RPC로 폰트별 원자 업로드하고 처리 건수를 반환한다.
+
+    각 폰트는 단일 트랜잭션(fonts upsert + aliases 재삽입)으로 처리된다.
+    첫 실패 시 즉시 중단하며, 이미 처리된 폰트는 유지된다(파이프라인 멱등 재실행).
+    """
     client = create_client(url, secret_key)
     schema = client.schema("fontagit")
     count = 0
@@ -65,9 +69,9 @@ def upload_records(records: list[FontRecord], url: str, secret_key: str) -> int:
                 "p_aliases": build_alias_rows(rec.aliases),
             }
             schema.rpc("upsert_font", rpc_params).execute()
-            count += 1
-        except Exception as err:
-            logger.error("RPC upsert_font 실패 (slug=%s): %s", rec.slug, err)
+        except Exception:
+            logger.error("업로드 실패(중단): slug=%s", rec.slug)
             raise
+        count += 1
     logger.info("업로드 완료: %d개", count)
     return count
