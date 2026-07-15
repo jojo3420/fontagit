@@ -39,7 +39,7 @@ export const fonts: Font[] = [
     officialUrl: "https://fonts.google.com/specimen/Song+Myung", aliases: ["송명", "송명체", "song myung"] },
   { slug: "sandoll-gothic-neo", nameKo: "산돌 고딕 Neo", nameEn: "Sandoll Gothic Neo", fontKey: "blackHanSans",
     tier: "paid", category: "고딕", foundry: "산돌", availableWeights: [100, 200, 300, 400, 500, 600, 700, 800, 900],
-    moves: 4210, license: { commercial: "conditional", verifiedAt: "2026-07-12", type: "Proprietary", webfont: "separate", redistribution: "no" },
+    moves: 4210, license: { commercial: "conditional", verifiedAt: "2026-07-12", type: "상용 라이선스", webfont: "separate", redistribution: "no" },
     officialUrl: "https://www.sandoll.co.kr/", aliases: ["산돌고딕", "sandoll gothic"],
     priceFrom: 99000,
     freeAlternatives: ["pretendard", "do-hyeon", "black-han-sans"] },
