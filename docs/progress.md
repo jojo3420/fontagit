@@ -17,10 +17,10 @@ FontAgit(폰트 아지트)는 국내외 무료-유료 폰트를 검색-비교하
 ## 2026-07-15 - 데이터 파이프라인 Supabase 업로드 완성 (Slice 0)
 
 - 상태: 완료
-- 완료한 일: 구글폰트 수집 데이터를 라이선스 판별 후 Supabase(폰트 DB)에 자동 적재하는 파이프라인 완성. 실제 폰트 136개 적재(공개 가능 130개), 여러 번 실행해도 중복 없이 동일(멱등) 검증. 공개는 OFL/Apache/UFL처럼 라이선스가 확인된 폰트만 자동 게시.
-- 커밋/PR: `2c1c62a`(변환 버그+테스트 정정), `fd1a5b5`(Supabase 업로더), `b487c49`(수집-판별-업로드 오케스트레이션), `436c181`(비밀파일 gitignore), `0a8d0d0`(DB 권한 마이그레이션), `33bf12a`(API키 로그 노출 억제). PR: develop→main 생성 예정(다음 단계).
+- 완료한 일: 구글폰트 수집 데이터를 라이선스 판별 후 Supabase(폰트 DB)에 자동 적재하는 파이프라인 완성. 실제 폰트 136개 적재(공개 가능 130개), 여러 번 실행해도 중복 없이 동일(멱등) 검증. 공개는 OFL/Apache/UFL처럼 라이선스가 확인된 폰트만 자동 게시. PR #7 듀얼 리뷰(Codex)에서 라이선스 조회 실패 시 공개 폰트가 전부 비공개(draft)로 덮이는 데이터 손실 경로를 발견-수정한 뒤 main에 머지.
+- 커밋/PR: `2c1c62a`(변환 버그+테스트 정정), `fd1a5b5`(Supabase 업로더), `b487c49`(오케스트레이션), `436c181`(비밀파일 gitignore), `0a8d0d0`(DB 권한), `33bf12a`(API키 로그 억제), `a20641d`+`81e325a`(PR #7 리뷰 반영: 라이선스 실패 시 업로드 보류-published 규칙 강제-status Literal). PR #7 develop→main 머지 완료(https://github.com/jojo3420/fontagit/pull/7).
 - 결정사항: FontAgit 전용 신규 Supabase 프로젝트(ref zgxtfcpiokhkcrywlxmc, 서울 리전) 사용 — ollidam 공유 인스턴스 아님. license_verified=true인 폰트만 공개(라이선스 정직성).
-- 남은 일: (1) develop→main PR 생성-머지. (2) Slice 1 웹 실데이터 연동(Plan B).
+- 남은 일: (1) Slice 1 웹 실데이터 연동(Plan B). (2) 파이프라인 후속 개선 백로그 — 업로드 원자성-stale alias-GitHub 응답 방어 등(GitHub 이슈 #8).
 - 관련 문서: `docs/superpowers/plans/2026-07-14-slice-0-data-pipeline-upload.md`, `.superpowers/sdd/progress.md`(태스크별 상세)
 - 상세 히스토리: 없음 (.superpowers/sdd/progress.md에 태스크별 dense 기록)
 
