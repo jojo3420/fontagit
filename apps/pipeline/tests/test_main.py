@@ -158,7 +158,7 @@ def test_main_returns_3_on_write_error(tmp_path):
 
 
 def test_main_returns_3_on_license_fetch_error(tmp_path):
-    """라이선스 조회 실패 시 main은 JSON 저장 후 업로드 스킵하고 3을 반환한다."""
+    """라이선스 조회 실패 시 main은 산출물 미생성 후 즉시 3을 반환한다."""
     fonts = [
         GoogleFontRaw(
             family="Roboto",
@@ -186,9 +186,9 @@ def test_main_returns_3_on_license_fetch_error(tmp_path):
 
                     result = main()
 
-                    # write_output은 호출되어야 함 (JSON 저장)
-                    mock_write.assert_called_once()
-                    # exit code는 3이어야 함 (업로드 스킵)
+                    # write_output은 호출되지 않음 (산출물 미생성)
+                    mock_write.assert_not_called()
+                    # exit code는 3이어야 함
                     assert result == 3
 
 

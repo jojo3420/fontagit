@@ -90,9 +90,9 @@ class TestFontRecord:
             official_url="https://fonts.google.com/specimen/Noto+Sans",
             is_commercial_free=True,
             license="OFL",
-            license_type="OFL 1.1",
+            license_type="OFL",
             license_verified=True,
-            status="active",
+            status="published",
             aliases=["noto", "noto-sans"],
             version="1.0",
             last_modified="2024-02-01",
@@ -106,9 +106,9 @@ class TestFontRecord:
         assert record.weights == [400, 700]
         assert record.is_commercial_free is True
         assert record.license == "OFL"
-        assert record.license_type == "OFL 1.1"
+        assert record.license_type == "OFL"
         assert record.license_verified is True
-        assert record.status == "active"
+        assert record.status == "published"
 
     def test_font_record_forbids_license_without_verification(self) -> None:
         """라이선스는 license_verified=False일 때 설정할 수 없다."""
@@ -141,7 +141,7 @@ class TestFontRecord:
                 variants=["400"],
                 weights=[400],
                 official_url="https://fonts.google.com/specimen/Noto+Sans",
-                license_type="OFL 1.1",
+                license_type="OFL",
                 license_verified=False,
                 aliases=["noto"],
                 version="1.0",
@@ -160,14 +160,14 @@ class TestFontRecord:
             weights=[400],
             official_url="https://fonts.google.com/specimen/Noto+Sans",
             license="OFL",
-            license_type="OFL 1.1",
+            license_type="OFL",
             license_verified=True,
             aliases=["noto"],
             version="1.0",
             last_modified="2024-02-01",
         )
         assert record.license == "OFL"
-        assert record.license_type == "OFL 1.1"
+        assert record.license_type == "OFL"
         assert record.license_verified is True
 
     def test_font_record_allows_no_license_and_type(self) -> None:

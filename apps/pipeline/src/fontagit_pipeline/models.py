@@ -1,5 +1,7 @@
 """FontAgit 데이터 모델."""
 
+from typing import Literal
+
 from pydantic import BaseModel, model_validator
 
 
@@ -33,7 +35,7 @@ class FontRecord(BaseModel):
     license: str | None = None
     license_type: str | None = None
     license_verified: bool = False
-    status: str = "draft"
+    status: Literal["draft", "published", "archived"] = "draft"
     aliases: list[str]
     version: str
     last_modified: str

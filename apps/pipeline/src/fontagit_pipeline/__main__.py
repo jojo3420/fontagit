@@ -64,13 +64,11 @@ def main() -> int:
         logger.error("webfonts 조회 실패: %s", exc.__class__.__name__)
         return 3
 
-    license_ok = True
     try:
         license_map = fetch_license_map(settings.github_token)
     except LicenseFetchError:
-        logger.warning("라이선스 조회 실패 — 전 레코드 draft 처리, 업로드는 보류")
-        license_map = {}
-        license_ok = False
+        logger.error("라이선스 조회 실패 — 데이터 무결성 위해 중단(산출물 미생성)")
+        return 3
     logger.info("라이선스 매핑 %d건", len(license_map))
 
     generated_at = datetime.now(timezone.utc).isoformat()
@@ -97,9 +95,6 @@ def main() -> int:
     if has_url and has_key:
         assert settings.supabase_url is not None
         assert settings.supabase_secret_key is not None
-        if not license_ok:
-            logger.error("라이선스 조회 실패 상태 — 기존 published 보존 위해 업로드 중단")
-            return 3
         published = [r for r in doc.fonts if r.status == "published"]
         try:
             uploaded = upload_records(doc.fonts, settings.supabase_url, settings.supabase_secret_key)
