@@ -34,6 +34,28 @@ def normalize_family_dir(name_en: str) -> str:
     return re.sub(r"[^a-z0-9]", "", name_en.lower())
 
 
+def _extract_tree(data: Any) -> list[dict[str, Any]]:
+    """GitHub API 응답에서 tree 배열을 추출하고 구조를 검증한다.
+
+    Args:
+        data: GitHub API의 JSON 응답
+
+    Returns:
+        tree 배열
+
+    Raises:
+        LicenseFetchError: 응답이 dict가 아니거나, tree 키가 없거나, tree가 배열이 아닌 경우
+    """
+    if not isinstance(data, dict):
+        raise LicenseFetchError("GitHub API 응답이 dict가 아닙니다")
+    if "tree" not in data:
+        raise LicenseFetchError("GitHub API 응답에 'tree' 키가 없습니다")
+    tree = data["tree"]
+    if not isinstance(tree, list):
+        raise LicenseFetchError("GitHub API 응답의 'tree' 값이 배열이 아닙니다")
+    return tree
+
+
 def parse_license_map(trees: dict[str, list[dict[str, Any]]]) -> dict[str, str]:
     """라이선스별 트리 데이터에서 폰트명→라이선스 매핑을 추출한다.
 
@@ -47,7 +69,7 @@ def parse_license_map(trees: dict[str, list[dict[str, Any]]]) -> dict[str, str]:
     for license_dir, license_type in _LICENSE_DIRS.items():
         if license_dir in trees:
             for entry in trees[license_dir]:
-                if entry.get("type") == "tree" and "path" in entry:
+                if isinstance(entry, dict) and entry.get("type") == "tree" and "path" in entry:
                     result[entry["path"]] = license_type
     return result
 
@@ -68,14 +90,17 @@ def resolve_license_type(
 
 
 def _get_tree_sha(client: httpx.Client, headers: dict[str, str]) -> dict[str, str]:
-    """루트 트리에서 ofl/apache/ufl 디렉토리의 sha를 얻는다."""
+    """루트 트리에서 ofl/apache/ufl 디렉토리의 sha를 얻는다.
+
+    Raises:
+        LicenseFetchError: GitHub API 응답 구조 이상 시
+    """
     r = client.get(f"{_GH_API}/repos/google/fonts/git/trees/main", headers=headers)
     r.raise_for_status()
-    shas: dict[str, str] = {}
     data = r.json()
-    if "tree" not in data:
-        return shas
-    for entry in data["tree"]:
+    tree = _extract_tree(data)
+    shas: dict[str, str] = {}
+    for entry in tree:
         if "path" in entry and "sha" in entry and entry.get("type") == "tree":
             if entry["path"] in _LICENSE_DIRS:
                 shas[entry["path"]] = entry["sha"]
@@ -107,8 +132,7 @@ def fetch_license_map(github_token: str | None = None) -> dict[str, str]:
                 )
                 r.raise_for_status()
                 data = r.json()
-                if "tree" in data:
-                    trees[dir_key] = data["tree"]
+                trees[dir_key] = _extract_tree(data)
     except httpx.HTTPError as exc:
         logger.warning("라이선스 매핑 조회 실패: %s", exc.__class__.__name__)
         raise LicenseFetchError(str(exc)) from exc
