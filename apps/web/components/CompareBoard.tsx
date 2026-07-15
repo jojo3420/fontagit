@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { fonts } from "@/data/fonts";
-import { fontKeyToVar } from "@/lib/fonts";
+import { familyOf } from "@/lib/fonts";
 import { TierChip } from "./TierChip";
 import styles from "./CompareBoard.module.css";
 
@@ -41,7 +41,7 @@ export function CompareBoard() {
       <div className={styles.board}>
         {slots.map((slug, i) => {
           const f = fonts.find((x) => x.slug === slug)!;
-          const family = fontKeyToVar[f.fontKey];
+          const family = familyOf(f.fontKey);
           return (
             <div key={i} className={styles.col}>
               <div className={styles.colHead}>

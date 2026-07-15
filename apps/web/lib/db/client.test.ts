@@ -31,7 +31,7 @@ describe("lib/db/client", () => {
     vi.resetModules();
 
     const clientModule = await import("./client");
-    const client = clientModule.supabaseClient as SupabaseClient;
+    const client = clientModule.supabaseClient as unknown as SupabaseClient;
     expect(client).toHaveProperty("auth");
     expect(client).toHaveProperty("storage");
   });

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCollectionBySlug, getAllCollectionSlugs, getFontBySlug } from "@/lib/data";
-import { fontKeyToVar } from "@/lib/fonts";
+import { familyOf } from "@/lib/fonts";
 import { TierChip } from "@/components/TierChip";
 import styles from "./page.module.css";
 
@@ -30,7 +30,7 @@ export default async function CollectionDetail({ params }: { params: Promise<{ s
           return (
             <div key={it.fontSlug} className={styles.item}>
               <div className={styles.itemHead}>
-                <Link href={`/fonts/${f.slug}`} className={styles.itemName} style={{ fontFamily: fontKeyToVar[f.fontKey] }}>{f.nameKo}</Link>
+                <Link href={`/fonts/${f.slug}`} className={styles.itemName} style={{ fontFamily: familyOf(f.fontKey) }}>{f.nameKo}</Link>
                 <TierChip tier={f.tier} />
               </div>
               <p className={styles.comment}>{it.comment}</p>

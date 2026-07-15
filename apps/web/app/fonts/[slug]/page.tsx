@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getFontBySlug, getAllSlugs, resolveFreeAlternatives } from "@/lib/data";
-import { fontKeyToVar } from "@/lib/fonts";
+import { familyOf } from "@/lib/fonts";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { SpecimenBox } from "@/components/SpecimenBox";
 import { LicenseSummaryCard } from "@/components/LicenseSummaryCard";
@@ -19,7 +19,7 @@ export default async function FontDetail({ params }: { params: Promise<{ slug: s
   const font = getFontBySlug(slug);
   if (!font) notFound();
 
-  const family = fontKeyToVar[font.fontKey];
+  const family = familyOf(font.fontKey);
   const isPaid = font.tier === "paid";
   const alternatives = isPaid ? resolveFreeAlternatives(font) : [];
   const caption = isPaid

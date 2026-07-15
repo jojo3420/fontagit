@@ -1,0 +1,36 @@
+export interface FontRow {
+  id: string;
+  slug: string;
+  name_en: string;
+  name_ko: string | null;
+  foundry: string | null;
+  category_ko: string;
+  weights: number[];
+  is_commercial_free: boolean;
+  license_type: string | null;
+  official_url: string | null;
+  last_modified: string | null;
+}
+
+export interface AliasRow {
+  id: string;
+  font_id: string;
+  alias: string;
+}
+
+export interface CollectionRow {
+  id: string;
+  slug: string;
+  title: string;
+  intro: string;
+  status: "draft" | "published" | "archived";
+  sort_order: number;
+  created_at: string;
+}
+
+export interface CollectionItemRow {
+  id: string;
+  collection_id: string;
+  font_id: string;
+  sort_order: number;
+}

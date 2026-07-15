@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { fonts } from "@/data/fonts";
-import { fontKeyToVar } from "@/lib/fonts";
+import { familyOf } from "@/lib/fonts";
 import { TierChip } from "./TierChip";
 import styles from "./PlaygroundCanvas.module.css";
 
@@ -34,7 +34,7 @@ export function PlaygroundCanvas() {
           <span>대표 - {HERO.nameKo} - 96px</span>
           <Link href={`/fonts/${HERO.slug}`}>상세 →</Link>
         </div>
-        <div className={styles.heroSpecimen} style={{ fontFamily: fontKeyToVar[HERO.fontKey] }}>{shown}</div>
+        <div className={styles.heroSpecimen} style={{ fontFamily: familyOf(HERO.fontKey) }}>{shown}</div>
       </div>
       <div className={styles.gridHead}>무료 폰트에서 보기 <span className={styles.count}>- 대표 1 + {GRID.length}종</span></div>
       <div className={styles.grid}>
@@ -47,7 +47,7 @@ export function PlaygroundCanvas() {
                 <Link href={`/fonts/${f.slug}`} className={styles.cellDetail}>상세</Link>
               </div>
             </div>
-            <div className={styles.cellSpecimen} style={{ fontFamily: fontKeyToVar[f.fontKey] }}>{shown}</div>
+            <div className={styles.cellSpecimen} style={{ fontFamily: familyOf(f.fontKey) }}>{shown}</div>
           </div>
         ))}
       </div>

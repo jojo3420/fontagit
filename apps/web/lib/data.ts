@@ -43,7 +43,7 @@ export function checkIntegrity(fontList: Font[], collectionList: Collection[], v
   for (const f of fontList) {
     if (slugs.has(f.slug)) throw new Error(`중복 slug: ${f.slug}`);
     slugs.add(f.slug);
-    if (!keySet.has(f.fontKey)) throw new Error(`미매핑 fontKey: ${f.slug} -> ${f.fontKey}`);
+    if (f.fontKey !== null && !keySet.has(f.fontKey)) throw new Error(`미매핑 fontKey: ${f.slug} -> ${f.fontKey}`);
     if (!f.license.type) throw new Error(`라이선스 type 누락: ${f.slug}`);
     if (!f.license.webfont) throw new Error(`라이선스 webfont 누락: ${f.slug}`);
     if (!f.license.redistribution) throw new Error(`라이선스 redistribution 누락: ${f.slug}`);
