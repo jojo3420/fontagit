@@ -1,0 +1,9 @@
+.row { display: flex; align-items: center; gap: 18px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); text-decoration: none; color: inherit; }
+.rank { width: 26px; font-size: 22px; font-weight: 800; color: var(--point); }
+.change { width: 34px; font-size: 12px; font-weight: 500; }
+.up { color: var(--up); } .down { color: var(--down); } .hold { color: var(--hold); }
+.new { color: var(--point); font-weight: 700; font-size: 10px; }
+.name { flex: 1; font-size: 26px; line-height: 1.2; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clicks { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; white-space: nowrap; }
+.num { font-size: 14px; font-weight: 700; color: var(--ink); }
+.label { font-size: 10.5px; font-style: normal; color: var(--sub); }
