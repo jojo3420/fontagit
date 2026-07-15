@@ -73,6 +73,12 @@ class TestParseLicenseMap:
         result = parse_license_map(trees)
         assert result == {"jua": "OFL"}
 
+    def test_skip_non_dict_entries(self):
+        """dict가 아닌 entry는 건너뛴다."""
+        trees = {"ofl": [123, {"type": "tree", "path": "jua"}, "invalid"]}
+        result = parse_license_map(trees)
+        assert result == {"jua": "OFL"}
+
 
 class TestResolveLicenseType:
     """resolve_license_type 테스트."""
@@ -136,8 +142,8 @@ class TestFetchLicenseMap:
             with pytest.raises(LicenseFetchError):
                 fetch_license_map()
 
-    def test_fetch_license_map_missing_tree_key_returns_empty(self):
-        """루트 응답에 tree 키가 없으면 빈 매핑을 반환한다(죽지 않음)."""
+    def test_fetch_license_map_missing_tree_key_raises_error(self):
+        """루트 응답에 tree 키가 없으면 LicenseFetchError를 raise한다."""
         with patch("fontagit_pipeline.licenses.httpx.Client") as mock_client_class:
             mock_client = MagicMock()
             mock_client_class.return_value.__enter__.return_value = mock_client
@@ -146,4 +152,18 @@ class TestFetchLicenseMap:
             mock_response.json.return_value = {}
             mock_client.get.return_value = mock_response
 
-            assert fetch_license_map() == {}
+            with pytest.raises(LicenseFetchError):
+                fetch_license_map()
+
+    def test_fetch_license_map_tree_not_list_raises_error(self):
+        """tree 값이 배열이 아니면 LicenseFetchError를 raise한다."""
+        with patch("fontagit_pipeline.licenses.httpx.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client_class.return_value.__enter__.return_value = mock_client
+            mock_response = MagicMock()
+            mock_response.raise_for_status.return_value = None
+            mock_response.json.return_value = {"tree": "not_a_list"}
+            mock_client.get.return_value = mock_response
+
+            with pytest.raises(LicenseFetchError):
+                fetch_license_map()
