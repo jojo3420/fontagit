@@ -59,3 +59,27 @@ describe("data helpers", () => {
     const goodCollections = [{ slug: "x", title: "x", intro: "x", items: [{ fontSlug: "pretendard", comment: "c" }] }];
     expect(() => checkIntegrity(fonts, goodCollections, FONT_KEYS)).not.toThrow();
   });
+  it("sandoll-gothic-neo should have correct license properties", () => {
+    const p = getFontBySlug("sandoll-gothic-neo");
+    expect(p).toBeDefined();
+    expect(p?.license.type).toBe("Proprietary");
+    expect(p?.license.redistribution).toBe("no");
+    expect(p?.priceFrom).toBe(99000);
+  });
+  it("pretendard should have SIL OFL license", () => {
+    const p = getFontBySlug("pretendard");
+    expect(p).toBeDefined();
+    expect(p?.license.type).toBe("SIL OFL");
+    expect(p?.license.webfont).toBe("included");
+    expect(p?.license.redistribution).toBe("yes");
+  });
+  it("all free fonts should have SIL OFL license", () => {
+    const freeFonts = ["pretendard", "black-han-sans", "jua", "do-hyeon", "gowun-batang", "nanum-myeongjo", "kirang-haerang", "gaegu", "song-myung"];
+    for (const slug of freeFonts) {
+      const font = getFontBySlug(slug);
+      expect(font).toBeDefined();
+      expect(font?.license.type).toBe("SIL OFL");
+      expect(font?.tier).toBe("free");
+    }
+  });
+});

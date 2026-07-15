@@ -44,6 +44,11 @@ export function checkIntegrity(fontList: Font[], collectionList: Collection[], v
     if (slugs.has(f.slug)) throw new Error(`중복 slug: ${f.slug}`);
     slugs.add(f.slug);
     if (!keySet.has(f.fontKey)) throw new Error(`미매핑 fontKey: ${f.slug} -> ${f.fontKey}`);
+    if (!f.license.type) throw new Error(`라이선스 type 누락: ${f.slug}`);
+    if (!f.license.webfont) throw new Error(`라이선스 webfont 누락: ${f.slug}`);
+    if (!f.license.redistribution) throw new Error(`라이선스 redistribution 누락: ${f.slug}`);
+    if (f.tier === "free" && f.license.type !== "SIL OFL") throw new Error(`무료 폰트 타입 불일치: ${f.slug}`);
+    if (f.tier === "paid" && f.priceFrom && f.priceFrom <= 0) throw new Error(`가격 오류: ${f.slug}`);
   }
   for (const f of fontList) {
     const alts = f.freeAlternatives ?? [];
