@@ -31,6 +31,7 @@ describe("lib/db/client", () => {
     vi.resetModules();
 
     const clientModule = await import("./client");
+    // Schema 이름 불일치("fontagit" vs "public") 때문에 as unknown 경유 필요
     const client = clientModule.supabaseClient as unknown as SupabaseClient;
     expect(client).toHaveProperty("auth");
     expect(client).toHaveProperty("storage");

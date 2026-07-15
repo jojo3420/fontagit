@@ -1,4 +1,4 @@
-import { Font, Collection, Category } from "@/types/font";
+import { Font, Collection, Category, CollectionFontItem } from "@/types/font";
 import { FontRow, CollectionRow } from "./types";
 
 export function rowToFont(row: FontRow, aliases: string[]): Font {
@@ -27,7 +27,7 @@ export function rowToFont(row: FontRow, aliases: string[]): Font {
 
 export function rowToCollection(
   row: CollectionRow,
-  items: { fontSlug: string; comment: string }[]
+  items: CollectionFontItem[]
 ): Collection {
   return {
     slug: row.slug,

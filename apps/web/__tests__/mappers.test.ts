@@ -155,13 +155,19 @@ describe("rowToCollection", () => {
       created_at: "2026-07-01T00:00:00Z",
     };
 
-    const items: { fontSlug: string; comment: string }[] = [
+    const items = [
       {
-        fontSlug: "pretendard",
+        slug: "pretendard",
+        nameKo: "프리텐다드",
+        fontKey: null,
+        tier: "free" as const,
         comment: "현대적이고 깔끔한 고딕",
       },
       {
-        fontSlug: "notoSerifKr",
+        slug: "notoSerifKr",
+        nameKo: "Noto 세리프 한글",
+        fontKey: null,
+        tier: "free" as const,
         comment: "우아한 세리프 폰트",
       },
     ];
@@ -173,6 +179,10 @@ describe("rowToCollection", () => {
     expect(result.intro).toBe("한글 디스플레이 폰트 모음");
     expect(result.items).toHaveLength(2);
     expect(result.items[0].comment).toBe("현대적이고 깔끔한 고딕");
-    expect(result.items[1].fontSlug).toBe("notoSerifKr");
+    expect(result.items[0].nameKo).toBe("프리텐다드");
+    expect(result.items[0].fontKey).toBeNull();
+    expect(result.items[0].tier).toBe("free");
+    expect(result.items[1].slug).toBe("notoSerifKr");
+    expect(result.items[1].comment).toBe("우아한 세리프 폰트");
   });
 });

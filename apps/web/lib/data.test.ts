@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { getFontBySlug, getAllSlugs, resolveFreeAlternatives, assertDataIntegrity, checkIntegrity, FONT_KEYS, getCollectionBySlug, getAllCollectionSlugs, fonts } from "@/lib/data";
+import type { CollectionFontItem } from "@/types/font";
+
+function itemKo(fontSlug: string, comment: string): CollectionFontItem {
+  const f = getFontBySlug(fontSlug)!;
+  return { slug: f.slug, nameKo: f.nameKo, fontKey: f.fontKey, tier: f.tier, comment };
+}
 
 describe("data helpers", () => {
   it("finds a font by slug", () => {
@@ -31,18 +37,25 @@ describe("data helpers", () => {
       const c = getCollectionBySlug(slug)!;
       expect(c.items.length).toBeGreaterThan(0);
       for (const it of c.items) {
-        expect(getFontBySlug(it.fontSlug)).toBeDefined();
+        expect(getFontBySlug(it.slug)).toBeDefined();
       }
     }
   });
   it("checkIntegrity throws on collection referencing a non-existent font", () => {
-    const badCollections = [{ slug: "x", title: "x", intro: "x", items: [{ fontSlug: "nope", comment: "c" }] }];
+    const badCollections = [
+      {
+        slug: "x",
+        title: "x",
+        intro: "x",
+        items: [{ slug: "nope", nameKo: "x", fontKey: null, tier: "free" as const, comment: "c" }],
+      },
+    ];
     expect(() => checkIntegrity(fonts, badCollections, FONT_KEYS)).toThrow();
   });
   it("checkIntegrity throws on duplicate collection slug", () => {
     const badCollections = [
-      { slug: "x", title: "x1", intro: "x1", items: [{ fontSlug: "pretendard", comment: "c" }] },
-      { slug: "x", title: "x2", intro: "x2", items: [{ fontSlug: "pretendard", comment: "c" }] },
+      { slug: "x", title: "x1", intro: "x1", items: [itemKo("pretendard", "c")] },
+      { slug: "x", title: "x2", intro: "x2", items: [itemKo("pretendard", "c")] },
     ];
     expect(() => checkIntegrity(fonts, badCollections, FONT_KEYS)).toThrow();
   });
@@ -51,11 +64,28 @@ describe("data helpers", () => {
     expect(() => checkIntegrity(fonts, badCollections, FONT_KEYS)).toThrow();
   });
   it("checkIntegrity throws on duplicate fontSlug within a collection", () => {
-    const badCollections = [{ slug: "x", title: "x", intro: "x", items: [{ fontSlug: "pretendard", comment: "c1" }, { fontSlug: "pretendard", comment: "c2" }] }];
+    const badCollections = [
+      {
+        slug: "x",
+        title: "x",
+        intro: "x",
+        items: [
+          itemKo("pretendard", "c1"),
+          itemKo("pretendard", "c2"),
+        ],
+      },
+    ];
     expect(() => checkIntegrity(fonts, badCollections, FONT_KEYS)).toThrow();
   });
   it("checkIntegrity does not throw on valid inputs", () => {
-    const goodCollections = [{ slug: "x", title: "x", intro: "x", items: [{ fontSlug: "pretendard", comment: "c" }] }];
+    const goodCollections = [
+      {
+        slug: "x",
+        title: "x",
+        intro: "x",
+        items: [itemKo("pretendard", "c")],
+      },
+    ];
     expect(() => checkIntegrity(fonts, goodCollections, FONT_KEYS)).not.toThrow();
   });
   it("모든 폰트에 라이선스 필드가 채워져 있다", () => {

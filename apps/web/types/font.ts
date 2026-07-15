@@ -38,7 +38,7 @@ export interface TrendItem {
   rank: number;
   change: TrendChange;
   changeAmount?: number;
-  font: Pick<Font, "slug" | "nameKo" | "fontKey" | "tier"> & { fontKey: FontKey | null };
+  font: Pick<Font, "slug" | "nameKo" | "fontKey" | "tier">;
   moves: number;
 }
 
@@ -47,11 +47,12 @@ export interface CollectionFontItem {
   nameKo: string;
   fontKey: FontKey | null;
   tier: Tier;
+  comment: string;
 }
 
 export interface Collection {
   slug: string;
   title: string;
   intro: string;
-  items: { fontSlug: string; comment: string }[];
+  items: CollectionFontItem[];
 }
