@@ -1,11 +1,22 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 describe("lib/db/client", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  });
+
+  afterEach(() => {
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  });
+
   it("env vars 있을 때 supabaseClient를 export해야 함", async () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost:54321";
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-key";
 
-    // Clear module cache to force re-evaluation
     vi.resetModules();
 
     const clientModule = await import("./client");
@@ -20,14 +31,12 @@ describe("lib/db/client", () => {
     vi.resetModules();
 
     const clientModule = await import("./client");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = clientModule.supabaseClient as any;
+    const client = clientModule.supabaseClient as SupabaseClient;
     expect(client).toHaveProperty("auth");
     expect(client).toHaveProperty("storage");
   });
 
   it("NEXT_PUBLIC_SUPABASE_URL 없을 때 에러 던져야 함", async () => {
-    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-key";
 
     vi.resetModules();
@@ -42,7 +51,6 @@ describe("lib/db/client", () => {
 
   it("NEXT_PUBLIC_SUPABASE_ANON_KEY 없을 때 에러 던져야 함", async () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost:54321";
-    delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     vi.resetModules();
 
