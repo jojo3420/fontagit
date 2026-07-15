@@ -1,27 +1,25 @@
+import Link from "next/link";
 import type { Font } from "@/types/font";
-import { TierChip } from "@/components/TierChip";
+import { fontKeyToVar } from "@/lib/fonts";
 import styles from "./AlternativesCard.module.css";
 
-interface AlternativesCardProps {
-  category: string;
-  items: Font[];
-}
-
-export function AlternativesCard({ category, items }: AlternativesCardProps) {
+/** 유료 폰트의 비슷한 무료 대안 카드. items가 비면 렌더하지 않음 */
+export function AlternativesCard({ category, items }: { category: string; items: Font[] }) {
   if (items.length === 0) return null;
-
   return (
-    <div className={styles.card}>
-      <h3 className={styles.title}>비슷한 무료 대안 {items.length}개</h3>
-      <p className={styles.subtitle}>분위기가 가까운 무료 {category}입니다</p>
-      <div className={styles.items}>
-        {items.map((item) => (
-          <div key={item.slug} className={styles.item}>
-            <span className={styles.name}>{item.nameKo}</span>
-            <TierChip tier="free" />
-          </div>
+    <aside className={styles.card}>
+      <h2 className={styles.title}>비슷한 무료 대안 {items.length}개</h2>
+      <p className={styles.sub}>분위기가 가까운 무료 {category}입니다</p>
+      <ul className={styles.list}>
+        {items.map((f) => (
+          <li key={f.slug} className={styles.item}>
+            <Link href={`/fonts/${f.slug}`} className={styles.name} style={{ fontFamily: fontKeyToVar[f.fontKey] }}>
+              {f.nameKo}
+            </Link>
+            <span className={styles.badge}>무료</span>
+          </li>
         ))}
-      </div>
-    </div>
+      </ul>
+    </aside>
   );
 }
