@@ -1,13 +1,17 @@
 """라이선스 판별 모듈 테스트."""
 import json
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 
+import httpx
 import pytest
 
 from fontagit_pipeline.licenses import (
     normalize_family_dir,
     parse_license_map,
     resolve_license_type,
+    fetch_license_map,
+    LicenseFetchError,
 )
 
 
@@ -84,3 +88,31 @@ class TestResolveLicenseType:
         license_map = parse_license_map(license_trees)
         result = resolve_license_type("Jua", license_map)
         assert result == "OFL"
+
+
+class TestFetchLicenseMap:
+    """fetch_license_map 테스트."""
+
+    def test_fetch_license_map_raises_on_http_error(self):
+        """httpx 오류 발생 시 LicenseFetchError를 raise한다."""
+        with patch("fontagit_pipeline.licenses.httpx.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client_class.return_value.__enter__.return_value = mock_client
+            mock_client.get.side_effect = httpx.ConnectError("연결 실패")
+
+            with pytest.raises(LicenseFetchError):
+                fetch_license_map()
+
+    def test_fetch_license_map_raises_on_status_error(self):
+        """HTTP 상태 오류 발생 시 LicenseFetchError를 raise한다."""
+        with patch("fontagit_pipeline.licenses.httpx.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client_class.return_value.__enter__.return_value = mock_client
+            mock_response = MagicMock()
+            mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+                "404", request=MagicMock(), response=MagicMock()
+            )
+            mock_client.get.return_value = mock_response
+
+            with pytest.raises(LicenseFetchError):
+                fetch_license_map()

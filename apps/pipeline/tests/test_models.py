@@ -192,6 +192,132 @@ class TestFontRecord:
         assert record.license_type is None
         assert record.license_verified is False
 
+    def test_font_record_forbids_published_without_verification(self) -> None:
+        """status=published는 license_verified=False일 때 불가능하다."""
+        with pytest.raises(ValidationError, match="published는"):
+            FontRecord(
+                slug="noto-sans",
+                name_en="Noto Sans",
+                category_ko="산세리프",
+                category_google="sans-serif",
+                subsets=["latin"],
+                variants=["400"],
+                weights=[400],
+                official_url="https://fonts.google.com/specimen/Noto+Sans",
+                license_type=None,
+                license_verified=False,
+                status="published",
+                aliases=["noto"],
+                version="1.0",
+                last_modified="2024-02-01",
+            )
+
+    def test_font_record_forbids_published_without_license_type(self) -> None:
+        """status=published는 license_type이 None일 때 불가능하다."""
+        with pytest.raises(ValidationError, match="published는"):
+            FontRecord(
+                slug="noto-sans",
+                name_en="Noto Sans",
+                category_ko="산세리프",
+                category_google="sans-serif",
+                subsets=["latin"],
+                variants=["400"],
+                weights=[400],
+                official_url="https://fonts.google.com/specimen/Noto+Sans",
+                license_type=None,
+                license_verified=True,
+                status="published",
+                aliases=["noto"],
+                version="1.0",
+                last_modified="2024-02-01",
+            )
+
+    def test_font_record_forbids_published_with_invalid_license_type(self) -> None:
+        """status=published는 허가된 license_type(OFL/Apache-2.0/UFL) 외에는 불가능하다."""
+        with pytest.raises(ValidationError, match="published는"):
+            FontRecord(
+                slug="noto-sans",
+                name_en="Noto Sans",
+                category_ko="산세리프",
+                category_google="sans-serif",
+                subsets=["latin"],
+                variants=["400"],
+                weights=[400],
+                official_url="https://fonts.google.com/specimen/Noto+Sans",
+                license_type="MIT",
+                license_verified=True,
+                status="published",
+                aliases=["noto"],
+                version="1.0",
+                last_modified="2024-02-01",
+            )
+
+    def test_font_record_allows_published_with_valid_ofl(self) -> None:
+        """status=published는 license_type=OFL + license_verified=True일 때 허용된다."""
+        record = FontRecord(
+            slug="noto-sans",
+            name_en="Noto Sans",
+            category_ko="산세리프",
+            category_google="sans-serif",
+            subsets=["latin"],
+            variants=["400"],
+            weights=[400],
+            official_url="https://fonts.google.com/specimen/Noto+Sans",
+            license_type="OFL",
+            license_verified=True,
+            status="published",
+            aliases=["noto"],
+            version="1.0",
+            last_modified="2024-02-01",
+        )
+        assert record.status == "published"
+        assert record.license_type == "OFL"
+        assert record.license_verified is True
+
+    def test_font_record_allows_published_with_valid_apache(self) -> None:
+        """status=published는 license_type=Apache-2.0 + license_verified=True일 때 허용된다."""
+        record = FontRecord(
+            slug="roboto",
+            name_en="Roboto",
+            category_ko="산세리프",
+            category_google="sans-serif",
+            subsets=["latin"],
+            variants=["400"],
+            weights=[400],
+            official_url="https://fonts.google.com/specimen/Roboto",
+            license_type="Apache-2.0",
+            license_verified=True,
+            status="published",
+            aliases=["roboto"],
+            version="1.0",
+            last_modified="2024-02-01",
+        )
+        assert record.status == "published"
+        assert record.license_type == "Apache-2.0"
+        assert record.license_verified is True
+
+    def test_font_record_allows_published_with_valid_ufl(self) -> None:
+        """status=published는 license_type=UFL + license_verified=True일 때 허용된다."""
+        record = FontRecord(
+            slug="ubuntu",
+            name_en="Ubuntu",
+            category_ko="산세리프",
+            category_google="sans-serif",
+            subsets=["latin"],
+            variants=["400"],
+            weights=[400],
+            official_url="https://fonts.google.com/specimen/Ubuntu",
+            license_type="UFL",
+            license_verified=True,
+            status="published",
+            aliases=["ubuntu"],
+            version="1.0",
+            last_modified="2024-02-01",
+        )
+        assert record.status == "published"
+        assert record.license_type == "UFL"
+        assert record.license_verified is True
+
 
 class TestOutputDocument:
     """OutputDocument 모델 테스트."""

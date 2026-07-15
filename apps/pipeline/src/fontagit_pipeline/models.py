@@ -48,6 +48,13 @@ class FontRecord(BaseModel):
             raise ValueError(
                 "라이선스는 license_verified=True일 때만 설정할 수 있습니다"
             )
+        if self.status == "published" and (
+            not self.license_verified
+            or self.license_type not in ("OFL", "Apache-2.0", "UFL")
+        ):
+            raise ValueError(
+                "published는 검증된 라이선스(OFL/Apache-2.0/UFL)만 가능합니다"
+            )
         return self
 
 

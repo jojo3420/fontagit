@@ -25,7 +25,8 @@ create table fontagit.fonts (
   constraint fonts_status_chk check (status in ('draft','published','archived')),
   constraint fonts_tier_chk   check (source_tier in ('A','B','C')),
   constraint fonts_cat_chk    check (category_ko in ('고딕','명조','손글씨','장식')),
-  constraint fonts_license_verify_chk check (license_type is null or license_verified = true)
+  constraint fonts_license_verify_chk check (license_type is null or license_verified = true),
+  constraint fonts_published_license_chk check (status <> 'published' or (license_verified = true and license_type in ('OFL','Apache-2.0','UFL')))
 );
 create index idx_fonts_status on fontagit.fonts(status);
 

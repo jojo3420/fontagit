@@ -65,6 +65,9 @@ def upload_records(records: list[FontRecord], url: str, secret_key: str) -> int:
             .execute()
         )
         data: Any = res.data
+        if not data:
+            logger.error("fonts upsert 응답이 비어있음 (slug=%s)", rec.slug)
+            raise RuntimeError(f"fonts upsert 응답 없음: {rec.slug}")
         font_id = str(data[0]["id"])
         alias_rows = build_alias_rows(font_id, rec.aliases)
         if alias_rows:

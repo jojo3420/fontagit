@@ -7,6 +7,10 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+
+class LicenseFetchError(Exception):
+    """google/fonts 라이선스 매핑 조회 실패."""
+
 _GH_API = "https://api.github.com"
 _TIMEOUT = httpx.Timeout(10.0, connect=10.0)
 _LICENSE_DIRS = {
@@ -75,13 +79,16 @@ def _get_tree_sha(client: httpx.Client, headers: dict[str, str]) -> dict[str, st
 
 
 def fetch_license_map(github_token: str | None = None) -> dict[str, str]:
-    """google/fonts에서 라이선스 매핑을 조회한다. 실패 시 빈 dict(전부 draft).
+    """google/fonts에서 라이선스 매핑을 조회한다.
 
     Args:
         github_token: GitHub API 토큰 (선택)
 
     Returns:
         폰트명→라이선스 타입 매핑
+
+    Raises:
+        LicenseFetchError: 라이선스 조회 실패 시
     """
     headers = {"Accept": "application/vnd.github+json"}
     if github_token:
@@ -97,6 +104,6 @@ def fetch_license_map(github_token: str | None = None) -> dict[str, str]:
                 r.raise_for_status()
                 trees[dir_key] = r.json()["tree"]
     except httpx.HTTPError as exc:
-        logger.warning("라이선스 매핑 조회 실패, 전부 draft 처리: %s", exc.__class__.__name__)
-        return {}
+        logger.warning("라이선스 매핑 조회 실패: %s", exc.__class__.__name__)
+        raise LicenseFetchError(str(exc)) from exc
     return parse_license_map(trees)

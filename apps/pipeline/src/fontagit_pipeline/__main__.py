@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from fontagit_pipeline.client import fetch_webfonts, WebfontsError
 from fontagit_pipeline.config import load_settings
-from fontagit_pipeline.licenses import fetch_license_map
+from fontagit_pipeline.licenses import fetch_license_map, LicenseFetchError
 from fontagit_pipeline.models import GoogleFontRaw, OutputDocument
 from fontagit_pipeline.transform import build_records
 from fontagit_pipeline.uploader import upload_records
@@ -64,7 +64,13 @@ def main() -> int:
         logger.error("webfonts 조회 실패: %s", exc.__class__.__name__)
         return 3
 
-    license_map = fetch_license_map(settings.github_token)
+    license_ok = True
+    try:
+        license_map = fetch_license_map(settings.github_token)
+    except LicenseFetchError:
+        logger.warning("라이선스 조회 실패 — 전 레코드 draft 처리, 업로드는 보류")
+        license_map = {}
+        license_ok = False
     logger.info("라이선스 매핑 %d건", len(license_map))
 
     generated_at = datetime.now(timezone.utc).isoformat()
@@ -83,7 +89,17 @@ def main() -> int:
 
     logger.info("저장 완료: %s (%d개)", _OUTPUT_PATH, doc.record_count)
 
-    if settings.supabase_url and settings.supabase_secret_key:
+    has_url = bool(settings.supabase_url)
+    has_key = bool(settings.supabase_secret_key)
+    if has_url != has_key:
+        logger.error("Supabase 설정 불완전(URL/SECRET_KEY 중 하나만 존재) — 업로드 중단")
+        return 3
+    if has_url and has_key:
+        assert settings.supabase_url is not None
+        assert settings.supabase_secret_key is not None
+        if not license_ok:
+            logger.error("라이선스 조회 실패 상태 — 기존 published 보존 위해 업로드 중단")
+            return 3
         published = [r for r in doc.fonts if r.status == "published"]
         try:
             uploaded = upload_records(doc.fonts, settings.supabase_url, settings.supabase_secret_key)
