@@ -2,32 +2,18 @@ import Link from "next/link";
 import type { Font } from "@/types/font";
 import { fontKeyToVar } from "@/lib/fonts";
 import { TierChip } from "./TierChip";
-import { LicenseBadge } from "./LicenseBadge";
 import styles from "./FontCard.module.css";
 
-interface FontCardProps {
-  font: Font;
-}
-
-export function FontCard({ font }: FontCardProps) {
-  const weightCount = font.availableWeights.length;
-
+/** 폰트 목록 카드(디자인 1f). 견본 + 폰트명 + 티어 배지 */
+export function FontCard({ font }: { font: Font }) {
   return (
     <Link href={`/fonts/${font.slug}`} className={styles.card}>
       <div className={styles.specimen} style={{ fontFamily: fontKeyToVar[font.fontKey] }}>
-        한글
+        다람쥐 헌<br />쳇바퀴
       </div>
-      <div className={styles.content}>
+      <div className={styles.foot}>
         <h3 className={styles.name}>{font.nameKo}</h3>
-        <p className={styles.meta}>
-          <span>{font.foundry}</span>
-          <span>{weightCount}가지 굵기</span>
-          <span>이동 {font.moves.toLocaleString()}회</span>
-        </p>
-        <div className={styles.foot}>
-          <TierChip tier={font.tier} />
-          <LicenseBadge commercial={font.license.commercial} />
-        </div>
+        <TierChip tier={font.tier} />
       </div>
     </Link>
   );
