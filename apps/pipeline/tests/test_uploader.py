@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -50,32 +50,34 @@ def test_build_alias_rows_empty_alias():
     assert len(rows) == 0
 
 
-def test_upload_records_rpc(monkeypatch: pytest.MonkeyPatch):
+def test_upload_records_calls_rpc_per_font():
     """upload_records가 RPC upsert_font를 폰트당 1회 호출한다."""
-    mock_rpc = MagicMock()
-    mock_execute = MagicMock()
-    mock_rpc.execute.return_value = mock_execute
+    with patch("fontagit_pipeline.uploader.create_client") as mock_create:
+        mock_client = MagicMock()
+        mock_create.return_value = mock_client
+        mock_schema = mock_client.schema.return_value
 
-    mock_table = MagicMock()
-    mock_table.rpc.return_value = mock_rpc
+        n = upload_records([_rec()], "https://x.supabase.co", "sb_secret")
 
-    mock_schema = MagicMock()
-    mock_schema.return_value = mock_table
+        assert n == 1
+        mock_client.schema.assert_called_once_with("fontagit")
+        mock_schema.rpc.assert_called_once()
+        name, payload = mock_schema.rpc.call_args.args
+        assert name == "upsert_font"
+        assert payload["p_font"]["slug"] == "noto-sans-kr"
+        assert "id" not in payload["p_font"]
+        assert payload["p_aliases"][0]["alias_norm"] == "notosanskr"
+        assert "font_id" not in payload["p_aliases"][0]
+        mock_schema.rpc.return_value.execute.assert_called_once()
 
-    mock_client = MagicMock()
-    mock_client.schema.return_value = mock_table
 
-    monkeypatch.setattr("fontagit_pipeline.uploader.create_client", lambda url, key: mock_client)
+def test_upload_records_raises_on_rpc_failure():
+    """RPC 실패 시 예외가 전파된다."""
+    with patch("fontagit_pipeline.uploader.create_client") as mock_create:
+        mock_client = MagicMock()
+        mock_create.return_value = mock_client
+        mock_schema = mock_client.schema.return_value
+        mock_schema.rpc.return_value.execute.side_effect = RuntimeError("boom")
 
-    records = [_rec(), _rec()]
-    count = upload_records(records, "http://test", "test_key")
-
-    assert count == 2
-    assert mock_table.rpc.call_count == 2
-    mock_table.rpc.assert_called_with(
-        "upsert_font",
-        {
-            "p_font": build_font_row(_rec()),
-            "p_aliases": build_alias_rows(_rec().aliases),
-        },
-    )
+        with pytest.raises(RuntimeError):
+            upload_records([_rec()], "https://x.supabase.co", "sb_secret")
