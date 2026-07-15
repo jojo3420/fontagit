@@ -14,6 +14,16 @@ FontAgit(폰트 아지트)는 국내외 무료-유료 폰트를 검색-비교하
 
 ## 진행 기록
 
+## 2026-07-15 - 파이프라인 업로드 원자성-stale alias 개선 (이슈 #8)
+
+- 상태: 부분 완료 (코드 완료 + sandbox DB 함수 적용, 실제 업로드 재검증-PR 미완)
+- 완료한 일: 폰트 업로드를 폰트 1건당 단일 트랜잭션(DB 함수 RPC)으로 묶어 "폰트는 저장됐는데 별칭이 없는" 불일치와, 이름 규칙 변경 시 남던 옛 별칭(stale alias)을 제거. 구글폰트 라이선스 조회 응답이 이상해도 죽지 않도록 방어 추가. 전체 테스트 75건 통과, sandbox Supabase에 DB 함수 적용 완료.
+- 커밋/PR: `060e827`(licenses 방어), `bfd1320`(upsert_font RPC + 실행권한 제한), `6bf73be`+`0227e2e`(업로더 RPC 재작성 + 테스트). PR ⚠️ 미생성.
+- 결정사항: 원자성=폰트별(전체 배치 아님), stale alias=삭제 후 재삽입(active 컬럼 아님). DB 함수는 SECURITY DEFINER라 실행 권한을 service_role로 제한(anon/authenticated 쓰기 차단).
+- 남은 일: (1) 실제 파이프라인 실행으로 멱등/stale/롤백 재검증. (2) PR 생성. (3) 이슈 #8 NICE 2건(license 필드 통합, GITHUB_TOKEN 설정).
+- 관련 문서: `docs/superpowers/plans/2026-07-15-upload-atomicity-alias-sync.md`, `docs/superpowers/specs/2026-07-15-upload-atomicity-alias-sync-design.md`, `docs/superpowers/handoff/2026-07-15-1348-upload-atomicity-issue8.md`
+- 상세 히스토리: 없음 (design/handoff/ledger에 dense 기록)
+
 ## 2026-07-15 - 데이터 파이프라인 Supabase 업로드 완성 (Slice 0)
 
 - 상태: 완료
