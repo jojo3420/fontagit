@@ -1,0 +1,18 @@
+.card { border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); padding: 24px; display: flex; flex-direction: column; gap: 12px; }
+.title { font-size: 15px; font-weight: 700; color: var(--ink); margin: 0; }
+.sub { font-size: 11.5px; color: var(--sub); margin: 0 0 4px; }
+.rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.row { display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
+.icon { width: 20px; height: 20px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+.rowLabel { color: var(--ink); }
+.rowValue { margin-left: auto; font-weight: 600; }
+.ok { color: var(--point); }
+.cond { color: var(--warn); }
+.no { color: var(--down); }
+.icon.ok { background: var(--point-weak); }
+.icon.cond { background: rgba(180, 134, 60, .14); }
+.icon.no { background: rgba(180, 86, 75, .12); }
+.notice { font-size: 12px; color: var(--sub); background: var(--surface-2); border-radius: 8px; padding: 12px 14px; margin: 4px 0; }
+.cta { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--point); color: var(--on-point); border-radius: var(--radius-btn); padding: 14px 18px; font-size: 14px; font-weight: 600; }
+.price { font-weight: 700; }
+.seller { text-align: center; font-size: 11.5px; color: var(--sub); margin: 0; }
