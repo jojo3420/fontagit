@@ -13,6 +13,9 @@ from fontagit_pipeline.transform import (
     merge_dedup,
     to_record,
     build_records,
+    map_category_ko,
+    build_slug,
+    extract_weights,
 )
 
 
@@ -66,6 +69,15 @@ def webfonts_sample() -> list[GoogleFontRaw]:
     with open(fixture_path) as f:
         data = json.load(f)
     return [GoogleFontRaw(**item) for item in data]
+
+
+@pytest.fixture
+def license_map() -> dict[str, str]:
+    """라이선스 맵 테스트 픽스처(정규화 디렉토리명 키)."""
+    return {
+        "notosanskr": "OFL",
+        "roboto": "Apache-2.0",
+    }
 
 
 def test_filter_korean_keeps_fonts_with_korean_subset_in_order(webfonts_sample):
@@ -131,32 +143,25 @@ def test_merge_dedup_removes_duplicates_within_korean():
     assert len(families) == len(set(families))
 
 
-def test_to_record_creates_record_with_license_none_and_verified_false(webfonts_sample):
-    raw = webfonts_sample[0]
-    rec = to_record(raw)
-    assert rec.name_en == "Noto Sans KR"
-    assert rec.license is None
-    assert rec.license_verified is False
-
-
-def test_to_record_uses_build_official_url_and_normalize_variants(webfonts_sample):
+def test_to_record_uses_build_official_url_and_normalize_variants(webfonts_sample, license_map):
     raw = webfonts_sample[1]
-    rec = to_record(raw)
+    rec = to_record(raw, license_map)
     assert rec.official_url == "https://fonts.google.com/specimen/Roboto"
     assert rec.variants == ["400", "700"]
 
 
-def test_build_records_merges_dedup_and_converts(webfonts_sample):
-    records = build_records(webfonts_sample, latin_limit=100)
+def test_build_records_merges_dedup_and_converts(webfonts_sample, license_map):
+    records = build_records(webfonts_sample, license_map, latin_limit=100)
     families = [rec.name_en for rec in records]
     assert families == ["Noto Sans KR", "Roboto"]
     assert len(families) == len(set(families))
     for rec in records:
         assert rec.license is None
-        assert rec.license_verified is False
+        assert rec.license_verified is True
+        assert rec.status == "published"
 
 
-def test_build_records_skips_non_ascii_family_with_warning(caplog):
+def test_build_records_skips_non_ascii_family_with_warning(caplog, license_map):
     """비ASCII family는 build_official_url의 ValueError에 의해 건너뛰고 로그한다."""
     caplog.set_level(logging.WARNING)
     fonts = [
@@ -179,9 +184,54 @@ def test_build_records_skips_non_ascii_family_with_warning(caplog):
             category="sans-serif",
         ),
     ]
-    records = build_records(fonts, latin_limit=100)
+    records = build_records(fonts, license_map, latin_limit=100)
     families = [rec.name_en for rec in records]
     assert "Noto Sans KR" in families
     assert "나눔고딕" not in families
     assert len(records) == 1
     assert any("나눔고딕" in record.message for record in caplog.records if record.levelno == logging.WARNING)
+
+
+def test_map_category_ko():
+    assert map_category_ko("sans-serif") == "고딕"
+    assert map_category_ko("serif") == "명조"
+    assert map_category_ko("handwriting") == "손글씨"
+    assert map_category_ko("display") == "장식"
+    assert map_category_ko("monospace") == "고딕"
+
+
+def test_build_slug():
+    assert build_slug("Noto Sans KR") == "noto-sans-kr"
+    assert build_slug("IBM Plex Sans") == "ibm-plex-sans"
+
+
+def test_extract_weights():
+    assert extract_weights(["400", "400 italic", "700"]) == [400, 700]
+    assert extract_weights(["300", "300 italic", "100"]) == [100, 300]
+
+
+def test_to_record_published_for_ofl():
+    raw = GoogleFontRaw(
+        family="Noto Sans KR", variants=["regular", "700"], subsets=["korean", "latin"],
+        version="v1", lastModified="2024-01-01", files={}, category="sans-serif",
+    )
+    rec = to_record(raw, {"notosanskr": "OFL"})
+    assert rec.slug == "noto-sans-kr"
+    assert rec.category_ko == "고딕"
+    assert rec.weights == [400, 700]
+    assert rec.license_type == "OFL"
+    assert rec.is_commercial_free is True
+    assert rec.license_verified is True
+    assert rec.status == "published"
+
+
+def test_to_record_draft_for_unknown_license():
+    raw = GoogleFontRaw(
+        family="Mystery Font", variants=["regular"], subsets=["latin"],
+        version="v1", lastModified="2024-01-01", files={}, category="serif",
+    )
+    rec = to_record(raw, {})
+    assert rec.license_type is None
+    assert rec.license_verified is False
+    assert rec.status == "draft"
+    assert rec.is_commercial_free is False

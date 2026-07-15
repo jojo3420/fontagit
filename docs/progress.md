@@ -10,17 +10,27 @@ FontAgit(폰트 아지트)는 국내외 무료-유료 폰트를 검색-비교하
 - 유료 폰트 상세에서 비슷한 무료 대안 추천
 - 인기 폰트 트렌드(주간/월간 TOP)
 - 홈 히어로 + 이번 주 TOP 10, 다크모드
-- 폰트 데이터 자동 수집 파이프라인(구글폰트 OFL 등, 서버 배치 — 이전 작업, main 반영됨)
+- 폰트 데이터 자동 수집-라이선스 판별-Supabase 적재 파이프라인(구글폰트 OFL/Apache/UFL 자동 공개, 서버 배치)
 
 ## 진행 기록
+
+## 2026-07-15 - 데이터 파이프라인 Supabase 업로드 완성 (Slice 0)
+
+- 상태: 완료
+- 완료한 일: 구글폰트 수집 데이터를 라이선스 판별 후 Supabase(폰트 DB)에 자동 적재하는 파이프라인 완성. 실제 폰트 136개 적재(공개 가능 130개), 여러 번 실행해도 중복 없이 동일(멱등) 검증. 공개는 OFL/Apache/UFL처럼 라이선스가 확인된 폰트만 자동 게시.
+- 커밋/PR: `2c1c62a`(변환 버그+테스트 정정), `fd1a5b5`(Supabase 업로더), `b487c49`(수집-판별-업로드 오케스트레이션), `436c181`(비밀파일 gitignore), `0a8d0d0`(DB 권한 마이그레이션), `33bf12a`(API키 로그 노출 억제). PR: develop→main 생성 예정(다음 단계).
+- 결정사항: FontAgit 전용 신규 Supabase 프로젝트(ref zgxtfcpiokhkcrywlxmc, 서울 리전) 사용 — ollidam 공유 인스턴스 아님. license_verified=true인 폰트만 공개(라이선스 정직성).
+- 남은 일: (1) develop→main PR 생성-머지. (2) Slice 1 웹 실데이터 연동(Plan B).
+- 관련 문서: `docs/superpowers/plans/2026-07-14-slice-0-data-pipeline-upload.md`, `.superpowers/sdd/progress.md`(태스크별 상세)
+- 상세 히스토리: 없음 (.superpowers/sdd/progress.md에 태스크별 dense 기록)
 
 ## 2026-07-14 - 웹 화면 진입점 추가 (캔버스/비교 nav)
 
 - 상태: 완료 (PR #6 main 머지)
 - 완료한 일: 만든 화면(타입 캔버스 `/playground`, 비교 `/compare`)으로 가는 메뉴 진입점을 추가해 "진입점 고립"(nav 링크가 없어 사용자가 화면을 못 찾던 문제)을 해소. 데스크톱 헤더 nav에 캔버스-비교 링크 추가, 모바일은 하단 탭바에 비교 탭 추가. 헤더 nav가 모바일에서도 보이는 구조라 좁은 폰 넘침 방지를 위해 두 링크는 모바일 상단 nav에서만 숨김.
-- 커밋/PR: `bc73261`(nav 링크), `68ad6b4`(스크린샷 기준 이미지 22개 갱신), `f02955b`(리뷰 반영-모바일 탭 선택 판정 정확화). PR #6 main 머지 완료(https://github.com/jojo3420/fontagit/pull/6). 이후 develop 선반영: `6027218`(smoke 테스트 강화 - viewport await + href 앵커 + 390px 모바일 검증, Codex Medium 후속).
-- 결정사항: 진입점 위치는 헤더 nav 확장 방식으로 확정(대안이던 홈 배너 스펙 9a 미채택). Codex 리뷰는 Critical-High 0, Medium 3 - 모바일 탭 active 정확 매칭은 PR #6에, 나머지 2건(smoke 테스트 await/href 앵커 + 모바일 검증)은 후속 커밋 `6027218`에 모두 반영(e2e 64 pass).
-- 남은 일: (1) develop 선반영분(`8f5b82b` progress, `6027218` 테스트 강화)을 다음 develop→main PR로 올려 반영. (2) 승계: 배포 도메인 확정 후 `metadataBase` 설정, 필터/검색/등록폼 실동작화, 실데이터 파이프라인 연동.
+- 커밋/PR: `bc73261`(nav 링크), `68ad6b4`(스크린샷 기준 이미지 22개 갱신), `f02955b`(리뷰 반영-모바일 탭 선택 판정 정확화). PR #6 main 머지 완료(https://github.com/jojo3420/fontagit/pull/6). 후속 `6027218`(smoke 테스트 강화 - viewport await + href 앵커 + 390px 모바일 검증, Codex Medium 후속). 후속분은 `ec59e72`(develop→main 머지 커밋)로 main 반영 완료.
+- 결정사항: 진입점 위치는 헤더 nav 확장 방식으로 확정(대안이던 홈 배너 스펙 9a 미채택). Codex 리뷰는 Critical-High 0, Medium 3 - 모바일 탭 active 정확 매칭은 PR #6에, 나머지 2건(smoke 테스트 await/href 앵커 + 모바일 검증)은 후속 커밋 `6027218`에 모두 반영(e2e 64 pass). main과 develop은 PR 머지 커밋 때문에 분기 상태라 develop→main은 fast-forward 불가, `--no-ff` 머지 커밋으로 합침.
+- 남은 일: 승계 - 배포 도메인 확정 후 `metadataBase` 설정, 필터/검색/등록폼 실동작화, 실데이터 파이프라인 연동.
 - 관련 문서: `tobyteam/cpr-review-6.md`(PR #6 Codex 리뷰 + 크로스 리뷰)
 - 상세 히스토리: 없음
 
