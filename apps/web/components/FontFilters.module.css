@@ -15,20 +15,20 @@
   color: #333;
 }
 
-.chips {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.chips label {
+.check {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: 13px;
+  margin-bottom: 8px;
   cursor: pointer;
 }
 
-.chips input[type="checkbox"] {
+.check input[type="checkbox"] {
   cursor: pointer;
+}
+
+.chips {
+  display: flex;
+  gap: 8px;
 }
