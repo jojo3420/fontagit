@@ -29,8 +29,8 @@ export interface CollectionRow {
 }
 
 export interface CollectionItemRow {
-  id: string;
   collection_id: string;
   font_id: string;
+  comment: string | null;
   sort_order: number;
 }
