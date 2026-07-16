@@ -88,11 +88,12 @@
     "name_ko": "노토 산스 KR",
     "name_en": "Noto Sans KR",
     "tier": "free",
-    "category": "고딕",
+    "category_ko": "고딕",
     "score": 100
   }
 ]
 ```
+웹 데이터 계층(search.ts)이 category_ko를 category로 매핑한다.
 
 **Contract**:
 - 점수: 정확 일치=100, 부분 일치=50, trgm 유사도=0~50

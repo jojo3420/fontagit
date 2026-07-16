@@ -110,4 +110,33 @@ describe('검색 페이지 (page.tsx)', () => {
       { timeout: 1000 }
     );
   });
+
+  it('요청 진행 중 입력을 전부 삭제하면 로딩 표시가 사라진다', async () => {
+    // 지연된 Promise로 모킹 (수동 resolve)
+    let resolveSearch: ((value: SearchResult[]) => void) | null = null;
+    const delayedPromise = new Promise<SearchResult[]>((resolve) => {
+      resolveSearch = resolve;
+    });
+    mockSearchFonts.mockReturnValue(delayedPromise);
+
+    const user = userEvent.setup({ delay: null });
+    render(await SearchPage());
+
+    const input = screen.getByPlaceholderText(/검색/i) as HTMLInputElement;
+
+    // 1. 입력 후 debounce 경과
+    await user.type(input, '노토');
+    await new Promise((r) => setTimeout(r, 300)); // debounce 250ms + 여유
+
+    // 2. 로딩 표시 확인
+    expect(screen.getByText('검색 중...')).toBeInTheDocument();
+
+    // 3. 입력 전부 삭제
+    await user.clear(input);
+    await new Promise((r) => setTimeout(r, 300)); // debounce 다시 경과
+
+    // 4. 로딩이 사라지고 초기 안내 메시지가 보여야 함
+    expect(screen.queryByText('검색 중...')).not.toBeInTheDocument();
+    expect(screen.getByText('검색어를 입력하세요.')).toBeInTheDocument();
+  });
 });

@@ -33,6 +33,7 @@ function SearchContent() {
         if (!cancelled) {
           setResults([]);
           setSearched(false);
+          setLoading(false);
         }
       }
     }, 250); // debounce
@@ -54,6 +55,7 @@ function SearchContent() {
           onChange={(e) => setQuery(e.target.value)}
           className={styles.input}
           autoFocus
+          aria-label="폰트 검색"
         />
       </div>
 
