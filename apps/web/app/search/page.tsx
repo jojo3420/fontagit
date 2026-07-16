@@ -40,7 +40,6 @@ function SearchContent() {
               setLoading(false);
             }
           });
-        router.replace(query.trim() ? `/search?q=${encodeURIComponent(query)}` : '/search', { scroll: false });
       } else {
         if (!cancelled) {
           setResults([]);
@@ -49,6 +48,11 @@ function SearchContent() {
           setError(false);
         }
       }
+      // URL 동기화는 검색 실행 여부와 무관하게 항상 수행 — 입력을 지우면 q도 제거
+      router.replace(
+        query.trim() ? `/search?q=${encodeURIComponent(query.trim())}` : '/search',
+        { scroll: false },
+      );
     }, 250); // debounce
 
     return () => {
