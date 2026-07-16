@@ -34,6 +34,9 @@ describe('검색 페이지 (page.tsx)', () => {
     const input = screen.getByPlaceholderText(/검색/i);
     expect(input).toBeInTheDocument();
     expect(input).toHaveValue('');
+
+    const prompt = screen.getByText('검색어를 입력하세요.');
+    expect(prompt).toBeInTheDocument();
   });
 
   it('입력 후 debounce(250ms)를 거쳐 검색 결과를 표시한다', async () => {
