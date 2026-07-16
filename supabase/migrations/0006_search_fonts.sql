@@ -15,6 +15,7 @@ comment on function fontagit.normalize_search(text) is
 create index if not exists idx_aliases_norm_trgm
   on fontagit.aliases using gin (alias_norm gin_trgm_ops);
 
+-- pg_trgm은 public에 설치. search_path(fontagit, pg_temp)에 public을 넣지 않고 스키마 한정 호출로 참조한다.
 -- search_fonts RPC 생성 (핵심 로직 — 매칭은 전부 정규화된 aliases.alias_norm 기준)
 create or replace function fontagit.search_fonts(q text)
 returns table (
@@ -49,7 +50,7 @@ begin
       when exists(select 1 from aliases a where a.font_id = f.id and a.alias_norm like '%' || v_normalized || '%')
         then 50
       else coalesce((
-        select (max(similarity(a.alias_norm, v_normalized)) * 50)::int
+        select (max(public.similarity(a.alias_norm, v_normalized)) * 50)::int
         from aliases a where a.font_id = f.id
       ), 0)
     end as score
@@ -58,7 +59,7 @@ begin
     and (
       exists(select 1 from aliases a where a.font_id = f.id and a.alias_norm = v_normalized)
       or exists(select 1 from aliases a where a.font_id = f.id and a.alias_norm like '%' || v_normalized || '%')
-      or exists(select 1 from aliases a where a.font_id = f.id and a.alias_norm % v_normalized)
+      or exists(select 1 from aliases a where a.font_id = f.id and a.alias_norm operator(public.%) v_normalized)
     )
   order by score desc, f.name_ko asc nulls last
   limit 20;
