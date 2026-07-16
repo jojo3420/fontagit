@@ -31,9 +31,10 @@ FontAgit(폰트 아지트)는 국내외 무료-유료 폰트를 검색-비교하
 - 완료한 일: 구글폰트 38종의 한글 이름-별칭을 선별해 적재. `name_ko` 31종, 한글 별칭 32종을 반영하고 유니코드 NFC 정규화를 적용. 현재 인기 100종에서 빠진 폰트는 `draft`로 내리고 새로 들어온 폰트는 공개하는 전수 동기화도 추가.
 - 안전장치: 수집 결과가 100종 미만이거나 한 번에 비공개 전환할 폰트가 5종을 넘으면 작업을 중단. 일반 업로드와 전수 동기화 함수를 분리해 오작동 범위를 제한.
 - 커밋/DB: `c7cfc7f`(동기화 DB 함수), `6492c73`(업로더 핵심 로직-테스트), `bda2729`(실행 명령 연결). dev에 마이그레이션 `0005` 적용. prod 쓰기 없음.
-- 검증: 파이프라인 재실행 성공(exit 0), 테스트 86건-Ruff-mypy 통과. dev DB는 전체 137종/공개 130종이며 `urbanist`는 draft, `geist`는 published. 현재 수집 결과와 DB 공개 Tier A 차이 0건, 한글 데이터 차이 0건, 기존 Tier B/C 변경 0건.
-- 결정사항: 마이그레이션 번호는 Tier A 동기화 `0005`, 검색 `0006`, 클릭 집계 `0007`, 등록 신청 `0008` 순서로 사용.
-- 다음 단계: 슬라이스2 검색(F-04, `pg_trgm` + `search_fonts` RPC) 구현 재개.
+- 커밋/PR: PR #14 MERGED (https://github.com/jojo3420/fontagit/pull/14, squash `f888f02`). Codex PR 리뷰(5.5/10) High 2건 반영 `6c83a74`(전체 동기화 경로 변환 실패 시 즉시 중단 strict, 스냅샷 한글 30/라틴 90 하한 분리 검증).
+- 검증: 파이프라인 재실행 성공(exit 0), 테스트 90건-Ruff-mypy 통과. dev DB는 전체 137종/공개 130종이며 `urbanist`는 draft, `geist`는 published. 현재 수집 결과와 DB 공개 Tier A 차이 0건, 한글 데이터 차이 0건, 기존 Tier B/C 변경 0건.
+- 결정사항: 마이그레이션 번호는 Tier A 동기화 `0005`, 검색 `0006`, 클릭 집계 `0007`, 등록 신청 `0008` 순서로 사용. Codex High(137건 upsert+동기화 단일 트랜잭션화)는 아키텍처 변경이라 다음 PR로 이연.
+- 다음 단계: 슬라이스2 검색(F-04, `pg_trgm` + `search_fonts` RPC) 구현 재개. Codex Medium 이연분: 산출물 쓰기 순서(임시파일 후 교체), sources URL 형식 검증, 매핑 JSON 최상위 배열 가드, 동기화 통합 테스트, 슬라이스2 계획 문서 갱신(NFC/similarity 버그/지마켓 테스트 교체).
 - 관련 문서: `docs/superpowers/specs/2026-07-16-slice0.5-korean-aliases-design.md`, `docs/superpowers/specs/2026-07-16-tier-a-stale-font-sync-design.md`, `docs/superpowers/plans/2026-07-16-tier-a-stale-font-sync.md`
 
 ## 2026-07-16 - 웹 실데이터 연동 슬라이스1 완료 + 검색 슬라이스2 착수
