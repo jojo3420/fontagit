@@ -1,9 +1,10 @@
-import { weeklyTrends } from "@/data/trends";
+import { getTemporaryTrends } from "@/lib/data";
 import { FilterChip } from "@/components/FilterChip";
 import { TrendRankRow } from "@/components/TrendRankRow";
 import styles from "./page.module.css";
 
-export default function TrendsPage() {
+export default async function TrendsPage() {
+  const items = await getTemporaryTrends();
   return (
     <main className={styles.main}>
       <div className={styles.head}>
@@ -15,7 +16,7 @@ export default function TrendsPage() {
         </div>
       </div>
       <ul className={styles.list}>
-        {weeklyTrends.map((item) => (
+        {items.map((item) => (
           <li key={item.rank}>
             <TrendRankRow item={item} />
           </li>

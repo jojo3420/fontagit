@@ -9,3 +9,4 @@ export {
   getCollectionBySlug,
   getAllCollectionSlugs,
 } from "./db/collections";
+export { getTemporaryTrends } from "./db/trends";
