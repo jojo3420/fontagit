@@ -2,6 +2,7 @@
 
 import logging
 import re
+import unicodedata
 from typing import Any
 
 from supabase import create_client
@@ -31,8 +32,10 @@ _FONT_COLS = (
 
 
 def normalize_alias(alias: str) -> str:
-    """별칭을 정규화한다(소문자, 공백 제거). 한글은 유지."""
-    return re.sub(r"\s+", "", alias.lower())
+    """별칭을 정규화한다(NFC → 공백 제거 → 소문자). 한글은 유지."""
+    alias = unicodedata.normalize("NFC", alias)
+    alias = re.sub(r"\s+", "", alias)
+    return alias.lower()
 
 
 def build_font_row(rec: FontRecord) -> dict[str, Any]:

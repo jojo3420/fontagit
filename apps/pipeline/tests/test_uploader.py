@@ -81,3 +81,11 @@ def test_upload_records_raises_on_rpc_failure():
 
         with pytest.raises(RuntimeError):
             upload_records([_rec()], "https://x.supabase.co", "sb_secret")
+
+
+def test_normalize_alias_converts_nfd_to_nfc():
+    import unicodedata
+
+    nfd = unicodedata.normalize("NFD", "본 고딕")  # 자모 분리형
+    assert normalize_alias(nfd) == "본고딕"
+    assert normalize_alias(nfd) == normalize_alias("본 고딕")  # NFC/NFD 입력 동치
