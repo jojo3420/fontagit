@@ -1,6 +1,8 @@
 import { supabaseClient } from './client';
 import type { SearchResult } from './types';
 
+const MAX_QUERY_LENGTH = 100;
+
 interface RPCSearchRow {
   slug: string;
   name_ko: string | null;
@@ -13,7 +15,7 @@ interface RPCSearchRow {
 export async function searchFonts(q: string): Promise<SearchResult[]> {
   const query = q.trim();
 
-  if (!query) {
+  if (!query || query.length > MAX_QUERY_LENGTH) {
     return [];
   }
 

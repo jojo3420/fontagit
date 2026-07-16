@@ -73,4 +73,36 @@ describe('searchFonts', () => {
 
     consoleErrorSpy.mockRestore();
   });
+
+  it('쿼리가 100자 초과 → RPC 호출 없이 빈 배열 반환', async () => {
+    const longQuery = 'a'.repeat(101);
+    const result = await searchFonts(longQuery);
+
+    expect(result).toEqual([]);
+    expect(supabaseClient.rpc).not.toHaveBeenCalled();
+  });
+
+  it('쿼리가 정확히 100자 → RPC 호출', async () => {
+    const query100 = 'a'.repeat(100);
+    const mockData = [
+      {
+        slug: 'test-font',
+        name_ko: '테스트',
+        name_en: 'Test',
+        tier: 'free' as const,
+        category_ko: '고딕',
+        score: 50,
+      },
+    ];
+
+    vi.mocked(supabaseClient.rpc).mockResolvedValueOnce({
+      data: mockData,
+      error: null,
+    } as any);
+
+    const result = await searchFonts(query100);
+
+    expect(result.length).toBe(1);
+    expect(supabaseClient.rpc).toHaveBeenCalled();
+  });
 });

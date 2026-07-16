@@ -17,21 +17,30 @@ function SearchContent() {
   const [searched, setSearched] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+
     const timer = setTimeout(() => {
       if (query.trim()) {
         setLoading(true);
         setSearched(true);
         searchFonts(query).then((data) => {
-          setResults(data);
-          setLoading(false);
+          if (!cancelled) {
+            setResults(data);
+            setLoading(false);
+          }
         });
       } else {
-        setResults([]);
-        setSearched(false);
+        if (!cancelled) {
+          setResults([]);
+          setSearched(false);
+        }
       }
     }, 250); // debounce
 
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [query]);
 
   return (
