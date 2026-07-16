@@ -20,14 +20,18 @@ describe("recordClick", () => {
 
   it("RPC 오류가 나도 throw하지 않는다 (fire-and-forget)", async () => {
     rpcMock.mockResolvedValue({ data: null, error: { message: "boom" } });
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(() => recordClick("noto-sans-kr")).not.toThrow();
-    await vi.waitFor(() => expect(rpcMock).toHaveBeenCalled());
+    await vi.waitFor(() => expect(consoleErrorSpy).toHaveBeenCalled());
+    consoleErrorSpy.mockRestore();
   });
 
   it("RPC reject(네트워크 예외)여도 unhandled rejection 없이 삼킨다", async () => {
     rpcMock.mockRejectedValue(new Error("network down"));
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(() => recordClick("noto-sans-kr")).not.toThrow();
-    await vi.waitFor(() => expect(rpcMock).toHaveBeenCalled());
+    await vi.waitFor(() => expect(consoleErrorSpy).toHaveBeenCalled());
+    consoleErrorSpy.mockRestore();
   });
 
   it("빈 slug는 RPC를 호출하지 않는다", () => {
