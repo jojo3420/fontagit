@@ -4,6 +4,7 @@ import {
   commercialState, webfontState, redistributionState,
   deriveSellerHost, type LicenseState,
 } from "@/lib/license";
+import { OfficialLinkCta } from "./OfficialLinkCta";
 import styles from "./LicenseSummaryCard.module.css";
 
 const STATE_ICON: Record<LicenseState, string> = { ok: "✓", cond: "!", no: "✕" };
@@ -37,10 +38,10 @@ export function LicenseSummaryCard({ font }: { font: Font }) {
         ))}
       </ul>
       <p className={styles.notice}>{notice}</p>
-      <a className={styles.cta} href={font.officialUrl} target="_blank" rel="noreferrer">
+      <OfficialLinkCta slug={font.slug} href={font.officialUrl} className={styles.cta}>
         <span>{ctaLabel}</span>
         {price && <span className={styles.price}>{price}</span>}
-      </a>
+      </OfficialLinkCta>
       {host && <p className={styles.seller}>이동 → {host}</p>}
     </aside>
   );
