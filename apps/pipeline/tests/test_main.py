@@ -219,7 +219,7 @@ def test_main_returns_3_on_supabase_config_mismatch(tmp_path):
                         )
                         mock_fetch.return_value = fonts
                         mock_license.return_value = {}
-                        mock_korean.return_value = None
+                        mock_korean.return_value = {}
 
                         result = main()
 

@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from fontagit_pipeline.client import fetch_webfonts, WebfontsError
 from fontagit_pipeline.config import load_settings
-from fontagit_pipeline.korean_names import load_korean_names, validate_coverage, KoreanNamesError
+from fontagit_pipeline.korean_names import load_korean_names, KoreanNamesError
 from fontagit_pipeline.licenses import fetch_license_map, LicenseFetchError
 from fontagit_pipeline.models import GoogleFontRaw, OutputDocument
 from fontagit_pipeline.transform import build_records
@@ -73,28 +73,19 @@ def main() -> int:
         return 3
     logger.info("라이선스 매핑 %d건", len(license_map))
 
-    korean_names = None
     try:
         korean_names = load_korean_names()
-        if korean_names:
-            logger.info("한글 매핑 %d건 로드", len(korean_names))
+        logger.info("한글 매핑 %d건 로드", len(korean_names))
     except KoreanNamesError as exc:
-        logger.warning("한글 매핑 로드 실패(선택적): %s", exc)
+        logger.error("한글 매핑 로드 실패: %s", exc)
+        return 3
 
     generated_at = datetime.now(timezone.utc).isoformat()
-    doc = build_document(fonts, license_map, generated_at, korean_names=korean_names)
-
-    # Korean subset 매핑 coverage 검증 (fail-fast)
-    if korean_names:
-        published_korean = {
-            r.slug for r in doc.fonts if r.status == "published" and "korean" in r.subsets
-        }
-        try:
-            validate_coverage(korean_names, published_korean)
-            logger.info("한글 매핑 검증 통과 (published korean %d건)", len(published_korean))
-        except KoreanNamesError as exc:
-            logger.error("한글 매핑 검증 실패: %s", exc)
-            return 3
+    try:
+        doc = build_document(fonts, license_map, generated_at, korean_names=korean_names)
+    except KoreanNamesError as exc:
+        logger.error("한글 매핑 검증 실패: %s", exc)
+        return 3
 
     # 빈 응답 처리: record_count가 0이면 기존 파일 보존
     if doc.record_count == 0:

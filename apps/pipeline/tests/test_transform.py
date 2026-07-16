@@ -237,27 +237,24 @@ def test_to_record_draft_for_unknown_license():
     assert rec.is_commercial_free is False
 
 
-def test_build_aliases_with_korean_name():
-    """name_ko가 제공되면 한글 이름과 공백 제거 버전을 추가한다."""
-    result = build_aliases("Noto Sans KR", name_ko="노토 산스 KR")
-    assert "Noto Sans KR" in result
-    assert "noto sans kr" in result
-    assert "notosanskr" in result
-    assert "noto sans kr ttf" in result
-    assert "노토 산스 KR" in result
-    assert "노토산스KR" in result
-    # 중복 제거 확인 (name_ko 자체와 공백 제거 버전만)
-    assert len(result) == 6
-
-
-def test_build_aliases_with_extra_aliases():
-    """extra_aliases가 제공되면 기본 별칭에 추가한다."""
-    result = build_aliases("Roboto", extra_aliases=["로보토"])
-    assert "Roboto" in result
-    assert "roboto" in result
-    assert "roboto ttf" in result
-    assert "로보토" in result
-    assert len(result) == 4
+def test_build_aliases_merges_name_ko_and_extra_aliases():
+    """name_ko와 extra_aliases가 제공되면 모두 병합하고 중복을 제거한다."""
+    result = build_aliases(
+        "Noto Sans KR",
+        name_ko="노토 산스 KR",
+        extra_aliases=["노토산스", "Noto Sans KR"],  # 마지막은 중복
+    )
+    # 파생 순서: 영문, 소문자, 공백제거, ttf, name_ko, name_ko 공백제거, 추가 별칭들 (중복 제거)
+    assert result == [
+        "Noto Sans KR",
+        "noto sans kr",
+        "notosanskr",
+        "noto sans kr ttf",
+        "노토 산스 KR",
+        "노토산스KR",
+        "노토산스",
+    ]
+    assert len(result) == 7
 
 
 def test_to_record_uses_korean_names_mapping():
@@ -285,3 +282,25 @@ def test_to_record_uses_korean_names_mapping():
     assert "노토 산스 KR" in rec.aliases
     assert "노토산스KR" in rec.aliases
     assert "노토산스" in rec.aliases
+
+
+def test_build_records_fails_fast_on_missing_korean_mapping():
+    """korean_names 매핑이 제공되면 coverage 검증 실패 시 KoreanNamesError raise한다."""
+    from fontagit_pipeline.korean_names import KoreanNamesError
+
+    with pytest.raises(KoreanNamesError):
+        build_records(
+            [
+                GoogleFontRaw(
+                    family="Noto Sans KR",
+                    variants=["regular"],
+                    subsets=["korean"],
+                    version="v1",
+                    lastModified="2024-01-01",
+                    files={},
+                    category="sans-serif",
+                )
+            ],
+            {"notosanskr": "OFL"},
+            korean_names={},
+        )

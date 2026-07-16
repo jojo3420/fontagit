@@ -3,6 +3,7 @@
 import logging
 import re
 
+from fontagit_pipeline.korean_names import validate_coverage, KoreanNamesError
 from fontagit_pipeline.licenses import resolve_license_type
 from fontagit_pipeline.models import GoogleFontRaw, FontRecord, KoreanNameEntry
 
@@ -183,4 +184,7 @@ def build_records(
             records.append(to_record(raw, license_map, korean_names=korean_names))
         except ValueError as exc:
             logger.warning("레코드 변환 건너뜀 (%s): %s", raw.family, exc)
+    if korean_names is not None:
+        published_korean = {r.slug for r in records if r.status == "published" and "korean" in r.subsets}
+        validate_coverage(korean_names, published_korean)
     return records
