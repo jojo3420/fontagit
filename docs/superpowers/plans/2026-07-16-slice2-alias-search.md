@@ -1,7 +1,9 @@
 # Slice 2: 알리아스 검색(F-04) Implementation Plan
 
 **For**: Agentic workers (구현 전담) | **Goal**: 한/영/띄어쓰기 별칭 검색 백엔드+UI 완성  
-**Status**: Implementation Ready | **Date**: 2026-07-16
+**Status**: Implementation Ready | **Date**: 2026-07-16 | **Version**: 1.1
+
+> v1.1 (2026-07-16): 슬라이스 0.5 완료 반영 — SQL 버그 B(trgm 점수 상수화)/C(유사도 대상을 alias_norm으로) 수정, normalize_search에 NFC 반영(결정 #3), 테스트 예시를 실데이터(본고딕/노토산스/나눔고딕)로 교체. 부분일치도 원문 이름 ILIKE 대신 alias_norm LIKE로 통일(공백 포함 이름과 정규화 쿼리 미스매치 해소).
 
 ---
 
@@ -15,7 +17,7 @@
 
 ### Key Decisions
 
-1. **Normalization SSoT**: DB 정규화 함수(normalize_search)는 파이프라인 규칙과 동일 — 공백제거 + 소문자
+1. **Normalization SSoT**: DB 정규화 함수(normalize_search)는 파이프라인 규칙과 동일 — **NFC → 공백제거 → 소문자** (0.5 스펙 4.3, 결정 #3)
 2. **아키텍처**: 검색은 런타임 동적(output:export 환경에서 클라이언트가 anon key로 Supabase RPC 호출)
 3. **UI 위치**: Header 검색 버튼(현재 미연결) → `/search` 라우트로 연결
 4. **검색 결과**: published 폰트만, slug로 정적 상세 페이지 링크
@@ -27,7 +29,7 @@
 
 - ✅ **output:export 정적 유지**: 검색은 런타임 클라이언트→Supabase RPC 직접 호출
 - ✅ **lib/db/ 계층화**: lib/db/search.ts 신설 (client.ts 재사용, mappers 준용)
-- ✅ **정규화 SSoT**: DB normalize_search(text) = `TRIM(LOWER(REGEXP_REPLACE(..., '\\s+', '', 'g')))`
+- ✅ **정규화 SSoT**: DB normalize_search(text) = `LOWER(REGEXP_REPLACE(NORMALIZE(q, NFC), '\s+', '', 'g'))` — NFC → 공백제거 → lower 순서(파이프라인 normalize_alias와 동일)
 - ✅ **마이그레이션 번호**: 0006 (0001~0004 기존, 0005 Tier A stale 폰트 동기화)
 - ✅ **보안**: RPC SECURITY DEFINER, anon에게 execute 권한, 파라미터 바인딩으로 SQL 인젝션 차단
 - ✅ **테스트**: 모킹(네트워크 없음) + pnpm test 단독 실행 가능
@@ -74,7 +76,7 @@
 **Input**:
 ```json
 {
-  "q": "지마켓"  // raw query (정규화는 DB 내부)
+  "q": "본고딕"  // raw query (정규화는 DB 내부)
 }
 ```
 
@@ -82,15 +84,16 @@
 ```json
 [
   {
-    "slug": "gmarket-sans",
-    "name_ko": "지마켓 산스",
-    "name_en": "Gmarket Sans",
+    "slug": "noto-sans-kr",
+    "name_ko": "노토 산스 KR",
+    "name_en": "Noto Sans KR",
     "tier": "free",
-    "category": "고딕",
+    "category_ko": "고딕",
     "score": 100
   }
 ]
 ```
+웹 데이터 계층(search.ts)이 category_ko를 category로 매핑한다.
 
 **Contract**:
 - 점수: 정확 일치=100, 부분 일치=50, trgm 유사도=0~50
@@ -116,8 +119,8 @@
 ### Task 0: Pre-Flight Gate (코드 없음, 확인만)
 
 **확인 사항**:
-- [ ] dev Supabase pg_trgm 확장 설치 가능 (anon SELECT 확인)
-- [ ] fontagit.aliases 데이터 존재 (슬라이스1 폰트 130종 alias 적재됨)
+- [ ] dev Supabase pg_trgm 미설치가 정상(0006이 설치 예정), 설치 가능 여부 확인
+- [ ] fontagit.aliases 데이터 존재 (슬라이스 0.5 완료: 폰트 137종/공개 130, 한글 별칭 보유 32종, name_ko 31종)
 - [ ] Header.tsx 검색 버튼 UI 위치 (현 상태: aria-label="검색", 미연결)
 - [ ] 검색 라우트 현황 (/search 없음, 신설 필요)
 
@@ -146,24 +149,25 @@ select count(*) from fontagit.aliases;
 
 **Steps**:
 
-1. **실패 테스트**: SQL Editor에서 `select search_fonts('지마켓');` 실행 → 함수 없음 오류 확인
+1. **실패 테스트**: SQL Editor에서 `select search_fonts('본고딕');` 실행 → 함수 없음 오류 확인
    
 2. **pg_trgm 확장 설치**:
    ```sql
    create extension if not exists pg_trgm;
    ```
 
-3. **정규화 함수 생성** (SSoT: 파이프라인 규칙 동일):
+3. **정규화 함수 생성** (SSoT: 파이프라인 규칙 동일, 순서 NFC → 공백제거 → lower):
    ```sql
    create or replace function fontagit.normalize_search(q text) returns text
    language sql immutable
    as $$
-     select trim(lower(regexp_replace(q, '\s+', '', 'g')))
+     select lower(regexp_replace(normalize(q, NFC), '\s+', '', 'g'))
    $$;
    
    comment on function fontagit.normalize_search(text) is
-     '별칭 검색 정규화: 공백제거, 소문자 변환. 파이프라인 uploader.py normalize_alias와 동일 규칙.';
+     '별칭 검색 정규화: NFC → 공백제거 → 소문자. 파이프라인 uploader.py normalize_alias와 동일 규칙-순서.';
    ```
+   (PostgreSQL `normalize()`는 PG13+ 내장. NFD 자모 분리형 입력도 NFC 완성형으로 통일 — 0.5 스펙 4.3)
 
 4. **aliases.alias_norm 인덱스 추가** (trgm 유사도 검색용):
    ```sql
@@ -171,7 +175,7 @@ select count(*) from fontagit.aliases;
      on fontagit.aliases using gin (alias_norm gin_trgm_ops);
    ```
 
-5. **search_fonts RPC 생성** (핵심 로직):
+5. **search_fonts RPC 생성** (핵심 로직 — 매칭은 전부 정규화된 `aliases.alias_norm` 기준):
    ```sql
    create or replace function fontagit.search_fonts(q text)
    returns table (
@@ -203,40 +207,51 @@ select count(*) from fontagit.aliases;
        case
          when exists(select 1 from aliases a where a.font_id = f.id and a.alias_norm = v_normalized)
            then 100
-         when f.name_ko ilike '%' || v_normalized || '%' or f.name_en ilike '%' || v_normalized || '%'
+         when exists(select 1 from aliases a where a.font_id = f.id and a.alias_norm like '%' || v_normalized || '%')
            then 50
-         else greatest(0, 50 - (similarity(v_normalized, f.name_en) * 0)::int)
+         else coalesce((
+           select (max(public.similarity(a.alias_norm, v_normalized)) * 50)::int
+           from aliases a where a.font_id = f.id
+         ), 0)
        end as score
      from fonts f
      where f.status = 'published'
        and (
          exists(select 1 from aliases a where a.font_id = f.id and a.alias_norm = v_normalized)
-         or f.name_ko ilike '%' || v_normalized || '%'
-         or f.name_en ilike '%' || v_normalized || '%'
-         or similarity(v_normalized, f.name_en) > 0.3
+         or exists(select 1 from aliases a where a.font_id = f.id and a.alias_norm like '%' || v_normalized || '%')
+         or exists(select 1 from aliases a where a.font_id = f.id and a.alias_norm operator(public.%) v_normalized)
        )
-     order by score desc, f.name_ko asc
+     order by score desc, f.name_ko asc nulls last
      limit 20;
    end;
    $$;
+   ```
+   **v1.1 교정 근거**:
+   - 버그 B 수정: `similarity * 0`(항상 50 고정) → `max(similarity(...)) * 50`으로 실제 유사도 반영(0~50).
+   - 버그 C 수정: 유사도 대상을 `fonts.name_en` → `aliases.alias_norm`(GIN trgm 인덱스 대상과 일치). 유사도 필터는 `%` 연산자(기본 임계 0.3, 인덱스 활용) 사용 — `similarity() > 0.3` 형태는 인덱스를 못 탄다.
+   - 부분일치도 `alias_norm LIKE`로 통일: 원문 이름(공백 포함)과 정규화 쿼리(공백 제거)는 ILIKE 미스매치("노토산스" vs "노토 산스 KR"). alias_norm에는 이름 정규화형이 이미 적재돼 있고 gin_trgm_ops가 LIKE도 가속.
+   - `name_ko asc nulls last`: 라틴 폰트 name_ko=null이 앞에 오지 않도록.
+   ```sql
 
    revoke execute on function fontagit.search_fonts(text) from public;
    grant execute on function fontagit.search_fonts(text) to anon;
    
    comment on function fontagit.search_fonts(text) is
-     'Slice 2 알리아스 검색. 입력을 정규화하고 별칭(정확=100점)→이름(부분=50점)→유사도 순 점수화. published 폰트만, 최대 20건.';
+     'Slice 2 알리아스 검색. 입력을 정규화하고 별칭 정확일치(100점)→별칭 부분일치(50점)→trgm 유사도(0~50점) 순 점수화. published 폰트만, 최대 20건.';
    ```
 
-6. **통과 테스트**: SQL Editor에서 3가지 케이스 실행
+6. **통과 테스트**: SQL Editor에서 4가지 케이스 실행 (실데이터 기준 — 슬라이스 0.5 적재분)
    ```sql
-   -- 정확일치 (지마켓 산스 데이터 필요)
-   select * from search_fonts('지마켓');
-   -- 부분일치
-   select * from search_fonts('지마');
-   -- trgm 유사도 (오타)
-   select * from search_fonts('지머켓');
+   -- 정확일치 (noto-sans-kr 통용 별칭 '본고딕' → 100점)
+   select * from search_fonts('본고딕');
+   -- 부분일치 (나눔고딕/나눔명조 등 다수 → 50점)
+   select * from search_fonts('나눔');
+   -- trgm 유사도 (오타 '본고딩' → 0~50점)
+   select * from search_fonts('본고딩');
+   -- 공백 별칭 정규화 ('본 고딕' → '본고딕' 정확일치)
+   select * from search_fonts('본 고딕');
    ```
-   → 모두 결과 0건 이상, score 내림차순 정렬 확인
+   → 각각 1건 이상 반환, score 내림차순 정렬 확인
 
 7. **커밋**: `feat: 마이그레이션 0006 (검색 백엔드 — search_fonts RPC + pg_trgm)`
 
@@ -335,9 +350,9 @@ select count(*) from fontagit.aliases;
      it('정상 RPC 응답 → SearchResult 배열로 매핑', async () => {
        const mockData = [
          {
-           slug: 'gmarket-sans',
-           name_ko: '지마켓 산스',
-           name_en: 'Gmarket Sans',
+           slug: 'noto-sans-kr',
+           name_ko: '노토 산스 KR',
+           name_en: 'Noto Sans KR',
            tier: 'free',
            category_ko: '고딕',
            score: 100,
@@ -348,13 +363,13 @@ select count(*) from fontagit.aliases;
          error: null,
        });
 
-       const result = await searchFonts('지마켓');
+       const result = await searchFonts('본고딕');
 
        expect(result).toEqual([
          {
-           slug: 'gmarket-sans',
-           nameKo: '지마켓 산스',
-           nameEn: 'Gmarket Sans',
+           slug: 'noto-sans-kr',
+           nameKo: '노토 산스 KR',
+           nameEn: 'Noto Sans KR',
            tier: 'free',
            category: '고딕',
          },
@@ -589,7 +604,7 @@ select count(*) from fontagit.aliases;
    }
    ```
 
-5. **통과 테스트**: `/search?q=지마켓` 접속 → 입력창 + 로딩 상태 표시, 결과 렌더 확인
+5. **통과 테스트**: `/search?q=본고딕` 접속 → 입력창 + 로딩 상태 표시, 결과 렌더 확인
 6. **커밋**: `feat: 검색 페이지 + Header 연결`
 
 ---
@@ -683,15 +698,11 @@ select count(*) from fontagit.aliases;
 
 2. **정규화 규칙 일관성 테스트** (search.test.ts에 추가):
    ```typescript
-   describe('정규화 일관성 (파이프라인 동일)', () => {
-     it('normalize_search("  공백  테스트  ") = "공백테스트"', async () => {
-       // DB와 동일 규칙 적용 확인
-       // 실제 검증은 Task 1 SQL에서 function이 올바르게 정의되었는지 확인
-       const input = '  공백  테스트  ';
-       const expected = '공백테스트';
-       // 클라이언트에서 정규화 함수 없음 → DB normalize_search 호출 확인
-       // (DB에서 검증)
-     });
+   describe('정규화 일관성 (파이프라인 동일: NFC → 공백제거 → lower)', () => {
+     // 클라이언트에는 정규화 함수가 없음(SSoT는 DB normalize_search).
+     // 실검증은 Task 1/Task 5의 SQL Editor 케이스로 수행:
+     //   normalize_search('  본 고 딕  ') = '본고딕'
+     //   normalize_search(NFD 자모분리 '본고딕') = NFC '본고딕'  (0.5 스펙 4.3 교차 검증)
    });
    ```
 
@@ -748,20 +759,20 @@ select count(*) from fontagit.aliases;
      it('결과 클릭 → /fonts/[slug] 링크', async () => {
        vi.mocked(searchFonts).mockResolvedValueOnce([
          {
-           slug: 'gmarket-sans',
-           nameKo: '지마켓 산스',
-           nameEn: 'Gmarket Sans',
+           slug: 'noto-sans-kr',
+           nameKo: '노토 산스 KR',
+           nameEn: 'Noto Sans KR',
            tier: 'free',
            category: '고딕',
          },
        ]);
 
        render(<SearchContent />);
-       await userEvent.type(screen.getByPlaceholderText(/폰트명/), '지마켓');
+       await userEvent.type(screen.getByPlaceholderText(/폰트명/), '본고딕');
 
        await waitFor(() => {
-         const link = screen.getByRole('link', { name: /지마켓 산스/ });
-         expect(link).toHaveAttribute('href', '/fonts/gmarket-sans');
+         const link = screen.getByRole('link', { name: /노토 산스 KR/ });
+         expect(link).toHaveAttribute('href', '/fonts/noto-sans-kr');
        });
      });
    });
@@ -776,10 +787,12 @@ select count(*) from fontagit.aliases;
 
 5. **정규화 SSoT 검증** (SQL Editor에서 수동):
    ```sql
-   -- 파이프라인이 이미 normalize_alias로 저장한 데이터 활용
-   -- DB normalize_search 함수가 동일 규칙인지 확인
+   -- 파이프라인이 이미 normalize_alias(NFC → 공백제거 → lower)로 저장한 데이터 활용
+   -- DB normalize_search 함수가 동일 규칙-순서인지 확인
    
-   select normalize_search('  지 마 켓  ');  -- "지마켓"
+   select normalize_search('  본 고 딕  ');                      -- "본고딕"
+   select normalize_search(convert_from('\xe18487e185a9e186abe18480e185a9e18483e185b5e186a8'::bytea, 'UTF8'));
+   -- NFD 자모분리 "본고딕" 입력 → NFC "본고딕" 반환 (0.5 스펙 4.3 교차 검증)
    ```
 
 6. **커밋**: `test: 검색 페이지 + 정규화 일관성 테스트`
@@ -818,8 +831,8 @@ select count(*) from fontagit.aliases;
 
 ### Spec Coverage
 
-- ✅ 정규화: 공백제거 + 소문자 (파이프라인과 동일)
-- ✅ 점수화: 정확(100) > 부분(50) > trgm(0~50)
+- ✅ 정규화: NFC → 공백제거 → 소문자 (파이프라인과 동일 순서)
+- ✅ 점수화: 정확(100) > 부분(50) > trgm(0~50, 실제 유사도 반영)
 - ✅ 최대 20건, published만
 - ✅ RPC SECURITY DEFINER, anon execute only
 - ✅ 클라이언트 컴포넌트 (런타임 동적)
@@ -894,4 +907,4 @@ select count(*) from fontagit.aliases;
 
 ---
 
-**Plan Version**: 1.0 | **Status**: Ready for Implementation | **Date**: 2026-07-16
+**Plan Version**: 1.1 | **Status**: Ready for Implementation | **Date**: 2026-07-16
