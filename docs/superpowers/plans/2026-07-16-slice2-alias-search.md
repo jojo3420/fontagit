@@ -209,7 +209,7 @@ select count(*) from fontagit.aliases;
          when exists(select 1 from aliases a where a.font_id = f.id and a.alias_norm like '%' || v_normalized || '%')
            then 50
          else coalesce((
-           select (max(similarity(a.alias_norm, v_normalized)) * 50)::int
+           select (max(public.similarity(a.alias_norm, v_normalized)) * 50)::int
            from aliases a where a.font_id = f.id
          ), 0)
        end as score
@@ -218,7 +218,7 @@ select count(*) from fontagit.aliases;
        and (
          exists(select 1 from aliases a where a.font_id = f.id and a.alias_norm = v_normalized)
          or exists(select 1 from aliases a where a.font_id = f.id and a.alias_norm like '%' || v_normalized || '%')
-         or exists(select 1 from aliases a where a.font_id = f.id and a.alias_norm % v_normalized)
+         or exists(select 1 from aliases a where a.font_id = f.id and a.alias_norm operator(public.%) v_normalized)
        )
      order by score desc, f.name_ko asc nulls last
      limit 20;
