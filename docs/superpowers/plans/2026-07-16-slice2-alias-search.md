@@ -1,9 +1,11 @@
 # Slice 2: 알리아스 검색(F-04) Implementation Plan
 
 **For**: Agentic workers (구현 전담) | **Goal**: 한/영/띄어쓰기 별칭 검색 백엔드+UI 완성  
-**Status**: Implementation Ready | **Date**: 2026-07-16 | **Version**: 1.1
+**Status**: Implementation Ready | **Date**: 2026-07-16 | **Version**: 1.2
 
 > v1.1 (2026-07-16): 슬라이스 0.5 완료 반영 — SQL 버그 B(trgm 점수 상수화)/C(유사도 대상을 alias_norm으로) 수정, normalize_search에 NFC 반영(결정 #3), 테스트 예시를 실데이터(본고딕/노토산스/나눔고딕)로 교체. 부분일치도 원문 이름 ILIKE 대신 alias_norm LIKE로 통일(공백 포함 이름과 정규화 쿼리 미스매치 해소).
+
+> v1.2 (2026-07-16): PR #15 이연 반영 — RPC 오류 시 빈 배열 → throw로 계약 변경(오류 상태 UI 구분), URL q 동기화(replace), aria-live.
 
 ---
 
