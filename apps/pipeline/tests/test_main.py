@@ -209,19 +209,21 @@ def test_main_returns_3_on_supabase_config_mismatch(tmp_path):
     with patch("fontagit_pipeline.__main__.load_settings") as mock_settings:
         with patch("fontagit_pipeline.__main__.fetch_webfonts") as mock_fetch:
             with patch("fontagit_pipeline.__main__.fetch_license_map") as mock_license:
-                with patch("fontagit_pipeline.__main__.write_output") as mock_write:
-                    mock_settings.return_value = MagicMock(
-                        google_fonts_api_key="test_key",
-                        github_token="test_token",
-                        supabase_url="https://test.supabase.co",
-                        supabase_secret_key=None,
-                    )
-                    mock_fetch.return_value = fonts
-                    mock_license.return_value = {}
+                with patch("fontagit_pipeline.__main__.load_korean_names") as mock_korean:
+                    with patch("fontagit_pipeline.__main__.write_output") as mock_write:
+                        mock_settings.return_value = MagicMock(
+                            google_fonts_api_key="test_key",
+                            github_token="test_token",
+                            supabase_url="https://test.supabase.co",
+                            supabase_secret_key=None,
+                        )
+                        mock_fetch.return_value = fonts
+                        mock_license.return_value = {}
+                        mock_korean.return_value = None
 
-                    result = main()
+                        result = main()
 
-                    # write_output은 호출되어야 함 (JSON 저장)
-                    mock_write.assert_called_once()
-                    # exit code는 3이어야 함 (설정 불완전)
-                    assert result == 3
+                        # write_output은 호출되어야 함 (JSON 저장)
+                        mock_write.assert_called_once()
+                        # exit code는 3이어야 함 (설정 불완전)
+                        assert result == 3

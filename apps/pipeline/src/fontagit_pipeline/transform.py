@@ -4,7 +4,7 @@ import logging
 import re
 
 from fontagit_pipeline.licenses import resolve_license_type
-from fontagit_pipeline.models import GoogleFontRaw, FontRecord
+from fontagit_pipeline.models import GoogleFontRaw, FontRecord, KoreanNameEntry
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ def build_official_url(family: str) -> str:
     return f"https://fonts.google.com/specimen/{family.replace(' ', '+')}"
 
 
-def build_aliases(name_en: str, name_ko: str | None = None) -> list[str]:
+def build_aliases(name_en: str, name_ko: str | None = None, extra_aliases: list[str] | None = None) -> list[str]:
     """검색용 기본 별칭 목록을 만든다(동일 문자열 기준 중복 제거, 순서 유지)."""
     candidates = [
         name_en,
@@ -50,6 +50,8 @@ def build_aliases(name_en: str, name_ko: str | None = None) -> list[str]:
     ]
     if name_ko:
         candidates += [name_ko, name_ko.replace(" ", "")]
+    if extra_aliases:
+        candidates += extra_aliases
     seen: set[str] = set()
     result: list[str] = []
     for c in candidates:
@@ -126,15 +128,28 @@ def extract_weights(variants: list[str]) -> list[int]:
     return sorted(weights)
 
 
-def to_record(raw: GoogleFontRaw, license_map: dict[str, str]) -> FontRecord:
+def to_record(
+    raw: GoogleFontRaw,
+    license_map: dict[str, str],
+    korean_names: dict[str, KoreanNameEntry] | None = None,
+) -> FontRecord:
     """GoogleFontRaw를 FontRecord로 변환. license_type 판별 및 상태 결정."""
     license_type = resolve_license_type(raw.family, license_map)
     verified = license_type is not None
     variants = normalize_variants(raw.variants)
+    slug = build_slug(raw.family)
+
+    name_ko = None
+    extra_aliases = None
+    if korean_names and slug in korean_names:
+        entry = korean_names[slug]
+        name_ko = entry.name_ko
+        extra_aliases = entry.aliases if entry.aliases else None
 
     return FontRecord(
-        slug=build_slug(raw.family),
+        slug=slug,
         name_en=raw.family,
+        name_ko=name_ko,
         source_tier="A",
         category_ko=map_category_ko(raw.category),
         category_google=raw.category,
@@ -147,7 +162,7 @@ def to_record(raw: GoogleFontRaw, license_map: dict[str, str]) -> FontRecord:
         license_type=license_type,
         license_verified=verified,
         status="published" if verified else "draft",
-        aliases=build_aliases(raw.family),
+        aliases=build_aliases(raw.family, name_ko=name_ko, extra_aliases=extra_aliases),
         version=raw.version,
         last_modified=raw.lastModified,
     )
@@ -155,14 +170,17 @@ def to_record(raw: GoogleFontRaw, license_map: dict[str, str]) -> FontRecord:
 
 
 def build_records(
-    fonts: list[GoogleFontRaw], license_map: dict[str, str], latin_limit: int = 100
+    fonts: list[GoogleFontRaw],
+    license_map: dict[str, str],
+    latin_limit: int = 100,
+    korean_names: dict[str, KoreanNameEntry] | None = None,
 ) -> list[FontRecord]:
     """병합-중복제거 후 FontRecord 리스트 반환. 변환 실패 시 건너뜀."""
     merged = merge_dedup(filter_korean(fonts), select_latin_top(fonts, latin_limit))
     records: list[FontRecord] = []
     for raw in merged:
         try:
-            records.append(to_record(raw, license_map))
+            records.append(to_record(raw, license_map, korean_names=korean_names))
         except ValueError as exc:
             logger.warning("레코드 변환 건너뜀 (%s): %s", raw.family, exc)
     return records

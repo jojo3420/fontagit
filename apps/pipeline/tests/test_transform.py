@@ -235,3 +235,53 @@ def test_to_record_draft_for_unknown_license():
     assert rec.license_verified is False
     assert rec.status == "draft"
     assert rec.is_commercial_free is False
+
+
+def test_build_aliases_with_korean_name():
+    """name_ko가 제공되면 한글 이름과 공백 제거 버전을 추가한다."""
+    result = build_aliases("Noto Sans KR", name_ko="노토 산스 KR")
+    assert "Noto Sans KR" in result
+    assert "noto sans kr" in result
+    assert "notosanskr" in result
+    assert "noto sans kr ttf" in result
+    assert "노토 산스 KR" in result
+    assert "노토산스KR" in result
+    # 중복 제거 확인 (name_ko 자체와 공백 제거 버전만)
+    assert len(result) == 6
+
+
+def test_build_aliases_with_extra_aliases():
+    """extra_aliases가 제공되면 기본 별칭에 추가한다."""
+    result = build_aliases("Roboto", extra_aliases=["로보토"])
+    assert "Roboto" in result
+    assert "roboto" in result
+    assert "roboto ttf" in result
+    assert "로보토" in result
+    assert len(result) == 4
+
+
+def test_to_record_uses_korean_names_mapping():
+    """korean_names 매핑이 제공되면 name_ko와 aliases를 설정한다."""
+    from fontagit_pipeline.models import KoreanNameEntry
+
+    korean_names = {
+        "noto-sans-kr": KoreanNameEntry(
+            name_ko="노토 산스 KR",
+            aliases=["노토산스KR", "노토산스"],
+            sources=["curated"],
+        ),
+    }
+    raw = GoogleFontRaw(
+        family="Noto Sans KR",
+        variants=["regular", "700"],
+        subsets=["korean", "latin"],
+        version="v1",
+        lastModified="2024-01-01",
+        files={},
+        category="sans-serif",
+    )
+    rec = to_record(raw, {"notosanskr": "OFL"}, korean_names=korean_names)
+    assert rec.name_ko == "노토 산스 KR"
+    assert "노토 산스 KR" in rec.aliases
+    assert "노토산스KR" in rec.aliases
+    assert "노토산스" in rec.aliases
