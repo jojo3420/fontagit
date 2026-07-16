@@ -34,3 +34,11 @@ export interface CollectionItemRow {
   comment: string | null;
   sort_order: number;
 }
+
+export interface SearchResult {
+  slug: string;
+  nameKo: string | null;
+  nameEn: string;
+  tier: 'free' | 'paid';
+  category: string;
+}
