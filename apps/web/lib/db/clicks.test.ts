@@ -1,0 +1,37 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const rpcMock = vi.fn();
+vi.mock("./client", () => ({
+  supabaseClient: { rpc: (...args: unknown[]) => rpcMock(...args) },
+}));
+
+import { recordClick } from "./clicks";
+
+describe("recordClick", () => {
+  beforeEach(() => {
+    rpcMock.mockReset();
+  });
+
+  it("record_click RPC를 p_slug로 호출한다", () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+    recordClick("noto-sans-kr");
+    expect(rpcMock).toHaveBeenCalledWith("record_click", { p_slug: "noto-sans-kr" });
+  });
+
+  it("RPC 오류가 나도 throw하지 않는다 (fire-and-forget)", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: { message: "boom" } });
+    expect(() => recordClick("noto-sans-kr")).not.toThrow();
+    await vi.waitFor(() => expect(rpcMock).toHaveBeenCalled());
+  });
+
+  it("RPC reject(네트워크 예외)여도 unhandled rejection 없이 삼킨다", async () => {
+    rpcMock.mockRejectedValue(new Error("network down"));
+    expect(() => recordClick("noto-sans-kr")).not.toThrow();
+    await vi.waitFor(() => expect(rpcMock).toHaveBeenCalled());
+  });
+
+  it("빈 slug는 RPC를 호출하지 않는다", () => {
+    recordClick("");
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+});
