@@ -2,6 +2,7 @@
 
 import logging
 import re
+import unicodedata
 from typing import Any
 
 from supabase import create_client
@@ -28,11 +29,16 @@ _FONT_COLS = (
     "version",
     "last_modified",
 )
+_MIN_TIER_A_SNAPSHOT_SIZE = 100
+_MIN_KOREAN_SNAPSHOT_SIZE = 30
+_MIN_LATIN_SNAPSHOT_SIZE = 90
 
 
 def normalize_alias(alias: str) -> str:
-    """별칭을 정규화한다(소문자, 공백 제거). 한글은 유지."""
-    return re.sub(r"\s+", "", alias.lower())
+    """별칭을 정규화한다(NFC → 공백 제거 → 소문자). 한글은 유지."""
+    alias = unicodedata.normalize("NFC", alias)
+    alias = re.sub(r"\s+", "", alias)
+    return alias.lower()
 
 
 def build_font_row(rec: FontRecord) -> dict[str, Any]:
@@ -53,14 +59,8 @@ def build_alias_rows(aliases: list[str]) -> list[dict[str, Any]]:
     return rows
 
 
-def upload_records(records: list[FontRecord], url: str, secret_key: str) -> int:
-    """레코드를 fontagit.upsert_font RPC로 폰트별 원자 업로드하고 처리 건수를 반환한다.
-
-    각 폰트는 단일 트랜잭션(fonts upsert + aliases 재삽입)으로 처리된다.
-    첫 실패 시 즉시 중단하며, 이미 처리된 폰트는 유지된다(파이프라인 멱등 재실행).
-    """
-    client = create_client(url, secret_key)
-    schema = client.schema("fontagit")
+def _upload_records(schema: Any, records: list[FontRecord]) -> int:
+    """주입된 fontagit 스키마 클라이언트로 레코드를 업로드한다."""
     count = 0
     for rec in records:
         try:
@@ -73,5 +73,55 @@ def upload_records(records: list[FontRecord], url: str, secret_key: str) -> int:
             logger.error("업로드 실패(중단): slug=%s", rec.slug)
             raise
         count += 1
+    return count
+
+
+def upload_records(records: list[FontRecord], url: str, secret_key: str) -> int:
+    """레코드를 부분 업로드한다. stale 폰트 상태는 변경하지 않는다."""
+    client = create_client(url, secret_key)
+    count = _upload_records(client.schema("fontagit"), records)
     logger.info("업로드 완료: %d개", count)
     return count
+
+
+def _validate_tier_a_snapshot(records: list[FontRecord]) -> list[str]:
+    """전체 Tier A 스냅샷을 DB 쓰기 전에 검증한다."""
+    if any(rec.source_tier != "A" for rec in records):
+        raise ValueError("전체 스냅샷에는 Tier A 레코드만 허용됩니다")
+    slugs = [rec.slug for rec in records]
+    if any(not slug.strip() for slug in slugs):
+        raise ValueError("전체 스냅샷에 빈 slug가 있습니다")
+    unique_slugs = sorted(set(slugs))
+    if len(unique_slugs) != len(slugs):
+        raise ValueError("전체 스냅샷에 중복 slug가 있습니다")
+    if len(unique_slugs) < _MIN_TIER_A_SNAPSHOT_SIZE:
+        raise ValueError(
+            f"active Tier A가 100종 미만입니다: {len(unique_slugs)}"
+        )
+    korean_count = sum(1 for rec in records if "korean" in rec.subsets)
+    if korean_count < _MIN_KOREAN_SNAPSHOT_SIZE:
+        raise ValueError(
+            f"한글 subset 폰트가 30종 미만입니다: {korean_count}"
+        )
+    latin_count = len(unique_slugs) - korean_count
+    if latin_count < _MIN_LATIN_SNAPSHOT_SIZE:
+        raise ValueError(
+            f"라틴 subset 폰트가 90종 미만입니다: {latin_count}"
+        )
+    return unique_slugs
+
+
+def upload_tier_a_snapshot(
+    records: list[FontRecord], url: str, secret_key: str
+) -> tuple[int, int]:
+    """전체 Tier A 스냅샷을 업로드하고 stale published를 draft 처리한다."""
+    active_slugs = _validate_tier_a_snapshot(records)
+    client = create_client(url, secret_key)
+    schema = client.schema("fontagit")
+    uploaded = _upload_records(schema, records)
+    sync_params: dict[str, Any] = {"p_active_slugs": active_slugs}
+    response = schema.rpc("sync_tier_a_fonts", sync_params).execute()
+    if not isinstance(response.data, int):
+        raise RuntimeError("sync_tier_a_fonts 응답이 정수가 아닙니다")
+    logger.info("Tier A stale draft 완료: %d개", response.data)
+    return uploaded, response.data

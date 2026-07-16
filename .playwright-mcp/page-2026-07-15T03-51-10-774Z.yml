@@ -1,0 +1,138 @@
+- generic [active] [ref=f5e1]:
+  - banner [ref=f5e2]:
+    - link "FontAgit 홈" [ref=f5e4] [cursor=pointer]:
+      - /url: /
+      - text: FontAgit
+    - navigation [ref=f5e5]:
+      - link "폰트" [ref=f5e6] [cursor=pointer]:
+        - /url: /fonts/
+      - link "트렌드" [ref=f5e7] [cursor=pointer]:
+        - /url: /trends/
+      - link "컬렉션" [ref=f5e8] [cursor=pointer]:
+        - /url: /collections/
+      - link "등록" [ref=f5e9] [cursor=pointer]:
+        - /url: /submit/
+    - generic [ref=f5e10]:
+      - button "다크모드 전환" [ref=f5e11] [cursor=pointer]
+      - button "검색" [ref=f5e14] [cursor=pointer]
+  - main [ref=f5e18]:
+    - generic [ref=f5e19]:
+      - generic [ref=f5e20]:
+        - heading "당신의 폰트 아지트" [level=1] [ref=f5e21]
+        - paragraph [ref=f5e22]: 설치 없이, 웹에서. 좋은 폰트를 골라두고 지금 뜨는 흐름까지 챙겨드려요.
+        - searchbox "폰트 검색" [ref=f5e23]
+        - generic [ref=f5e24]:
+          - button "한글" [pressed] [ref=f5e25] [cursor=pointer]
+          - button "고딕" [ref=f5e26] [cursor=pointer]
+          - button "명조" [ref=f5e27] [cursor=pointer]
+          - button "손글씨" [ref=f5e28] [cursor=pointer]
+          - button "무료" [ref=f5e29] [cursor=pointer]
+          - button "유료" [ref=f5e30] [cursor=pointer]
+      - complementary [ref=f5e31]:
+        - generic [ref=f5e32]:
+          - generic [ref=f5e33]:
+            - heading "이번 주 인기 TOP 10" [level=2] [ref=f5e34]
+            - paragraph [ref=f5e35]: 이동 클릭 기준 · 매주 갱신
+          - link "전체 →" [ref=f5e36] [cursor=pointer]:
+            - /url: /trends/
+        - list [ref=f5e37]:
+          - listitem [ref=f5e38]:
+            - link "1 ▲ 2 프리텐다드 이동 5,120회 무료" [ref=f5e39] [cursor=pointer]:
+              - /url: /fonts/pretendard/
+              - generic [ref=f5e40]: "1"
+              - generic [ref=f5e41]: ▲ 2
+              - generic [ref=f5e42]: 프리텐다드
+              - generic [ref=f5e43]: 이동 5,120회
+              - generic [ref=f5e44]: 무료
+          - listitem [ref=f5e45]:
+            - link "2 — 검은고딕 이동 3,120회 무료" [ref=f5e46] [cursor=pointer]:
+              - /url: /fonts/black-han-sans/
+              - generic [ref=f5e47]: "2"
+              - generic [ref=f5e48]: —
+              - generic [ref=f5e49]: 검은고딕
+              - generic [ref=f5e50]: 이동 3,120회
+              - generic [ref=f5e51]: 무료
+          - listitem [ref=f5e52]:
+            - link "3 ▲ 1 배민 주아 이동 2,870회 무료" [ref=f5e53] [cursor=pointer]:
+              - /url: /fonts/jua/
+              - generic [ref=f5e54]: "3"
+              - generic [ref=f5e55]: ▲ 1
+              - generic [ref=f5e56]: 배민 주아
+              - generic [ref=f5e57]: 이동 2,870회
+              - generic [ref=f5e58]: 무료
+          - listitem [ref=f5e59]:
+            - link "4 ▼ 1 배민 도현 이동 2,450회 무료" [ref=f5e60] [cursor=pointer]:
+              - /url: /fonts/do-hyeon/
+              - generic [ref=f5e61]: "4"
+              - generic [ref=f5e62]: ▼ 1
+              - generic [ref=f5e63]: 배민 도현
+              - generic [ref=f5e64]: 이동 2,450회
+              - generic [ref=f5e65]: 무료
+          - listitem [ref=f5e66]:
+            - link "5 NEW 고운바탕 이동 1,980회 무료" [ref=f5e67] [cursor=pointer]:
+              - /url: /fonts/gowun-batang/
+              - generic [ref=f5e68]: "5"
+              - generic [ref=f5e69]: NEW
+              - generic [ref=f5e70]: 고운바탕
+              - generic [ref=f5e71]: 이동 1,980회
+              - generic [ref=f5e72]: 무료
+          - listitem [ref=f5e73]:
+            - link "6 — 나눔명조 이동 1,740회 무료" [ref=f5e74] [cursor=pointer]:
+              - /url: /fonts/nanum-myeongjo/
+              - generic [ref=f5e75]: "6"
+              - generic [ref=f5e76]: —
+              - generic [ref=f5e77]: 나눔명조
+              - generic [ref=f5e78]: 이동 1,740회
+              - generic [ref=f5e79]: 무료
+          - listitem [ref=f5e80]:
+            - link "7 ▲ 3 산돌 고딕 Neo 이동 4,210회 유료" [ref=f5e81] [cursor=pointer]:
+              - /url: /fonts/sandoll-gothic-neo/
+              - generic [ref=f5e82]: "7"
+              - generic [ref=f5e83]: ▲ 3
+              - generic [ref=f5e84]: 산돌 고딕 Neo
+              - generic [ref=f5e85]: 이동 4,210회
+              - generic [ref=f5e86]: 유료
+          - listitem [ref=f5e87]:
+            - link "8 ▼ 2 기랑해랑 이동 980회 무료" [ref=f5e88] [cursor=pointer]:
+              - /url: /fonts/kirang-haerang/
+              - generic [ref=f5e89]: "8"
+              - generic [ref=f5e90]: ▼ 2
+              - generic [ref=f5e91]: 기랑해랑
+              - generic [ref=f5e92]: 이동 980회
+              - generic [ref=f5e93]: 무료
+          - listitem [ref=f5e94]:
+            - link "9 NEW 개구 이동 860회 무료" [ref=f5e95] [cursor=pointer]:
+              - /url: /fonts/gaegu/
+              - generic [ref=f5e96]: "9"
+              - generic [ref=f5e97]: NEW
+              - generic [ref=f5e98]: 개구
+              - generic [ref=f5e99]: 이동 860회
+              - generic [ref=f5e100]: 무료
+          - listitem [ref=f5e101]:
+            - link "10 — 송명 이동 720회 무료" [ref=f5e102] [cursor=pointer]:
+              - /url: /fonts/song-myung/
+              - generic [ref=f5e103]: "10"
+              - generic [ref=f5e104]: —
+              - generic [ref=f5e105]: 송명
+              - generic [ref=f5e106]: 이동 720회
+              - generic [ref=f5e107]: 무료
+    - generic [ref=f5e108]: 광고
+  - contentinfo [ref=f5e111]:
+    - generic [ref=f5e112]: 당신의 폰트 아지트. 오늘도 좋은 서체 찾으시길.
+    - generic [ref=f5e113]:
+      - link "폰트" [ref=f5e114] [cursor=pointer]:
+        - /url: /fonts/
+      - link "트렌드" [ref=f5e115] [cursor=pointer]:
+        - /url: /trends/
+  - navigation "모바일 탭" [ref=f5e116]:
+    - link "홈" [ref=f5e117] [cursor=pointer]:
+      - /url: /
+    - link "폰트" [ref=f5e118] [cursor=pointer]:
+      - /url: /fonts/
+    - link "트렌드" [ref=f5e119] [cursor=pointer]:
+      - /url: /trends/
+    - link "캔버스" [ref=f5e120] [cursor=pointer]:
+      - /url: /playground/
+    - link "비교" [ref=f5e121] [cursor=pointer]:
+      - /url: /compare/
+  - button "Open Next.js Dev Tools" [ref=f5e127] [cursor=pointer]

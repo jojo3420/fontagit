@@ -1,0 +1,55 @@
+- generic [active] [ref=f11e1]:
+  - banner [ref=f11e2]:
+    - generic [ref=f11e3]:
+      - link "FontAgit 홈" [ref=f11e4] [cursor=pointer]:
+        - /url: /
+        - text: FontAgit
+      - generic [ref=f11e5]: 폰트 아지트
+    - navigation [ref=f11e6]:
+      - link "폰트" [ref=f11e7] [cursor=pointer]:
+        - /url: /fonts/
+      - link "트렌드" [ref=f11e8] [cursor=pointer]:
+        - /url: /trends/
+      - link "캔버스" [ref=f11e9] [cursor=pointer]:
+        - /url: /playground/
+      - link "비교" [ref=f11e10] [cursor=pointer]:
+        - /url: /compare/
+      - link "컬렉션" [ref=f11e11] [cursor=pointer]:
+        - /url: /collections/
+      - link "등록" [ref=f11e12] [cursor=pointer]:
+        - /url: /submit/
+    - generic [ref=f11e13]:
+      - button "다크모드 전환" [ref=f11e14] [cursor=pointer]
+      - button "검색" [ref=f11e17] [cursor=pointer]
+  - main [ref=f11e21]:
+    - generic [ref=f11e22]: 컬렉션 - 3종
+    - heading "새벽 감성 명조 모음" [level=1] [ref=f11e23]
+    - paragraph [ref=f11e24]: 긴 글에 어울리는, 획이 차분한 명조들을 모았어요. 에세이-브랜드 소개문-전자책 본문에 특히 잘 맞습니다.
+    - generic [ref=f11e25]:
+      - generic [ref=f11e26]:
+        - generic [ref=f11e27]:
+          - link "고운바탕" [ref=f11e28] [cursor=pointer]:
+            - /url: /fonts/gowun-batang/
+          - generic [ref=f11e29]: 무료
+        - paragraph [ref=f11e30]: 공기 같은 가벼움. 본문 15px에서 눈이 편해요.
+      - generic [ref=f11e31]:
+        - generic [ref=f11e32]:
+          - link "나눔명조" [ref=f11e33] [cursor=pointer]:
+            - /url: /fonts/nanum-myeongjo/
+          - generic [ref=f11e34]: 무료
+        - paragraph [ref=f11e35]: 묵직한 제목용. 굵기 대비가 또렷합니다.
+      - generic [ref=f11e36]:
+        - generic [ref=f11e37]:
+          - link "송명" [ref=f11e38] [cursor=pointer]:
+            - /url: /fonts/song-myung/
+          - generic [ref=f11e39]: 무료
+        - paragraph [ref=f11e40]: 고전적인 인상. 표지-인용구에 잘 어울려요.
+  - contentinfo [ref=f11e41]:
+    - generic [ref=f11e42]: 당신의 폰트 아지트. 오늘도 좋은 서체 찾으시길.
+    - generic [ref=f11e43]:
+      - link "폰트" [ref=f11e44] [cursor=pointer]:
+        - /url: /fonts/
+      - link "트렌드" [ref=f11e45] [cursor=pointer]:
+        - /url: /trends/
+  - button "Open Next.js Dev Tools" [ref=f11e51] [cursor=pointer]
+  - alert [ref=f11e55]

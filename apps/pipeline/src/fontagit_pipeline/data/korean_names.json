@@ -1,0 +1,286 @@
+{
+  "asta-sans": {
+    "name_ko": "아스타산스",
+    "aliases": [
+      "42dot Sans"
+    ],
+    "sources": [
+      "https://noonnu.cc/en/font_page/1595",
+      "https://fonts.taedonn.com/post/Asta+Sans"
+    ]
+  },
+  "bagel-fat-one": {
+    "name_ko": "베이글팻",
+    "aliases": [],
+    "sources": [
+      "https://noonnu.cc/en/font_page/1345"
+    ]
+  },
+  "black-and-white-picture": {
+    "name_ko": "a흑백사진",
+    "aliases": [
+      "흑백사진"
+    ],
+    "sources": [
+      "https://www.koreafont.com/fonts/list/955/"
+    ]
+  },
+  "black-han-sans": {
+    "name_ko": "검은고딕",
+    "aliases": [],
+    "sources": [
+      "https://github.com/zesstype/Black-Han-Sans"
+    ]
+  },
+  "cute-font": {
+    "name_ko": "귀요미체",
+    "aliases": [
+      "귀요미"
+    ],
+    "sources": [
+      "https://fonts.google.com/specimen/Cute+Font"
+    ]
+  },
+  "diphylleia": {
+    "name_ko": "산하엽",
+    "aliases": [],
+    "sources": [
+      "https://noonnu.cc/en/font_page/1346"
+    ]
+  },
+  "do-hyeon": {
+    "name_ko": "도현체",
+    "aliases": [
+      "배달의민족 도현",
+      "배민 도현"
+    ],
+    "sources": [
+      "http://font.woowahan.com/dohyeon/"
+    ]
+  },
+  "dokdo": {
+    "name_ko": "대한민국 독도체",
+    "aliases": [],
+    "sources": [
+      "https://noonnu.cc/en/font_page/110"
+    ]
+  },
+  "dongle": {
+    "name_ko": "동글한글",
+    "aliases": [
+      "동글"
+    ],
+    "sources": [
+      "https://ryufont.com/"
+    ]
+  },
+  "east-sea-dokdo": {
+    "name_ko": null,
+    "aliases": [],
+    "sources": []
+  },
+  "gaegu": {
+    "name_ko": null,
+    "aliases": [],
+    "sources": []
+  },
+  "gamja-flower": {
+    "name_ko": "감자꽃",
+    "aliases": [],
+    "sources": [
+      "https://fonts.google.com/specimen/Gamja+Flower"
+    ]
+  },
+  "gasoek-one": {
+    "name_ko": "가석체",
+    "aliases": [
+      "가석"
+    ],
+    "sources": [
+      "https://noonnu.cc/font_page/1347"
+    ]
+  },
+  "gothic-a1": {
+    "name_ko": "고딕A1",
+    "aliases": [],
+    "sources": [
+      "https://noonnu.cc/en/font_page/891"
+    ]
+  },
+  "gowun-batang": {
+    "name_ko": "고운바탕",
+    "aliases": [],
+    "sources": [
+      "https://noonnu.cc/en/font_page/733"
+    ]
+  },
+  "gowun-dodum": {
+    "name_ko": "고운돋움",
+    "aliases": [],
+    "sources": [
+      "https://noonnu.cc/en/font_page/734"
+    ]
+  },
+  "grandiflora-one": {
+    "name_ko": "능소화",
+    "aliases": [
+      "능소화체"
+    ],
+    "sources": [
+      "https://fonts.taedonn.com/post/Grandiflora+One"
+    ]
+  },
+  "gugi": {
+    "name_ko": null,
+    "aliases": [],
+    "sources": []
+  },
+  "hahmlet": {
+    "name_ko": "함렛",
+    "aliases": [],
+    "sources": [
+      "https://noonnu.cc/en/font_page/757"
+    ]
+  },
+  "hi-melody": {
+    "name_ko": "하이멜로디",
+    "aliases": [],
+    "sources": [
+      "https://www.adobe.com/fonts/browse/fonts?family=Hi+Melody",
+      "https://fonts.google.com/specimen/Hi+Melody"
+    ]
+  },
+  "ibm-plex-sans-kr": {
+    "name_ko": null,
+    "aliases": [
+      "IBM 플렉스 산스 KR",
+      "플렉스 산스"
+    ],
+    "sources": [
+      "https://noonnu.cc/en/font_page/448"
+    ]
+  },
+  "jua": {
+    "name_ko": "주아",
+    "aliases": [
+      "배달의민족 주아",
+      "배민 주아"
+    ],
+    "sources": [
+      "http://font.woowahan.com/jua/"
+    ]
+  },
+  "kirang-haerang": {
+    "name_ko": "기랑해랑체",
+    "aliases": [],
+    "sources": [
+      "https://noonnu.cc/en/font_page/56"
+    ]
+  },
+  "moirai-one": {
+    "name_ko": "모이라이",
+    "aliases": [],
+    "sources": [
+      "https://noonnu.cc/font_page/1349"
+    ]
+  },
+  "nanum-brush-script": {
+    "name_ko": "나눔손글씨붓",
+    "aliases": [],
+    "sources": [
+      "https://noonnu.cc/en/font_page/43"
+    ]
+  },
+  "nanum-gothic": {
+    "name_ko": "나눔고딕",
+    "aliases": [],
+    "sources": [
+      "https://noonnu.cc/en/font_page/39"
+    ]
+  },
+  "nanum-gothic-coding": {
+    "name_ko": "나눔고딕코딩",
+    "aliases": [],
+    "sources": [
+      "https://noonnu.cc/en/font_page/40"
+    ]
+  },
+  "nanum-myeongjo": {
+    "name_ko": "나눔명조",
+    "aliases": [],
+    "sources": [
+      "https://noonnu.cc/font_page/41"
+    ]
+  },
+  "nanum-pen-script": {
+    "name_ko": "나눔손글씨펜",
+    "aliases": [],
+    "sources": [
+      "https://noonnu.cc/en/font_page/44"
+    ]
+  },
+  "noto-sans-kr": {
+    "name_ko": "본고딕",
+    "aliases": [
+      "Source Han Sans"
+    ],
+    "sources": [
+      "https://noonnu.cc/en/font_page/34"
+    ]
+  },
+  "noto-serif-kr": {
+    "name_ko": "본명조",
+    "aliases": [
+      "Source Han Serif"
+    ],
+    "sources": [
+      "https://noonnu.cc/en/font_page/35"
+    ]
+  },
+  "orbit": {
+    "name_ko": "오르빗",
+    "aliases": [],
+    "sources": [
+      "https://noonnu.cc/en/font_page/1242"
+    ]
+  },
+  "poor-story": {
+    "name_ko": null,
+    "aliases": [],
+    "sources": []
+  },
+  "single-day": {
+    "name_ko": null,
+    "aliases": [],
+    "sources": []
+  },
+  "song-myung": {
+    "name_ko": "송명",
+    "aliases": [],
+    "sources": [
+      "https://noonnu.cc/en/font_page/766"
+    ]
+  },
+  "stylish": {
+    "name_ko": null,
+    "aliases": [],
+    "sources": []
+  },
+  "sunflower": {
+    "name_ko": "J해바라기",
+    "aliases": [],
+    "sources": [
+      "https://noonnu.cc/en/font_page/765"
+    ]
+  },
+  "yeon-sung": {
+    "name_ko": "연성체",
+    "aliases": [
+      "배달의민족 연성",
+      "배민 연성"
+    ],
+    "sources": [
+      "http://font.woowahan.com/yeonsung/"
+    ]
+  }
+}
