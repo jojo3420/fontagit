@@ -1,0 +1,91 @@
+- generic [active] [ref=f2e1]:
+  - banner [ref=f2e2]:
+    - generic [ref=f2e3]:
+      - link "FontAgit 홈" [ref=f2e4] [cursor=pointer]:
+        - /url: /
+        - text: FontAgit
+      - generic [ref=f2e5]: 폰트 아지트
+    - navigation [ref=f2e6]:
+      - link "폰트" [ref=f2e7] [cursor=pointer]:
+        - /url: /fonts/
+      - link "트렌드" [ref=f2e8] [cursor=pointer]:
+        - /url: /trends/
+      - link "캔버스" [ref=f2e9] [cursor=pointer]:
+        - /url: /playground/
+      - link "비교" [ref=f2e10] [cursor=pointer]:
+        - /url: /compare/
+      - link "컬렉션" [ref=f2e11] [cursor=pointer]:
+        - /url: /collections/
+      - link "등록" [ref=f2e12] [cursor=pointer]:
+        - /url: /submit/
+    - generic [ref=f2e13]:
+      - button "다크모드 전환" [ref=f2e14] [cursor=pointer]
+      - button "검색" [ref=f2e17] [cursor=pointer]
+  - main [ref=f2e21]:
+    - navigation "경로" [ref=f2e22]:
+      - generic [ref=f2e23]:
+        - link "폰트" [ref=f2e24] [cursor=pointer]:
+          - /url: /fonts/
+        - generic [ref=f2e25]: ›
+      - generic [ref=f2e26]:
+        - link "고딕" [ref=f2e27] [cursor=pointer]:
+          - /url: /fonts/?category=%EA%B3%A0%EB%94%95
+        - generic [ref=f2e28]: ›
+      - generic [ref=f2e29]: 산돌 고딕 Neo
+    - generic [ref=f2e31]:
+      - generic [ref=f2e32]:
+        - generic [ref=f2e33]:
+          - heading "산돌 고딕 Neo" [level=1] [ref=f2e34]
+          - generic [ref=f2e35]: 유료
+        - paragraph [ref=f2e36]: 산돌 · 9가지 굵기 · 이동 4,210회
+        - generic [ref=f2e37]:
+          - generic [ref=f2e38]: 다람쥐 헌 쳇바퀴에 타고파
+          - paragraph [ref=f2e39]: 견본은 유사 서체로 대체 표시 — 실제 서체는 공식 페이지에서 확인하세요.
+      - generic [ref=f2e40]:
+        - complementary [ref=f2e41]:
+          - heading "라이선스 요약" [level=2] [ref=f2e42]
+          - paragraph [ref=f2e43]: 상용 라이선스 · 확인일 2026-07-12
+          - list [ref=f2e44]:
+            - listitem [ref=f2e45]:
+              - generic [ref=f2e46]: "!"
+              - generic [ref=f2e47]: 상업적 사용
+              - generic [ref=f2e48]: 구매 시
+            - listitem [ref=f2e49]:
+              - generic [ref=f2e50]: "!"
+              - generic [ref=f2e51]: 웹폰트
+              - generic [ref=f2e52]: 별도 구매
+            - listitem [ref=f2e53]:
+              - generic [ref=f2e54]: ✕
+              - generic [ref=f2e55]: 재배포
+              - generic [ref=f2e56]: 불가
+          - paragraph [ref=f2e57]: 조건은 판매처 정책에 따릅니다. 구매 전 라이선스 범위를 확인하세요.
+          - link "구매하러 가기 ₩99,000~" [ref=f2e58] [cursor=pointer]:
+            - /url: https://www.sandoll.co.kr/
+            - generic [ref=f2e59]: 구매하러 가기
+            - generic [ref=f2e60]: ₩99,000~
+          - paragraph [ref=f2e61]: 이동 → sandoll.co.kr
+        - complementary [ref=f2e62]:
+          - heading "비슷한 무료 대안 3개" [level=2] [ref=f2e63]
+          - paragraph [ref=f2e64]: 분위기가 가까운 무료 고딕입니다
+          - list [ref=f2e65]:
+            - listitem [ref=f2e66]:
+              - link "프리텐다드" [ref=f2e67] [cursor=pointer]:
+                - /url: /fonts/pretendard/
+              - generic [ref=f2e68]: 무료
+            - listitem [ref=f2e69]:
+              - link "배민 도현" [ref=f2e70] [cursor=pointer]:
+                - /url: /fonts/do-hyeon/
+              - generic [ref=f2e71]: 무료
+            - listitem [ref=f2e72]:
+              - link "검은고딕" [ref=f2e73] [cursor=pointer]:
+                - /url: /fonts/black-han-sans/
+              - generic [ref=f2e74]: 무료
+  - contentinfo [ref=f2e75]:
+    - generic [ref=f2e76]: 당신의 폰트 아지트. 오늘도 좋은 서체 찾으시길.
+    - generic [ref=f2e77]:
+      - link "폰트" [ref=f2e78] [cursor=pointer]:
+        - /url: /fonts/
+      - link "트렌드" [ref=f2e79] [cursor=pointer]:
+        - /url: /trends/
+  - button "Open Next.js Dev Tools" [ref=f2e85] [cursor=pointer]
+  - alert [ref=f2e89]

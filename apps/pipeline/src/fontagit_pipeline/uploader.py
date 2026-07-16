@@ -30,6 +30,8 @@ _FONT_COLS = (
     "last_modified",
 )
 _MIN_TIER_A_SNAPSHOT_SIZE = 100
+_MIN_KOREAN_SNAPSHOT_SIZE = 30
+_MIN_LATIN_SNAPSHOT_SIZE = 90
 
 
 def normalize_alias(alias: str) -> str:
@@ -95,6 +97,16 @@ def _validate_tier_a_snapshot(records: list[FontRecord]) -> list[str]:
     if len(unique_slugs) < _MIN_TIER_A_SNAPSHOT_SIZE:
         raise ValueError(
             f"active Tier A가 100종 미만입니다: {len(unique_slugs)}"
+        )
+    korean_count = sum(1 for rec in records if "korean" in rec.subsets)
+    if korean_count < _MIN_KOREAN_SNAPSHOT_SIZE:
+        raise ValueError(
+            f"한글 subset 폰트가 30종 미만입니다: {korean_count}"
+        )
+    latin_count = len(unique_slugs) - korean_count
+    if latin_count < _MIN_LATIN_SNAPSHOT_SIZE:
+        raise ValueError(
+            f"라틴 subset 폰트가 90종 미만입니다: {latin_count}"
         )
     return unique_slugs
 

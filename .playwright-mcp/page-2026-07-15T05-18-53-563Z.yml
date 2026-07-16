@@ -1,0 +1,119 @@
+- generic [active] [ref=f10e1]:
+  - banner [ref=f10e2]:
+    - generic [ref=f10e3]:
+      - link "FontAgit 홈" [ref=f10e4] [cursor=pointer]:
+        - /url: /
+        - text: FontAgit
+      - generic [ref=f10e5]: 폰트 아지트
+    - navigation [ref=f10e6]:
+      - link "폰트" [ref=f10e7] [cursor=pointer]:
+        - /url: /fonts/
+      - link "트렌드" [ref=f10e8] [cursor=pointer]:
+        - /url: /trends/
+      - link "캔버스" [ref=f10e9] [cursor=pointer]:
+        - /url: /playground/
+      - link "비교" [ref=f10e10] [cursor=pointer]:
+        - /url: /compare/
+      - link "컬렉션" [ref=f10e11] [cursor=pointer]:
+        - /url: /collections/
+      - link "등록" [ref=f10e12] [cursor=pointer]:
+        - /url: /submit/
+    - generic [ref=f10e13]:
+      - button "다크모드 전환" [ref=f10e14] [cursor=pointer]
+      - button "검색" [ref=f10e17] [cursor=pointer]
+  - main [ref=f10e21]:
+    - generic [ref=f10e22]:
+      - generic [ref=f10e23]:
+        - heading "타입 캔버스" [level=1] [ref=f10e24]
+        - generic [ref=f10e25]: 아무 글자나 입력하면 모든 폰트가 그 글자로 바뀝니다
+      - generic [ref=f10e26]:
+        - textbox "캔버스 입력" [ref=f10e29]:
+          - /placeholder: 아지트
+          - text: 아지트
+        - button "지우기" [ref=f10e30] [cursor=pointer]
+      - generic [ref=f10e31]:
+        - button "다람쥐 헌 쳇바퀴에 타고파" [ref=f10e32] [cursor=pointer]
+        - button "당신의 폰트 아지트" [ref=f10e33] [cursor=pointer]
+        - button "가나다라 ABC 0123" [ref=f10e34] [cursor=pointer]
+      - generic [ref=f10e35]:
+        - generic [ref=f10e36]:
+          - generic [ref=f10e37]: 대표 - 프리텐다드 - 96px
+          - link "상세 →" [ref=f10e38] [cursor=pointer]:
+            - /url: /fonts/pretendard/
+        - generic [ref=f10e39]: 아지트
+      - generic [ref=f10e40]:
+        - text: 무료 폰트에서 보기
+        - generic [ref=f10e41]: "- 대표 1 + 8종"
+      - generic [ref=f10e42]:
+        - generic [ref=f10e43]:
+          - generic [ref=f10e44]:
+            - generic [ref=f10e45]: 검은고딕
+            - generic [ref=f10e46]:
+              - generic [ref=f10e47]: 무료
+              - link "상세" [ref=f10e48] [cursor=pointer]:
+                - /url: /fonts/black-han-sans/
+          - generic [ref=f10e49]: 아지트
+        - generic [ref=f10e50]:
+          - generic [ref=f10e51]:
+            - generic [ref=f10e52]: 배민 주아
+            - generic [ref=f10e53]:
+              - generic [ref=f10e54]: 무료
+              - link "상세" [ref=f10e55] [cursor=pointer]:
+                - /url: /fonts/jua/
+          - generic [ref=f10e56]: 아지트
+        - generic [ref=f10e57]:
+          - generic [ref=f10e58]:
+            - generic [ref=f10e59]: 배민 도현
+            - generic [ref=f10e60]:
+              - generic [ref=f10e61]: 무료
+              - link "상세" [ref=f10e62] [cursor=pointer]:
+                - /url: /fonts/do-hyeon/
+          - generic [ref=f10e63]: 아지트
+        - generic [ref=f10e64]:
+          - generic [ref=f10e65]:
+            - generic [ref=f10e66]: 고운바탕
+            - generic [ref=f10e67]:
+              - generic [ref=f10e68]: 무료
+              - link "상세" [ref=f10e69] [cursor=pointer]:
+                - /url: /fonts/gowun-batang/
+          - generic [ref=f10e70]: 아지트
+        - generic [ref=f10e71]:
+          - generic [ref=f10e72]:
+            - generic [ref=f10e73]: 나눔명조
+            - generic [ref=f10e74]:
+              - generic [ref=f10e75]: 무료
+              - link "상세" [ref=f10e76] [cursor=pointer]:
+                - /url: /fonts/nanum-myeongjo/
+          - generic [ref=f10e77]: 아지트
+        - generic [ref=f10e78]:
+          - generic [ref=f10e79]:
+            - generic [ref=f10e80]: 기랑해랑
+            - generic [ref=f10e81]:
+              - generic [ref=f10e82]: 무료
+              - link "상세" [ref=f10e83] [cursor=pointer]:
+                - /url: /fonts/kirang-haerang/
+          - generic [ref=f10e84]: 아지트
+        - generic [ref=f10e85]:
+          - generic [ref=f10e86]:
+            - generic [ref=f10e87]: 개구
+            - generic [ref=f10e88]:
+              - generic [ref=f10e89]: 무료
+              - link "상세" [ref=f10e90] [cursor=pointer]:
+                - /url: /fonts/gaegu/
+          - generic [ref=f10e91]: 아지트
+        - generic [ref=f10e92]:
+          - generic [ref=f10e93]:
+            - generic [ref=f10e94]: 송명
+            - generic [ref=f10e95]:
+              - generic [ref=f10e96]: 무료
+              - link "상세" [ref=f10e97] [cursor=pointer]:
+                - /url: /fonts/song-myung/
+          - generic [ref=f10e98]: 아지트
+  - contentinfo [ref=f10e99]:
+    - generic [ref=f10e100]: 당신의 폰트 아지트. 오늘도 좋은 서체 찾으시길.
+    - generic [ref=f10e101]:
+      - link "폰트" [ref=f10e102] [cursor=pointer]:
+        - /url: /fonts/
+      - link "트렌드" [ref=f10e103] [cursor=pointer]:
+        - /url: /trends/
+  - button "Open Next.js Dev Tools" [ref=f10e109] [cursor=pointer]

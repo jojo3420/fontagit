@@ -28,9 +28,10 @@ def build_document(
     generated_at: str,
     latin_limit: int = 100,
     korean_names: dict[str, KoreanNameEntry] | None = None,
+    strict: bool = False,
 ) -> OutputDocument:
     """폰트 원형 목록을 OutputDocument로 변환한다."""
-    records = build_records(fonts, license_map, latin_limit, korean_names=korean_names)
+    records = build_records(fonts, license_map, latin_limit, korean_names=korean_names, strict=strict)
     return OutputDocument(
         generated_at=generated_at, source=_SOURCE,
         record_count=len(records), fonts=records,
@@ -82,7 +83,10 @@ def main() -> int:
 
     generated_at = datetime.now(timezone.utc).isoformat()
     try:
-        doc = build_document(fonts, license_map, generated_at, korean_names=korean_names)
+        doc = build_document(fonts, license_map, generated_at, korean_names=korean_names, strict=True)
+    except ValueError as exc:
+        logger.error("폰트 변환 실패: %s", exc)
+        return 3
     except KoreanNamesError as exc:
         logger.error("한글 매핑 검증 실패: %s", exc)
         return 3

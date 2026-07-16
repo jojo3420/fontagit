@@ -1,0 +1,88 @@
+- generic [active] [ref=f9e1]:
+  - banner [ref=f9e2]:
+    - generic [ref=f9e3]:
+      - link "FontAgit 홈" [ref=f9e4] [cursor=pointer]:
+        - /url: /
+        - text: FontAgit
+      - generic [ref=f9e5]: 폰트 아지트
+    - navigation [ref=f9e6]:
+      - link "폰트" [ref=f9e7] [cursor=pointer]:
+        - /url: /fonts/
+      - link "트렌드" [ref=f9e8] [cursor=pointer]:
+        - /url: /trends/
+      - link "캔버스" [ref=f9e9] [cursor=pointer]:
+        - /url: /playground/
+      - link "비교" [ref=f9e10] [cursor=pointer]:
+        - /url: /compare/
+      - link "컬렉션" [ref=f9e11] [cursor=pointer]:
+        - /url: /collections/
+      - link "등록" [ref=f9e12] [cursor=pointer]:
+        - /url: /submit/
+    - generic [ref=f9e13]:
+      - button "다크모드 전환" [ref=f9e14] [cursor=pointer]
+      - button "검색" [ref=f9e17] [cursor=pointer]
+  - main [ref=f9e21]:
+    - generic [ref=f9e22]:
+      - generic [ref=f9e23]:
+        - heading "폰트 비교" [level=1] [ref=f9e24]
+        - generic [ref=f9e25]: 같은 문장으로 나란히 놓고 결정하세요
+      - generic [ref=f9e26]:
+        - generic [ref=f9e27]: 문장
+        - textbox "비교 문장 입력" [ref=f9e28]:
+          - /placeholder: 아지트
+          - text: 아지트
+      - generic [ref=f9e29]:
+        - generic [ref=f9e30]:
+          - generic [ref=f9e31]:
+            - combobox "1번 폰트 선택" [ref=f9e32] [cursor=pointer]:
+              - option "프리텐다드" [selected]
+              - option "검은고딕"
+              - option "배민 주아"
+              - option "배민 도현"
+              - option "고운바탕"
+              - option "나눔명조"
+              - option "기랑해랑"
+              - option "개구"
+              - option "송명"
+            - generic [ref=f9e33]: 무료
+          - generic [ref=f9e34]: 아지트
+          - generic [ref=f9e35]: 좋은 폰트는 말을 걸지 않고 뜻을 전한다. ABCabc 0123
+        - generic [ref=f9e36]:
+          - generic [ref=f9e37]:
+            - combobox "2번 폰트 선택" [ref=f9e38] [cursor=pointer]:
+              - option "프리텐다드"
+              - option "검은고딕"
+              - option "배민 주아"
+              - option "배민 도현"
+              - option "고운바탕" [selected]
+              - option "나눔명조"
+              - option "기랑해랑"
+              - option "개구"
+              - option "송명"
+            - generic [ref=f9e39]: 무료
+          - generic [ref=f9e40]: 아지트
+          - generic [ref=f9e41]: 좋은 폰트는 말을 걸지 않고 뜻을 전한다. ABCabc 0123
+        - generic [ref=f9e42]:
+          - generic [ref=f9e43]:
+            - combobox "3번 폰트 선택" [ref=f9e44] [cursor=pointer]:
+              - option "프리텐다드"
+              - option "검은고딕" [selected]
+              - option "배민 주아"
+              - option "배민 도현"
+              - option "고운바탕"
+              - option "나눔명조"
+              - option "기랑해랑"
+              - option "개구"
+              - option "송명"
+            - generic [ref=f9e45]: 무료
+          - generic [ref=f9e46]: 아지트
+          - generic [ref=f9e47]: 좋은 폰트는 말을 걸지 않고 뜻을 전한다. ABCabc 0123
+  - contentinfo [ref=f9e48]:
+    - generic [ref=f9e49]: 당신의 폰트 아지트. 오늘도 좋은 서체 찾으시길.
+    - generic [ref=f9e50]:
+      - link "폰트" [ref=f9e51] [cursor=pointer]:
+        - /url: /fonts/
+      - link "트렌드" [ref=f9e52] [cursor=pointer]:
+        - /url: /trends/
+  - button "Open Next.js Dev Tools" [ref=f9e58] [cursor=pointer]
+  - alert [ref=f9e62]

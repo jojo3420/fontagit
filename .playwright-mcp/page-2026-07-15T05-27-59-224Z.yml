@@ -1,0 +1,63 @@
+- generic [active] [ref=f12e1]:
+  - banner [ref=f12e2]:
+    - generic [ref=f12e3]:
+      - link "FontAgit 홈" [ref=f12e4] [cursor=pointer]:
+        - /url: /
+        - text: FontAgit
+      - generic [ref=f12e5]: 폰트 아지트
+    - navigation [ref=f12e6]:
+      - link "폰트" [ref=f12e7] [cursor=pointer]:
+        - /url: /fonts/
+      - link "트렌드" [ref=f12e8] [cursor=pointer]:
+        - /url: /trends/
+      - link "캔버스" [ref=f12e9] [cursor=pointer]:
+        - /url: /playground/
+      - link "비교" [ref=f12e10] [cursor=pointer]:
+        - /url: /compare/
+      - link "컬렉션" [ref=f12e11] [cursor=pointer]:
+        - /url: /collections/
+      - link "등록" [ref=f12e12] [cursor=pointer]:
+        - /url: /submit/
+    - generic [ref=f12e13]:
+      - button "다크모드 전환" [ref=f12e14] [cursor=pointer]
+      - button "검색" [ref=f12e17] [cursor=pointer]
+  - main [ref=f12e21]:
+    - heading "폰트 등록 신청" [level=1] [ref=f12e22]
+    - paragraph [ref=f12e23]: 만드신 폰트를 아지트에 소개해 주세요. 검토 후 등록됩니다.
+    - generic [ref=f12e24]:
+      - generic [ref=f12e25]:
+        - generic [ref=f12e26]: 폰트 이름 *
+        - textbox "폰트 이름 *" [ref=f12e27]:
+          - /placeholder: "예: 아지트 고딕"
+      - generic [ref=f12e28]:
+        - generic [ref=f12e29]:
+          - generic [ref=f12e30]: 제작자 *
+          - textbox "제작자 *" [ref=f12e31]:
+            - /placeholder: 이름/팀
+        - generic [ref=f12e32]:
+          - generic [ref=f12e33]: 분류
+          - combobox "분류" [ref=f12e34]:
+            - option "고딕" [selected]
+            - option "명조"
+            - option "손글씨"
+            - option "장식"
+      - generic [ref=f12e35]:
+        - generic [ref=f12e36]: 공식 페이지 URL *
+        - textbox "공식 페이지 URL *" [ref=f12e37]:
+          - /placeholder: https://
+      - generic [ref=f12e38]:
+        - generic [ref=f12e39]: 라이선스
+        - generic [ref=f12e40]:
+          - button "무료" [pressed] [ref=f12e41] [cursor=pointer]
+          - button "유료" [ref=f12e42] [cursor=pointer]
+          - button "조건부" [ref=f12e43] [cursor=pointer]
+      - button "신청 보내기" [ref=f12e44] [cursor=pointer]
+  - contentinfo [ref=f12e45]:
+    - generic [ref=f12e46]: 당신의 폰트 아지트. 오늘도 좋은 서체 찾으시길.
+    - generic [ref=f12e47]:
+      - link "폰트" [ref=f12e48] [cursor=pointer]:
+        - /url: /fonts/
+      - link "트렌드" [ref=f12e49] [cursor=pointer]:
+        - /url: /trends/
+  - button "Open Next.js Dev Tools" [ref=f12e55] [cursor=pointer]
+  - alert [ref=f12e59]

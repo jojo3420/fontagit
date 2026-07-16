@@ -304,3 +304,59 @@ def test_build_records_fails_fast_on_missing_korean_mapping():
             {"notosanskr": "OFL"},
             korean_names={},
         )
+
+
+def test_build_records_strict_mode_raises_on_conversion_failure():
+    """strict=True 모드에서 변환 실패 시 ValueError를 그대로 전파한다."""
+    fonts = [
+        GoogleFontRaw(
+            family="Valid Font",
+            variants=["regular"],
+            subsets=["latin"],
+            version="v1",
+            lastModified="2024-01-01",
+            files={},
+            category="sans-serif",
+        ),
+        GoogleFontRaw(
+            family="나눔고딕",  # build_official_url에서 ValueError 유발
+            variants=["regular"],
+            subsets=["korean"],
+            version="v1",
+            lastModified="2024-01-01",
+            files={},
+            category="sans-serif",
+        ),
+    ]
+    # strict=True에서 변환 실패하면 ValueError 전파
+    with pytest.raises(ValueError):
+        build_records(fonts, {}, strict=True)
+
+
+def test_build_records_default_mode_skips_failure_gracefully(caplog):
+    """strict=False (기본값) 모드에서 변환 실패는 warning으로 기록하고 건너뜀."""
+    caplog.set_level(logging.WARNING)
+    fonts = [
+        GoogleFontRaw(
+            family="Valid Font",
+            variants=["regular"],
+            subsets=["latin"],
+            version="v1",
+            lastModified="2024-01-01",
+            files={},
+            category="sans-serif",
+        ),
+        GoogleFontRaw(
+            family="나눔고딕",  # build_official_url에서 ValueError 유발
+            variants=["regular"],
+            subsets=["korean"],
+            version="v1",
+            lastModified="2024-01-01",
+            files={},
+            category="sans-serif",
+        ),
+    ]
+    records = build_records(fonts, {})  # strict=False (기본값)
+    # 유효한 폰트만 반환
+    assert len(records) == 1
+    assert records[0].name_en == "Valid Font"

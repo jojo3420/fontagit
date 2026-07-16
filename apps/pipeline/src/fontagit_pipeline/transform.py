@@ -175,14 +175,20 @@ def build_records(
     license_map: dict[str, str],
     latin_limit: int = 100,
     korean_names: dict[str, KoreanNameEntry] | None = None,
+    strict: bool = False,
 ) -> list[FontRecord]:
-    """병합-중복제거 후 FontRecord 리스트 반환. 변환 실패 시 건너뜀."""
+    """병합-중복제거 후 FontRecord 리스트 반환.
+
+    strict=False (기본값): 변환 실패 시 warning으로 기록하고 건너뜀.
+    strict=True: 변환 실패 시 ValueError를 그대로 전파."""
     merged = merge_dedup(filter_korean(fonts), select_latin_top(fonts, latin_limit))
     records: list[FontRecord] = []
     for raw in merged:
         try:
             records.append(to_record(raw, license_map, korean_names=korean_names))
         except ValueError as exc:
+            if strict:
+                raise
             logger.warning("레코드 변환 건너뜀 (%s): %s", raw.family, exc)
     if korean_names is not None:
         published_korean = {r.slug for r in records if r.status == "published" and "korean" in r.subsets}

@@ -92,17 +92,23 @@ def test_normalize_alias_converts_nfd_to_nfc():
     assert normalize_alias(nfd) == normalize_alias("본 고딕")  # NFC/NFD 입력 동치
 
 
-def _snapshot_records(count: int = 100) -> list[FontRecord]:
-    return [
-        _rec().model_copy(
-            update={
-                "slug": f"font-{i:03d}",
-                "name_en": f"Font {i:03d}",
-                "aliases": [f"Font {i:03d}"],
-            }
+def _snapshot_records(count: int = 120) -> list[FontRecord]:
+    """기본 30개 한글 + 90개 라틴으로 스냅샷 생성 (최소 한글 30 + 라틴 90)."""
+    records = []
+    for i in range(count):
+        is_korean = i < 30
+        subsets = ["korean"] if is_korean else ["latin"]
+        records.append(
+            _rec().model_copy(
+                update={
+                    "slug": f"font-{i:03d}",
+                    "name_en": f"Font {i:03d}",
+                    "aliases": [f"Font {i:03d}"],
+                    "subsets": subsets,
+                }
+            )
         )
-        for i in range(count)
-    ]
+    return records
 
 
 def test_upload_tier_a_snapshot_syncs_only_after_all_upserts():
@@ -113,12 +119,12 @@ def test_upload_tier_a_snapshot_syncs_only_after_all_upserts():
 
         result = upload_tier_a_snapshot(records, "https://x.supabase.co", "sb_secret")
 
-        assert result == (100, 1)
+        assert result == (120, 1)
         names = [rpc_call.args[0] for rpc_call in schema.rpc.call_args_list]
-        assert names == ["upsert_font"] * 100 + ["sync_tier_a_fonts"]
+        assert names == ["upsert_font"] * 120 + ["sync_tier_a_fonts"]
         assert schema.rpc.call_args_list[-1] == call(
             "sync_tier_a_fonts",
-            {"p_active_slugs": [f"font-{i:03d}" for i in range(100)]},
+            {"p_active_slugs": [f"font-{i:03d}" for i in range(120)]},
         )
 
 
@@ -143,3 +149,45 @@ def test_upload_tier_a_snapshot_rejects_fewer_than_100_before_connecting():
             )
 
         mock_create.assert_not_called()
+
+
+def test_validate_tier_a_snapshot_rejects_insufficient_korean():
+    """한글 subset 폰트가 30종 미만이면 ValueError."""
+    from fontagit_pipeline.uploader import _validate_tier_a_snapshot
+
+    records = [
+        _rec().model_copy(
+            update={
+                "slug": f"font-{i:03d}",
+                "name_en": f"Font {i:03d}",
+                "aliases": [f"Font {i:03d}"],
+                "subsets": ["latin"],  # 라틴만
+                "source_tier": "A",
+            }
+        )
+        for i in range(100)
+    ]
+    # 한글이 0개이므로 30종 미만
+    with pytest.raises(ValueError, match="한글"):
+        _validate_tier_a_snapshot(records)
+
+
+def test_validate_tier_a_snapshot_rejects_insufficient_latin():
+    """라틴 subset 폰트가 90종 미만이면 ValueError."""
+    from fontagit_pipeline.uploader import _validate_tier_a_snapshot
+
+    records = [
+        _rec().model_copy(
+            update={
+                "slug": f"font-{i:03d}",
+                "name_en": f"Font {i:03d}",
+                "aliases": [f"Font {i:03d}"],
+                "subsets": ["korean"],  # 한글만
+                "source_tier": "A",
+            }
+        )
+        for i in range(100)
+    ]
+    # 라틴이 0개이므로 90종 미만
+    with pytest.raises(ValueError, match="라틴"):
+        _validate_tier_a_snapshot(records)

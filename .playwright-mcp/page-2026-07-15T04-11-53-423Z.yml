@@ -1,0 +1,134 @@
+- generic [active] [ref=f7e1]:
+  - banner [ref=f7e2]:
+    - link "FontAgit 홈" [ref=f7e4] [cursor=pointer]:
+      - /url: /
+      - text: FontAgit
+    - navigation [ref=f7e5]:
+      - link "폰트" [ref=f7e6] [cursor=pointer]:
+        - /url: /fonts/
+      - link "트렌드" [ref=f7e7] [cursor=pointer]:
+        - /url: /trends/
+      - link "컬렉션" [ref=f7e8] [cursor=pointer]:
+        - /url: /collections/
+      - link "등록" [ref=f7e9] [cursor=pointer]:
+        - /url: /submit/
+    - generic [ref=f7e10]:
+      - button "다크모드 전환" [ref=f7e11] [cursor=pointer]
+      - button "검색" [ref=f7e14] [cursor=pointer]
+  - main [ref=f7e18]:
+    - complementary [ref=f7e19]:
+      - generic [ref=f7e20]:
+        - heading "분류" [level=2] [ref=f7e21]
+        - generic [ref=f7e22] [cursor=pointer]:
+          - checkbox "고딕" [ref=f7e23]
+          - text: 고딕
+        - generic [ref=f7e24] [cursor=pointer]:
+          - checkbox "명조" [ref=f7e25]
+          - text: 명조
+        - generic [ref=f7e26] [cursor=pointer]:
+          - checkbox "손글씨" [ref=f7e27]
+          - text: 손글씨
+        - generic [ref=f7e28] [cursor=pointer]:
+          - checkbox "디스플레이" [ref=f7e29]
+          - text: 디스플레이
+      - generic [ref=f7e30]:
+        - heading "가격" [level=2] [ref=f7e31]
+        - generic [ref=f7e32] [cursor=pointer]:
+          - checkbox "무료" [ref=f7e33]
+          - text: 무료
+        - generic [ref=f7e34] [cursor=pointer]:
+          - checkbox "유료" [ref=f7e35]
+          - text: 유료
+      - generic [ref=f7e36]:
+        - heading "용도" [level=2] [ref=f7e37]
+        - generic [ref=f7e38]:
+          - button "본문" [ref=f7e39] [cursor=pointer]
+          - button "제목" [ref=f7e40] [cursor=pointer]
+          - button "로고" [ref=f7e41] [cursor=pointer]
+    - generic [ref=f7e42]:
+      - generic [ref=f7e43]:
+        - generic [ref=f7e44]: 폰트 10종
+        - generic [ref=f7e45]:
+          - button "인기순" [ref=f7e46] [cursor=pointer]
+          - button "최신순" [ref=f7e47] [cursor=pointer]
+      - generic [ref=f7e48]:
+        - link "다람쥐 헌 쳇바퀴 프리텐다드 무료" [ref=f7e49] [cursor=pointer]:
+          - /url: /fonts/pretendard/
+          - generic [ref=f7e50]: 다람쥐 헌쳇바퀴
+          - generic [ref=f7e51]:
+            - heading "프리텐다드" [level=3] [ref=f7e52]
+            - generic [ref=f7e53]: 무료
+        - link "다람쥐 헌 쳇바퀴 검은고딕 무료" [ref=f7e54] [cursor=pointer]:
+          - /url: /fonts/black-han-sans/
+          - generic [ref=f7e55]: 다람쥐 헌쳇바퀴
+          - generic [ref=f7e56]:
+            - heading "검은고딕" [level=3] [ref=f7e57]
+            - generic [ref=f7e58]: 무료
+        - link "다람쥐 헌 쳇바퀴 배민 주아 무료" [ref=f7e59] [cursor=pointer]:
+          - /url: /fonts/jua/
+          - generic [ref=f7e60]: 다람쥐 헌쳇바퀴
+          - generic [ref=f7e61]:
+            - heading "배민 주아" [level=3] [ref=f7e62]
+            - generic [ref=f7e63]: 무료
+        - link "다람쥐 헌 쳇바퀴 배민 도현 무료" [ref=f7e64] [cursor=pointer]:
+          - /url: /fonts/do-hyeon/
+          - generic [ref=f7e65]: 다람쥐 헌쳇바퀴
+          - generic [ref=f7e66]:
+            - heading "배민 도현" [level=3] [ref=f7e67]
+            - generic [ref=f7e68]: 무료
+        - link "다람쥐 헌 쳇바퀴 고운바탕 무료" [ref=f7e69] [cursor=pointer]:
+          - /url: /fonts/gowun-batang/
+          - generic [ref=f7e70]: 다람쥐 헌쳇바퀴
+          - generic [ref=f7e71]:
+            - heading "고운바탕" [level=3] [ref=f7e72]
+            - generic [ref=f7e73]: 무료
+        - link "다람쥐 헌 쳇바퀴 나눔명조 무료" [ref=f7e74] [cursor=pointer]:
+          - /url: /fonts/nanum-myeongjo/
+          - generic [ref=f7e75]: 다람쥐 헌쳇바퀴
+          - generic [ref=f7e76]:
+            - heading "나눔명조" [level=3] [ref=f7e77]
+            - generic [ref=f7e78]: 무료
+        - link "다람쥐 헌 쳇바퀴 기랑해랑 무료" [ref=f7e79] [cursor=pointer]:
+          - /url: /fonts/kirang-haerang/
+          - generic [ref=f7e80]: 다람쥐 헌쳇바퀴
+          - generic [ref=f7e81]:
+            - heading "기랑해랑" [level=3] [ref=f7e82]
+            - generic [ref=f7e83]: 무료
+        - link "다람쥐 헌 쳇바퀴 개구 무료" [ref=f7e84] [cursor=pointer]:
+          - /url: /fonts/gaegu/
+          - generic [ref=f7e85]: 다람쥐 헌쳇바퀴
+          - generic [ref=f7e86]:
+            - heading "개구" [level=3] [ref=f7e87]
+            - generic [ref=f7e88]: 무료
+        - link "다람쥐 헌 쳇바퀴 송명 무료" [ref=f7e89] [cursor=pointer]:
+          - /url: /fonts/song-myung/
+          - generic [ref=f7e90]: 다람쥐 헌쳇바퀴
+          - generic [ref=f7e91]:
+            - heading "송명" [level=3] [ref=f7e92]
+            - generic [ref=f7e93]: 무료
+        - link "다람쥐 헌 쳇바퀴 산돌 고딕 Neo 유료" [ref=f7e94] [cursor=pointer]:
+          - /url: /fonts/sandoll-gothic-neo/
+          - generic [ref=f7e95]: 다람쥐 헌쳇바퀴
+          - generic [ref=f7e96]:
+            - heading "산돌 고딕 Neo" [level=3] [ref=f7e97]
+            - generic [ref=f7e98]: 유료
+  - contentinfo [ref=f7e99]:
+    - generic [ref=f7e100]: 당신의 폰트 아지트. 오늘도 좋은 서체 찾으시길.
+    - generic [ref=f7e101]:
+      - link "폰트" [ref=f7e102] [cursor=pointer]:
+        - /url: /fonts/
+      - link "트렌드" [ref=f7e103] [cursor=pointer]:
+        - /url: /trends/
+  - navigation "모바일 탭" [ref=f7e104]:
+    - link "홈" [ref=f7e105] [cursor=pointer]:
+      - /url: /
+    - link "폰트" [ref=f7e106] [cursor=pointer]:
+      - /url: /fonts/
+    - link "트렌드" [ref=f7e107] [cursor=pointer]:
+      - /url: /trends/
+    - link "캔버스" [ref=f7e108] [cursor=pointer]:
+      - /url: /playground/
+    - link "비교" [ref=f7e109] [cursor=pointer]:
+      - /url: /compare/
+  - button "Open Next.js Dev Tools" [ref=f7e115] [cursor=pointer]
+  - alert [ref=f7e119]
