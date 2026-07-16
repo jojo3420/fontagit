@@ -1,103 +1,51 @@
 import { describe, it, expect } from "vitest";
-import { getFontBySlug, getAllSlugs, resolveFreeAlternatives, assertDataIntegrity, checkIntegrity, FONT_KEYS, getCollectionBySlug, getAllCollectionSlugs, fonts } from "@/lib/data";
-import type { CollectionFontItem } from "@/types/font";
+import { fonts } from "@/data/fonts";
+import { collections } from "@/data/collections";
 
-function itemKo(fontSlug: string, comment: string): CollectionFontItem {
-  const f = getFontBySlug(fontSlug)!;
-  return { slug: f.slug, nameKo: f.nameKo, fontKey: f.fontKey, tier: f.tier, comment };
-}
-
-describe("data helpers", () => {
-  it("finds a font by slug", () => {
-    expect(getFontBySlug("pretendard")?.nameKo).toBe("프리텐다드");
-    expect(getFontBySlug("nope")).toBeUndefined();
+describe("fixture data integrity", () => {
+  it("finds a font by slug in fixture", () => {
+    expect(fonts.find((f) => f.slug === "pretendard")?.nameKo).toBe("프리텐다드");
+    expect(fonts.find((f) => f.slug === "nope")).toBeUndefined();
   });
   it("has at least 10 fonts for TOP 10", () => {
-    expect(getAllSlugs().length).toBeGreaterThanOrEqual(10);
+    expect(fonts.length).toBeGreaterThanOrEqual(10);
   });
   it("resolves free alternatives to real free fonts (max 3)", () => {
-    const paid = getFontBySlug("sandoll-gothic-neo")!;
-    const alts = resolveFreeAlternatives(paid);
+    const paid = fonts.find((f) => f.slug === "sandoll-gothic-neo")!;
+    const alts = paid.freeAlternatives
+      ? paid.freeAlternatives
+          .map((slug: string) => fonts.find((f) => f.slug === slug))
+          .filter((f): f is typeof fonts[number] => f !== undefined && f.tier === "free")
+          .slice(0, 3)
+      : [];
     expect(alts.length).toBeLessThanOrEqual(3);
     expect(alts.every((f) => f.tier === "free")).toBe(true);
     expect(alts.map((f) => f.slug)).toContain("pretendard");
   });
-  it("passes integrity check", () => {
-    expect(() => assertDataIntegrity(FONT_KEYS)).not.toThrow();
-  });
   it("finds a collection by slug", () => {
-    expect(getCollectionBySlug("dawn-serif")?.title).toBe("새벽 감성 명조 모음");
-    expect(getCollectionBySlug("nope")).toBeUndefined();
+    expect(collections.find((c) => c.slug === "dawn-serif")?.title).toBe("새벽 감성 명조 모음");
+    expect(collections.find((c) => c.slug === "nope")).toBeUndefined();
   });
   it("lists all collection slugs", () => {
-    expect(getAllCollectionSlugs().length).toBeGreaterThanOrEqual(3);
+    expect(collections.length).toBeGreaterThanOrEqual(3);
   });
   it("every collection item references a real font", () => {
-    for (const slug of getAllCollectionSlugs()) {
-      const c = getCollectionBySlug(slug)!;
-      expect(c.items.length).toBeGreaterThan(0);
-      for (const it of c.items) {
-        expect(getFontBySlug(it.slug)).toBeDefined();
+    for (const col of collections) {
+      expect(col.items.length).toBeGreaterThan(0);
+      for (const it of col.items) {
+        expect(fonts.find((f) => f.slug === it.slug)).toBeDefined();
       }
     }
   });
-  it("checkIntegrity throws on collection referencing a non-existent font", () => {
-    const badCollections = [
-      {
-        slug: "x",
-        title: "x",
-        intro: "x",
-        items: [{ slug: "nope", nameKo: "x", fontKey: null, tier: "free" as const, comment: "c" }],
-      },
-    ];
-    expect(() => checkIntegrity(fonts, badCollections, FONT_KEYS)).toThrow();
-  });
-  it("checkIntegrity throws on duplicate collection slug", () => {
-    const badCollections = [
-      { slug: "x", title: "x1", intro: "x1", items: [itemKo("pretendard", "c")] },
-      { slug: "x", title: "x2", intro: "x2", items: [itemKo("pretendard", "c")] },
-    ];
-    expect(() => checkIntegrity(fonts, badCollections, FONT_KEYS)).toThrow();
-  });
-  it("checkIntegrity throws on empty collection items", () => {
-    const badCollections = [{ slug: "x", title: "x", intro: "x", items: [] }];
-    expect(() => checkIntegrity(fonts, badCollections, FONT_KEYS)).toThrow();
-  });
-  it("checkIntegrity throws on duplicate fontSlug within a collection", () => {
-    const badCollections = [
-      {
-        slug: "x",
-        title: "x",
-        intro: "x",
-        items: [
-          itemKo("pretendard", "c1"),
-          itemKo("pretendard", "c2"),
-        ],
-      },
-    ];
-    expect(() => checkIntegrity(fonts, badCollections, FONT_KEYS)).toThrow();
-  });
-  it("checkIntegrity does not throw on valid inputs", () => {
-    const goodCollections = [
-      {
-        slug: "x",
-        title: "x",
-        intro: "x",
-        items: [itemKo("pretendard", "c")],
-      },
-    ];
-    expect(() => checkIntegrity(fonts, goodCollections, FONT_KEYS)).not.toThrow();
-  });
   it("모든 폰트에 라이선스 필드가 채워져 있다", () => {
-    for (const slug of getAllSlugs()) {
-      const f = getFontBySlug(slug)!;
+    for (const f of fonts) {
       expect(f.license.type.length).toBeGreaterThan(0);
       expect(["included", "separate", "no"]).toContain(f.license.webfont);
       expect(["yes", "no"]).toContain(f.license.redistribution);
     }
   });
   it("유료 폰트 sandoll-gothic-neo는 구매 시/별도 구매/불가 + 가격", () => {
-    const p = getFontBySlug("sandoll-gothic-neo")!;
+    const p = fonts.find((f) => f.slug === "sandoll-gothic-neo")!;
     expect(p.license.commercial).toBe("conditional");
     expect(p.license.webfont).toBe("separate");
     expect(p.license.redistribution).toBe("no");

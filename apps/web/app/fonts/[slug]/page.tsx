@@ -10,18 +10,19 @@ import styles from "./page.module.css";
 
 export const dynamicParams = false;
 
-export function generateStaticParams() {
-  return getAllSlugs().map((slug) => ({ slug }));
+export async function generateStaticParams() {
+  const slugs = await getAllSlugs();
+  return slugs.map((slug) => ({ slug }));
 }
 
 export default async function FontDetail({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const font = getFontBySlug(slug);
+  const font = await getFontBySlug(slug);
   if (!font) notFound();
 
   const family = familyOf(font.fontKey);
   const isPaid = font.tier === "paid";
-  const alternatives = isPaid ? resolveFreeAlternatives(font) : [];
+  const alternatives = isPaid ? await resolveFreeAlternatives(font) : [];
   const caption = isPaid
     ? "견본은 유사 서체로 대체 표시 — 실제 서체는 공식 페이지에서 확인하세요."
     : undefined;

@@ -9,13 +9,14 @@ export const contentType = "image/png";
 
 const FONT_PATH = "node_modules/pretendard/dist/public/static/Pretendard-Bold.otf";
 
-export function generateStaticParams() {
-  return getAllSlugs().map((slug) => ({ slug }));
+export async function generateStaticParams() {
+  const slugs = await getAllSlugs();
+  return slugs.map((slug) => ({ slug }));
 }
 
 export default async function FontOgImage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const font = getFontBySlug(slug);
+  const font = await getFontBySlug(slug);
   const nameKo = font?.nameKo ?? "FontAgit";
   const tierLabel = font?.tier === "paid" ? "유료" : "무료";
   const licenseText = `${tierLabel} - 공식 페이지에서 라이선스 확인`;

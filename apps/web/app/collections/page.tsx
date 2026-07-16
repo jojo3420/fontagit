@@ -1,11 +1,13 @@
-import { collections } from "@/data/collections";
+import { getAllCollections } from "@/lib/data";
 import { CollectionCard } from "@/components/CollectionCard";
 import { EmptyState } from "@/components/EmptyState";
 import styles from "./page.module.css";
 
 export const metadata = { title: "컬렉션 - FontAgit" };
 
-export default function CollectionsPage() {
+export default async function CollectionsPage() {
+  const collections = await getAllCollections();
+
   return (
     <main className={styles.main}>
       <h1 className={styles.h1}>컬렉션</h1>

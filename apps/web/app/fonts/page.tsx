@@ -1,9 +1,11 @@
-import { fonts } from "@/data/fonts";
+import { getAllFonts } from "@/lib/data";
 import { FontFilters } from "@/components/FontFilters";
 import { FontGrid } from "@/components/FontGrid";
 import styles from "./page.module.css";
 
-export default function FontsPage() {
+export default async function FontsPage() {
+  const fonts = await getAllFonts();
+
   return (
     <main className={styles.main}>
       <FontFilters />

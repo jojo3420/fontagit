@@ -1,6 +1,23 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import FontDetail from "@/app/fonts/[slug]/page";
+import { fonts } from "@/data/fonts";
+
+const mockFonts = new Map(fonts.map((f) => [f.slug, f]));
+
+vi.mock("@/lib/data", () => ({
+  getFontBySlug: vi.fn((slug: string) =>
+    Promise.resolve(mockFonts.get(slug) || null)
+  ),
+  resolveFreeAlternatives: vi.fn((font: any) => {
+    if (!font.freeAlternatives) return Promise.resolve([]);
+    const alts = font.freeAlternatives
+      .map((slug: string) => mockFonts.get(slug))
+      .filter((f: any): f is typeof fonts[number] => f !== undefined && f.tier === "free")
+      .slice(0, 3);
+    return Promise.resolve(alts);
+  }),
+}));
 
 async function renderDetail(slug: string) {
   const ui = await FontDetail({ params: Promise.resolve({ slug }) });

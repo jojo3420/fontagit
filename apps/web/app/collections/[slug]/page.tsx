@@ -7,13 +7,14 @@ import styles from "./page.module.css";
 
 export const dynamicParams = false;
 
-export function generateStaticParams() {
-  return getAllCollectionSlugs().map((slug) => ({ slug }));
+export async function generateStaticParams() {
+  const slugs = await getAllCollectionSlugs();
+  return slugs.map((slug) => ({ slug }));
 }
 
 export default async function CollectionDetail({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const collection = getCollectionBySlug(slug);
+  const collection = await getCollectionBySlug(slug);
 
   if (!collection) {
     notFound();
