@@ -60,6 +60,21 @@ class FontRecord(BaseModel):
         return self
 
 
+class KoreanNameEntry(BaseModel):
+    """한글 이름-별칭 큐레이션 엔트리."""
+
+    name_ko: str | None = None
+    aliases: list[str] = []
+    sources: list[str] = []
+
+    @model_validator(mode="after")
+    def normalize_name_ko(self) -> "KoreanNameEntry":
+        """공백만 있는 name_ko는 None으로 정규화한다."""
+        if self.name_ko is not None and not self.name_ko.strip():
+            self.name_ko = None
+        return self
+
+
 class OutputDocument(BaseModel):
     """최종 출력 문서."""
 
