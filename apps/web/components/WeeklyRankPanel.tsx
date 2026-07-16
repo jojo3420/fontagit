@@ -16,14 +16,15 @@ interface WeeklyRankPanelProps {
 export function WeeklyRankPanel({ items, source }: WeeklyRankPanelProps) {
   const isClicks = source === "clicks";
   const title = isClicks ? "이번 주 인기 TOP 10" : "최신 등록 TOP 10";
-  const hint = isClicks ? "이동 클릭 기준" : null;
+  const hint = isClicks ? "이동 클릭 기준" : "최근 등록순";
+  const hintSuffix = isClicks ? "매주 갱신" : "클릭 데이터 수집 중";
 
   return (
     <aside className={styles.panel}>
       <div className={styles.head}>
         <div>
           <h2 className={styles.title}>{title}</h2>
-          {hint && <p className={styles.hint}>{hint} {String.fromCharCode(183)} 매주 갱신</p>}
+          <p className={styles.hint}>{hint} {String.fromCharCode(183)} {hintSuffix}</p>
         </div>
         <Link href="/trends" className={styles.all}>전체 →</Link>
       </div>
