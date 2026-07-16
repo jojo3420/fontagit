@@ -3,7 +3,7 @@
 import logging
 import re
 
-from fontagit_pipeline.korean_names import validate_coverage, KoreanNamesError
+from fontagit_pipeline.korean_names import validate_coverage
 from fontagit_pipeline.licenses import resolve_license_type
 from fontagit_pipeline.models import GoogleFontRaw, FontRecord, KoreanNameEntry
 

@@ -107,9 +107,8 @@ def upload_tier_a_snapshot(
     client = create_client(url, secret_key)
     schema = client.schema("fontagit")
     uploaded = _upload_records(schema, records)
-    response = schema.rpc(
-        "sync_tier_a_fonts", {"p_active_slugs": active_slugs}
-    ).execute()
+    sync_params: dict[str, Any] = {"p_active_slugs": active_slugs}
+    response = schema.rpc("sync_tier_a_fonts", sync_params).execute()
     if not isinstance(response.data, int):
         raise RuntimeError("sync_tier_a_fonts 응답이 정수가 아닙니다")
     logger.info("Tier A stale draft 완료: %d개", response.data)

@@ -12,9 +12,9 @@ from fontagit_pipeline.client import fetch_webfonts, WebfontsError
 from fontagit_pipeline.config import load_settings
 from fontagit_pipeline.korean_names import load_korean_names, KoreanNamesError
 from fontagit_pipeline.licenses import fetch_license_map, LicenseFetchError
-from fontagit_pipeline.models import GoogleFontRaw, OutputDocument
+from fontagit_pipeline.models import GoogleFontRaw, KoreanNameEntry, OutputDocument
 from fontagit_pipeline.transform import build_records
-from fontagit_pipeline.uploader import upload_records
+from fontagit_pipeline.uploader import upload_tier_a_snapshot
 from fontagit_pipeline.writer import write_output
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ def build_document(
     license_map: dict[str, str],
     generated_at: str,
     latin_limit: int = 100,
-    korean_names: dict | None = None,
+    korean_names: dict[str, KoreanNameEntry] | None = None,
 ) -> OutputDocument:
     """폰트 원형 목록을 OutputDocument로 변환한다."""
     records = build_records(fonts, license_map, latin_limit, korean_names=korean_names)
@@ -110,11 +110,18 @@ def main() -> int:
         assert settings.supabase_secret_key is not None
         published = [r for r in doc.fonts if r.status == "published"]
         try:
-            uploaded = upload_records(doc.fonts, settings.supabase_url, settings.supabase_secret_key)
+            uploaded, drafted = upload_tier_a_snapshot(
+                doc.fonts, settings.supabase_url, settings.supabase_secret_key
+            )
         except Exception as exc:  # 외부 경계
             logger.error("Supabase 업로드 실패: %s", exc.__class__.__name__)
             return 3
-        logger.info("업로드 %d개(공개 %d개)", uploaded, len(published))
+        logger.info(
+            "업로드 %d개(공개 %d개, stale draft %d개)",
+            uploaded,
+            len(published),
+            drafted,
+        )
     else:
         logger.info("Supabase 설정 없음 — 업로드 건너뜀(로컬 JSON만).")
     return 0
