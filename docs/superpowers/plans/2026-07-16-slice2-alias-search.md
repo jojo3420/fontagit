@@ -28,7 +28,7 @@
 - ✅ **output:export 정적 유지**: 검색은 런타임 클라이언트→Supabase RPC 직접 호출
 - ✅ **lib/db/ 계층화**: lib/db/search.ts 신설 (client.ts 재사용, mappers 준용)
 - ✅ **정규화 SSoT**: DB normalize_search(text) = `TRIM(LOWER(REGEXP_REPLACE(..., '\\s+', '', 'g')))`
-- ✅ **마이그레이션 번호**: 0005 (0001~0004 선점됨)
+- ✅ **마이그레이션 번호**: 0006 (0001~0004 기존, 0005 Tier A stale 폰트 동기화)
 - ✅ **보안**: RPC SECURITY DEFINER, anon에게 execute 권한, 파라미터 바인딩으로 SQL 인젝션 차단
 - ✅ **테스트**: 모킹(네트워크 없음) + pnpm test 단독 실행 가능
 - ✅ **타입**: 100% Type Hints, 하드코딩 금지(Enum/Constants)
@@ -134,10 +134,10 @@ select count(*) from fontagit.aliases;
 
 ---
 
-### Task 1: Migration 0005 (검색 백엔드)
+### Task 1: Migration 0006 (검색 백엔드)
 
 **Files**:
-- **Create**: `supabase/migrations/0005_search_fonts.sql`
+- **Create**: `supabase/migrations/0006_search_fonts.sql`
 
 **Interfaces**:
 - **Produces**:
@@ -238,7 +238,7 @@ select count(*) from fontagit.aliases;
    ```
    → 모두 결과 0건 이상, score 내림차순 정렬 확인
 
-7. **커밋**: `feat: 마이그레이션 0005 (검색 백엔드 — search_fonts RPC + pg_trgm)`
+7. **커밋**: `feat: 마이그레이션 0006 (검색 백엔드 — search_fonts RPC + pg_trgm)`
 
 ---
 
@@ -790,7 +790,7 @@ select count(*) from fontagit.aliases;
 
 | 파일 | 타입 | 변경 | 목적 |
 |------|------|------|------|
-| `supabase/migrations/0005_search_fonts.sql` | Create | SQL | pg_trgm + normalize_search + search_fonts RPC |
+| `supabase/migrations/0006_search_fonts.sql` | Create | SQL | pg_trgm + normalize_search + search_fonts RPC |
 | `apps/web/lib/db/search.ts` | Create | TS | searchFonts() 데이터 계층 |
 | `apps/web/lib/db/search.test.ts` | Create | TS | search.ts 단위 테스트 |
 | `apps/web/lib/db/types.ts` | Modify | TS | SearchResult 인터페이스 추가 |

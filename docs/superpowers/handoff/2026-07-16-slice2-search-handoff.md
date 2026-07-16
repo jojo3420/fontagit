@@ -76,9 +76,9 @@
 |---|------|------|
 | 1 | 검색은 클라이언트에서 anon RPC 직접 호출 | output:export 정적 유지, 옵션1 |
 | 2 | 정규화 SSoT: 공백제거+소문자 | 파이프라인 `normalize_alias`(re.sub(\s+,"",lower))와 동일해야 정확 매칭. DB `normalize_search` 함수를 단일 출처로 |
-| 3 | 검색 마이그레이션 번호 `0005` | 0001~0004 이미 사용(0003 컬렉션시드, 0004 RLS) |
+| 3 | 검색 마이그레이션 번호 `0006` | 0001~0004 기존, 0005 Tier A stale 폰트 동기화 |
 | 4 | 검색 점수화: 정확별칭>부분일치>trgm 유사도 | 기획서 6장 |
-| 5 | 마이그레이션 번호: 검색0005/클릭0006/등록0007 | High5 충돌 정리 |
+| 5 | 마이그레이션 번호: 동기화0005/검색0006/클릭0007/등록0008 | Slice 0.5 Task 5 적대적 리뷰에서 재조정 |
 
 ---
 
@@ -87,7 +87,7 @@
 | # | 이슈 | 영향 | 다음 시도 |
 |---|------|------|----------|
 | 1 | 슬라이스2 계획 미검증(서브에이전트 self-review만) | 구현 전 검증 필요 | 메인이 직접 mappers/RPC/UI 정확성 확인(슬라이스1처럼) |
-| 2 | Task1 마이그레이션 0005(pg_trgm+search_fonts RPC)는 anon 쓰기 불가 | DB 적용 차단 | 사용자가 dev Supabase SQL Editor에서 적용(pg_trgm create extension 권한 필요). URL: dev 프로젝트 zgxtfcpiokhkcrywlxmc |
+| 2 | Task1 마이그레이션 0006(pg_trgm+search_fonts RPC)는 anon 쓰기 불가 | DB 적용 차단 | 사용자가 dev Supabase SQL Editor에서 적용(pg_trgm create extension 권한 필요). URL: dev 프로젝트 zgxtfcpiokhkcrywlxmc |
 | 3 | ⚠️ PR#13 후속 미반영 항목(Should) | 품질 | 컬렉션 조립 테스트, prod 0건 빌드 가드, prod BASE_URL 필수화 - 후속 |
 
 ---
@@ -105,8 +105,8 @@
 
 🔴 **MUST**:
 - [ ] 슬라이스2 계획(`2026-07-16-slice2-alias-search.md`) 결함 검증 (메인 직접)
-- [ ] subagent-driven으로 Task 0~5 구현 (게이트→마이그레이션0005→lib/db/search.ts→검색UI→계약→테스트)
-- [ ] Task1 마이그레이션 0005 dev 적용(사용자 SQL Editor, pg_trgm + search_fonts RPC + normalize_search)
+- [ ] subagent-driven으로 Task 0~5 구현 (게이트→마이그레이션0006→lib/db/search.ts→검색UI→계약→테스트)
+- [ ] Task1 마이그레이션 0006 dev 적용(사용자 SQL Editor, pg_trgm + search_fonts RPC + normalize_search)
 
 🟡 **SHOULD**:
 - [ ] 슬라이스3 클릭집계(F-03) - 트렌드 정직성 해소(prod 배포 전 필수)
