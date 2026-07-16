@@ -2,6 +2,8 @@ import type { MetadataRoute } from "next";
 import { getAllSlugs, getAllCollectionSlugs } from "@/lib/data";
 import { BASE_URL } from "@/lib/seo";
 
+export const dynamic = "force-static";
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const fontSlugs = await getAllSlugs();
   const collectionSlugs = await getAllCollectionSlugs();
