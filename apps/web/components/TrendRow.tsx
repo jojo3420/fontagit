@@ -11,7 +11,12 @@ const LABEL: Record<TrendItem["change"], (n?: number) => string> = {
   new: () => "NEW",
 };
 
-export function TrendRow({ item }: { item: TrendItem }) {
+interface TrendRowProps {
+  item: TrendItem;
+  showMoves?: boolean;
+}
+
+export function TrendRow({ item, showMoves = true }: TrendRowProps) {
   return (
     <Link href={`/fonts/${item.font.slug}`} className={styles.row}>
       <span className={styles.rank}>{item.rank}</span>
@@ -24,7 +29,9 @@ export function TrendRow({ item }: { item: TrendItem }) {
       >
         {item.font.nameKo}
       </span>
-      <span className={styles.moves}>이동 {item.moves.toLocaleString()}회</span>
+      {showMoves && (
+        <span className={styles.moves}>이동 {item.moves.toLocaleString()}회</span>
+      )}
       <TierChip tier={item.font.tier} />
     </Link>
   );

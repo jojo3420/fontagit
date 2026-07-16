@@ -9,5 +9,5 @@ export {
   getCollectionBySlug,
   getAllCollectionSlugs,
 } from "./db/collections";
-export { getTemporaryTrends, getTrends } from "./db/trends";
+export { getTrends } from "./db/trends";
 export type { TrendsResult, TrendsSource } from "./db/trends";

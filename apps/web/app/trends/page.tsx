@@ -1,10 +1,12 @@
-import { getTemporaryTrends } from "@/lib/data";
+import { getTrends } from "@/lib/data";
 import { FilterChip } from "@/components/FilterChip";
 import { TrendRankRow } from "@/components/TrendRankRow";
 import styles from "./page.module.css";
 
 export default async function TrendsPage() {
-  const items = await getTemporaryTrends();
+  const { items, source } = await getTrends();
+  const showMoves = source === "clicks";
+
   return (
     <main className={styles.main}>
       <div className={styles.head}>
@@ -18,7 +20,7 @@ export default async function TrendsPage() {
       <ul className={styles.list}>
         {items.map((item) => (
           <li key={item.rank}>
-            <TrendRankRow item={item} />
+            <TrendRankRow item={item} showMoves={showMoves} />
           </li>
         ))}
       </ul>

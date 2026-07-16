@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import Home from "@/app/page";
 import { fonts } from "@/data/fonts";
 import type { TrendItem } from "@/types/font";
+import type { TrendsResult } from "@/lib/data";
 
 const mockTrends: TrendItem[] = fonts.slice(0, 10).map((font, index) => ({
   rank: index + 1,
@@ -16,8 +17,18 @@ const mockTrends: TrendItem[] = fonts.slice(0, 10).map((font, index) => ({
   moves: font.moves,
 }));
 
+const mockTrendsClicksResult: TrendsResult = {
+  source: "clicks",
+  items: mockTrends,
+};
+
+const mockTrendsLatestResult: TrendsResult = {
+  source: "latest",
+  items: mockTrends,
+};
+
 vi.mock("@/lib/data", () => ({
-  getTemporaryTrends: vi.fn(() => Promise.resolve(mockTrends)),
+  getTrends: vi.fn(() => Promise.resolve(mockTrendsClicksResult)),
 }));
 
 async function renderHome() {

@@ -16,7 +16,6 @@ vi.mock("@/lib/db/collections", () => ({
 }));
 
 vi.mock("@/lib/db/trends", () => ({
-  getTemporaryTrends: vi.fn(),
   getTrends: vi.fn(),
 }));
 
