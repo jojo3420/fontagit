@@ -26,8 +26,10 @@ export async function searchFonts(q: string): Promise<SearchResult[]> {
     );
 
     if (error) {
-      console.error('RPC error in searchFonts:', error);
-      return [];
+      console.error('[search] RPC error:', error);
+      const err = new Error('SEARCH_RPC_FAILED');
+      err.cause = error;
+      throw err;
     }
 
     if (!data) {
@@ -42,7 +44,12 @@ export async function searchFonts(q: string): Promise<SearchResult[]> {
       category: row.category_ko,
     }));
   } catch (err) {
-    console.error('Error in searchFonts:', err);
-    return [];
+    if (err instanceof Error && err.message === 'SEARCH_RPC_FAILED') {
+      throw err;
+    }
+    console.error('[search] RPC error:', err);
+    const e = new Error('SEARCH_RPC_FAILED');
+    e.cause = err;
+    throw e;
   }
 }
