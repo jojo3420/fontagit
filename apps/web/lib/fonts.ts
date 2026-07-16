@@ -89,3 +89,7 @@ export const fontKeyToVar: Record<FontKey, string> = {
   gaegu: "var(--font-gaegu)",
   songMyung: "var(--font-song-myung)",
 };
+
+export function familyOf(fontKey: FontKey | null): string {
+  return fontKey ? fontKeyToVar[fontKey] : '"Pretendard Variable", "Pretendard", sans-serif';
+}

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { TrendItem } from "@/types/font";
-import { fontKeyToVar } from "@/lib/fonts";
+import { familyOf } from "@/lib/fonts";
 import { TierChip } from "./TierChip";
 import styles from "./TrendRow.module.css";
 
@@ -20,7 +20,7 @@ export function TrendRow({ item }: { item: TrendItem }) {
       </span>
       <span
         className={styles.name}
-        style={{ fontFamily: fontKeyToVar[item.font.fontKey] }}
+        style={{ fontFamily: familyOf(item.font.fontKey) }}
       >
         {item.font.nameKo}
       </span>

@@ -21,7 +21,7 @@ export interface Font {
   slug: string;
   nameKo: string;
   nameEn: string;
-  fontKey: FontKey;
+  fontKey: FontKey | null;
   tier: Tier;
   category: Category;
   foundry: string;
@@ -42,7 +42,17 @@ export interface TrendItem {
   moves: number;
 }
 
+export interface CollectionFontItem {
+  slug: string;
+  nameKo: string;
+  fontKey: FontKey | null;
+  tier: Tier;
+  comment: string;
+}
+
 export interface Collection {
-  slug: string; title: string; intro: string;
-  items: { fontSlug: string; comment: string }[];
+  slug: string;
+  title: string;
+  intro: string;
+  items: CollectionFontItem[];
 }

@@ -1,6 +1,23 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import FontDetail from "@/app/fonts/[slug]/page";
+import FontDetail, { generateMetadata } from "@/app/fonts/[slug]/page";
+import { fonts } from "@/data/fonts";
+
+const mockFonts = new Map(fonts.map((f) => [f.slug, f]));
+
+vi.mock("@/lib/data", () => ({
+  getFontBySlug: vi.fn((slug: string) =>
+    Promise.resolve(mockFonts.get(slug) || null)
+  ),
+  resolveFreeAlternatives: vi.fn((font: any) => {
+    if (!font.freeAlternatives) return Promise.resolve([]);
+    const alts = font.freeAlternatives
+      .map((slug: string) => mockFonts.get(slug))
+      .filter((f: any): f is typeof fonts[number] => f !== undefined && f.tier === "free")
+      .slice(0, 3);
+    return Promise.resolve(alts);
+  }),
+}));
 
 async function renderDetail(slug: string) {
   const ui = await FontDetail({ params: Promise.resolve({ slug }) });
@@ -25,5 +42,34 @@ describe("폰트 상세 페이지", () => {
     expect(screen.getByText(/구매하러 가기/)).toBeInTheDocument();
     expect(screen.getByText(/비슷한 무료 대안/)).toBeInTheDocument();
     expect(screen.queryByLabelText("미리보기 입력")).toBeNull();
+  });
+});
+
+describe("generateMetadata", () => {
+  it("무료 폰트: title/description/canonical 포함", async () => {
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ slug: "nanum-myeongjo" }),
+    });
+    expect(metadata.title).toBe("나눔명조 - FontAgit");
+    expect(metadata.description).toContain("무료");
+    expect(metadata.description).toContain("가지 굵기");
+    expect(metadata.alternates?.canonical).toContain("/fonts/nanum-myeongjo/");
+    expect(metadata.openGraph?.title).toBe("나눔명조 - FontAgit");
+  });
+
+  it("유료 폰트: tier 표시 (유료)", async () => {
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ slug: "sandoll-gothic-neo" }),
+    });
+    expect(metadata.title).toBe("산돌 고딕 Neo - FontAgit");
+    expect(metadata.description).toContain("유료");
+  });
+
+  it("존재하지 않는 폰트: 안전 처리", async () => {
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ slug: "nonexistent" }),
+    });
+    expect(metadata.title).toBe("폰트를 찾을 수 없습니다");
+    expect(metadata.description).toContain("존재하지 않습니다");
   });
 });

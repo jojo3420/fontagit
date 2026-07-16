@@ -1,3 +1,7 @@
+/**
+ * ⚠️ 슬라이스1: 목업 데이터
+ * 슬라이스3에서 실 클릭집계(get_top_fonts RPC) 기반으로 교체 예정
+ */
 import type { TrendItem, TrendChange } from "@/types/font";
 import { fonts } from "@/data/fonts";
 
