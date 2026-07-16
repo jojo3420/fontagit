@@ -1,34 +1,37 @@
 """한글 이름 매핑 로더 테스트."""
 
+import unicodedata
+
 import pytest
-from pathlib import Path
 
 from fontagit_pipeline.korean_names import (
+    KoreanNamesError,
     load_korean_names,
     validate_coverage,
-    KoreanNamesError,
 )
 
 
-class TestLoadKoreanNames:
-    """load_korean_names 함수 테스트."""
+def test_load_korean_names_returns_38_nfc_normalized_entries():
+    """38개 항목 로드 후 모든 문자열이 NFC 정규화됨을 확인한다."""
+    mapping = load_korean_names()
+    assert len(mapping) == 38
+    entry = mapping["noto-sans-kr"]
+    assert entry.name_ko == "본고딕"
+    assert entry.sources  # 근거 URL 1개 이상
+    # NFC 보장: 모든 문자열이 NFC와 동일
+    for slug, e in mapping.items():
+        for s in ([e.name_ko] if e.name_ko else []) + e.aliases:
+            assert s == unicodedata.normalize("NFC", s), f"{slug}: NFD 혼입"
 
-    def test_load_korean_names_returns_38_nfc_normalized_entries(self):
-        """매핑 JSON을 로드하면 38개의 정규화된 항목을 반환한다."""
-        mapping = load_korean_names()
 
-        assert len(mapping) == 38
-        assert "noto-sans-kr" in mapping
+def test_validate_coverage_fails_on_missing_and_surplus():
+    """매핑과 published 폰트 집합의 불일치를 감지한다."""
+    mapping = load_korean_names()
+    published = set(mapping.keys())
+    validate_coverage(mapping, published)  # 일치 → 통과
 
-        entry = mapping["noto-sans-kr"]
-        assert entry.name_ko == "본고딕"
-        assert entry.sources is not None and len(entry.sources) > 0
+    with pytest.raises(KoreanNamesError, match="누락"):
+        validate_coverage(mapping, published | {"new-korean-font"})
 
-    def test_validate_coverage_raises_on_missing_name_ko(self):
-        """name_ko가 None인 항목이 있으면 KoreanNamesError를 발생시킨다."""
-        mapping = load_korean_names()
-
-        with pytest.raises(KoreanNamesError) as exc_info:
-            validate_coverage(mapping)
-
-        assert "name_ko is None" in str(exc_info.value)
+    with pytest.raises(KoreanNamesError, match="잉여"):
+        validate_coverage(mapping, published - {"noto-sans-kr"})

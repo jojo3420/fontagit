@@ -65,13 +65,25 @@ class KoreanNameEntry(BaseModel):
 
     name_ko: str | None = None
     aliases: list[str] = []
-    sources: list[str] = []
+    sources: list[str]
 
     @model_validator(mode="after")
-    def normalize_name_ko(self) -> "KoreanNameEntry":
-        """공백만 있는 name_ko는 None으로 정규화한다."""
+    def validate_evidence(self) -> "KoreanNameEntry":
+        """name_ko/aliases 존재 시 sources 필수, 빈 alias/공백 name_ko는 에러."""
+        # (a) name_ko가 공백뿐이면 에러 (None으로 변환 아님)
         if self.name_ko is not None and not self.name_ko.strip():
-            self.name_ko = None
+            raise ValueError("name_ko는 공백만으로 구성될 수 없습니다")
+
+        # (b) 빈 문자열 alias는 에러
+        if any(not alias.strip() for alias in self.aliases):
+            raise ValueError("aliases에 공백만 있는 항목이 있습니다")
+
+        # (c) name_ko 또는 aliases가 있으면 sources 1개 이상 필수
+        if (self.name_ko is not None or self.aliases) and not self.sources:
+            raise ValueError(
+                "name_ko 또는 aliases가 있으면 sources 1개 이상 필수입니다"
+            )
+
         return self
 
 
