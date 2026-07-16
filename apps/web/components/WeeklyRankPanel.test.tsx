@@ -40,7 +40,7 @@ describe("WeeklyRankPanel", () => {
   it("source=latest일 때 '최신 등록' 라벨을 표시한다", () => {
     render(<WeeklyRankPanel items={mockItems} source="latest" />);
     expect(screen.getByText("최신 등록 TOP 10")).toBeInTheDocument();
-    expect(screen.getByText(/최근 등록순/)).toBeInTheDocument();
+    expect(screen.getByText(/최근 등록순.*클릭 데이터 수집 중/)).toBeInTheDocument();
     expect(screen.queryByText(/이동 클릭 기준/)).not.toBeInTheDocument();
   });
 
