@@ -109,6 +109,10 @@ begin
   end if;
 end $$;
 
+-- Note: S5 (published filter) and S6 (limit 20) are smoke-level tests because
+-- dev data lacks negative cases (unpublished fonts matching query, 20+ matches).
+-- Test data generation not adopted due to "no direct dev insert outside pipeline" decision.
+
 -- S5: published 필터 검증
 do $$
 declare

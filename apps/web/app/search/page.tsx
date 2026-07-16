@@ -36,6 +36,7 @@ function SearchContent() {
           .catch((err) => {
             if (!cancelled) {
               setError(true);
+              setResults([]);
               setLoading(false);
             }
           });
@@ -79,7 +80,7 @@ function SearchContent() {
         {!loading && searched && results.length === 0 && !error && (
           <div className={styles.empty}>검색 결과가 없습니다.</div>
         )}
-        {!loading && results.length > 0 && (
+        {!loading && !error && results.length > 0 && (
           <ul className={styles.list}>
             {results.map((item) => (
               <li key={item.slug} className={styles.item}>

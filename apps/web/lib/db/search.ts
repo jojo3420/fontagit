@@ -26,6 +26,7 @@ export async function searchFonts(q: string): Promise<SearchResult[]> {
     );
 
     if (error) {
+      console.error('[search] RPC error:', error);
       const err = new Error('SEARCH_RPC_FAILED');
       err.cause = error;
       throw err;
@@ -46,6 +47,7 @@ export async function searchFonts(q: string): Promise<SearchResult[]> {
     if (err instanceof Error && err.message === 'SEARCH_RPC_FAILED') {
       throw err;
     }
+    console.error('[search] RPC error:', err);
     const e = new Error('SEARCH_RPC_FAILED');
     e.cause = err;
     throw e;

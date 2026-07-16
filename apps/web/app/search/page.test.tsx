@@ -160,4 +160,23 @@ describe('검색 페이지 (page.tsx)', () => {
     );
   });
 
+
+
+  // PR#16 Review: Error message shown when search fails
+  it('검색 실패 시 에러 메시지가 표시되고 로딩 상태는 해제된다', async () => {
+    mockSearchFonts.mockRejectedValueOnce(new Error('SEARCH_RPC_FAILED'));
+
+    const user = userEvent.setup({ delay: null });
+    render(await SearchPage());
+
+    const input = screen.getByPlaceholderText(/검색/i) as HTMLInputElement;
+    await user.type(input, 'test');
+    await new Promise((r) => setTimeout(r, 350));
+
+    await waitFor(() => {
+      expect(screen.getByText(/검색에 실패했습니다/i)).toBeInTheDocument();
+      expect(screen.queryByText('검색 중...')).not.toBeInTheDocument();
+    });
+  });
+
 });
