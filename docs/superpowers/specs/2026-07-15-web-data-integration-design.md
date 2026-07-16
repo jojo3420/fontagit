@@ -61,7 +61,7 @@
 - 완료 기준: 목록/상세/컬렉션이 실데이터 렌더, 링크 오류 0, 사이트맵/메타 생성, 빌드 SSG 성공.
 
 ### 슬라이스 2 — 알리아스 검색 (F-04, 6장)
-- 마이그레이션 `0003`: `pg_trgm` 확장 + `aliases.alias_norm` GIN trgm 인덱스 + `search_fonts(q text)` RPC(정확 별칭 > 부분일치 > trgm 유사도 점수화). anon에 execute 권한.
+- 마이그레이션 `0005`: `pg_trgm` 확장 + `aliases.alias_norm` GIN trgm 인덱스 + `search_fonts(q text)` RPC(정확 별칭 > 부분일치 > trgm 유사도 점수화). anon에 execute 권한. (0003/0004는 슬라이스1에서 컬렉션 시드-RLS로 선점됨)
 - **정규화 SSoT**: 정규화 규칙(소문자 + 공백 제거)을 DB 함수 하나로 두고 파이프라인(`uploader.normalize_alias`)과 검색이 공유. 현재 파이프라인은 `\s+` 제거+lower이므로 동일 규칙으로 통일(불일치 시 정확매칭 실패).
 - 검색 페이지: 클라이언트 컴포넌트에서 anon RPC 호출(런타임 동적). 검색결과 slug는 빌드된 상세만 링크.
 - **검색 계약**: 입력(정규화 후 최소 1자), 반환 필드(slug, name_ko, name_en, tier, category), 최대 N건, 동점 정렬 기준, 빈 검색어/특수문자 처리, 입력 debounce.
@@ -69,14 +69,14 @@
 - 완료 기준: "지마켓산스/gmarket sans/지마켓 폰트" 등 별칭-오타 매칭 동작, 계약대로 반환.
 
 ### 슬라이스 3 — Top10 클릭집계 (F-03, 7장)
-- 마이그레이션 `0004`: `font_clicks`(익명, IP-식별자 컬럼 없음, `font_id` FK, `clicked_at` timestamptz default now, 인덱스) + `font_click_daily`(롤업). **anon은 원본 테이블 직접 접근 불가**, `record_click`/`get_top_fonts` RPC로만.
+- 마이그레이션 `0006`: `font_clicks`(익명, IP-식별자 컬럼 없음, `font_id` FK, `clicked_at` timestamptz default now, 인덱스) + `font_click_daily`(롤업). **anon은 원본 테이블 직접 접근 불가**, `record_click`/`get_top_fonts` RPC로만.
 - 공식 링크 이동 시 `record_click(fontId)` 호출을 **fire-and-forget**(실패/지연이 이동 차단 금지, 짧은 timeout 후 무조건 `window.location` 이동).
 - **Top10 = 빌드타임 생성**: 홈/트렌드 SSG가 `get_top_fonts`로 랭킹 조회(기획서 7-4). **데이터 없으면 "최신 등록" 폴백**. 표기는 반드시 "이동 클릭 기준". (초기 raw 직접조회 방식은 폐기)
 - 일별 롤업 cron-보관정책은 후속.
 - 완료 기준: 클릭 기록-랭킹 조회 동작, 원본 테이블 anon 미노출, 개인식별정보 미저장 확인.
 
 ### 슬라이스 4 — 등록폼 제출 (F-14)
-- 마이그레이션 `0005`: `submissions`(name, foundry, category, official_url, license_choice, status='pending', created_at). anon 직접 insert 차단, `submit_font` RPC로만(status/created_at DB 강제).
+- 마이그레이션 `0007`: `submissions`(name, foundry, category, official_url, license_choice, status='pending', created_at). anon 직접 insert 차단, `submit_font` RPC로만(status/created_at DB 강제).
 - 필드 제약 구체화: 필수 여부, 길이, `license_choice` 허용값(무료/유료/조건부), `official_url` http(s) 형식, 중복 기준.
 - `SubmitForm`에 검증(프론트/DB 제약 일치) + RPC 호출 + 중복제출 방지(버튼 disabled).
 - **상태 모델**(폼 성격): 입력대기 / 제출중 / 성공 / 실패(재시도). (목록-검색의 로딩/빈결과/오류/성공과 구분)
