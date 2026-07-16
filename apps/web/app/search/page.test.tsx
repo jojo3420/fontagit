@@ -14,6 +14,9 @@ vi.mock('next/navigation', () => ({
       get: (key: string) => params.get(key),
     };
   }),
+  useRouter: vi.fn(() => ({
+    replace: vi.fn(),
+  })),
 }));
 
 // Import after mocks are defined
@@ -139,4 +142,22 @@ describe('검색 페이지 (page.tsx)', () => {
     expect(screen.queryByText('검색 중...')).not.toBeInTheDocument();
     expect(screen.getByText('검색어를 입력하세요.')).toBeInTheDocument();
   });
+
+  it('searchFonts reject → error message displayed', async () => {
+    mockSearchFonts.mockRejectedValue(new Error('SEARCH_RPC_FAILED'));
+
+    const user = userEvent.setup({ delay: null });
+    render(await SearchPage());
+
+    const input = screen.getByPlaceholderText(/검색/i) as HTMLInputElement;
+    await user.type(input, '테스트');
+
+    await waitFor(
+      () => {
+        expect(screen.getByText(/검색에 실패했습니다/i)).toBeInTheDocument();
+      },
+      { timeout: 1000 }
+    );
+  });
+
 });

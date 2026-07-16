@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { searchFonts } from '@/lib/db/search';
 import type { SearchResult } from '@/lib/db/types';
@@ -9,12 +9,14 @@ import styles from './page.module.css';
 
 function SearchContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const q = searchParams.get('q') || '';
 
   const [query, setQuery] = useState(q);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -23,17 +25,27 @@ function SearchContent() {
       if (query.trim()) {
         setLoading(true);
         setSearched(true);
-        searchFonts(query).then((data) => {
-          if (!cancelled) {
-            setResults(data);
-            setLoading(false);
-          }
-        });
+        setError(false);
+        searchFonts(query)
+          .then((data) => {
+            if (!cancelled) {
+              setResults(data);
+              setLoading(false);
+            }
+          })
+          .catch((err) => {
+            if (!cancelled) {
+              setError(true);
+              setLoading(false);
+            }
+          });
+        router.replace(query.trim() ? `/search?q=${encodeURIComponent(query)}` : '/search', { scroll: false });
       } else {
         if (!cancelled) {
           setResults([]);
           setSearched(false);
           setLoading(false);
+          setError(false);
         }
       }
     }, 250); // debounce
@@ -42,7 +54,7 @@ function SearchContent() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, router]);
 
   return (
     <main className={styles.main}>
@@ -59,9 +71,12 @@ function SearchContent() {
         />
       </div>
 
-      <div className={styles.results}>
+      <div className={styles.results} aria-live="polite">
         {loading && <div className={styles.loading}>검색 중...</div>}
-        {!loading && searched && results.length === 0 && (
+        {!loading && error && (
+          <div className={styles.error}>검색에 실패했습니다. 잠시 후 다시 시도해주세요.</div>
+        )}
+        {!loading && searched && results.length === 0 && !error && (
           <div className={styles.empty}>검색 결과가 없습니다.</div>
         )}
         {!loading && results.length > 0 && (

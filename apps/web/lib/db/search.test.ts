@@ -57,21 +57,14 @@ describe('searchFonts', () => {
     expect(supabaseClient.rpc).not.toHaveBeenCalled();
   });
 
-  it('RPC 오류 → console.error 호출 후 빈 배열 반환', async () => {
+  it('RPC 오류 → throw', async () => {
     const mockError = { message: 'RPC failed' };
     vi.mocked(supabaseClient.rpc).mockResolvedValueOnce({
       data: null,
       error: mockError,
     } as any);
 
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    const result = await searchFonts('query');
-
-    expect(result).toEqual([]);
-    expect(consoleErrorSpy).toHaveBeenCalledWith('RPC error in searchFonts:', mockError);
-
-    consoleErrorSpy.mockRestore();
+    await expect(searchFonts('query')).rejects.toThrow('SEARCH_RPC_FAILED');
   });
 
   it('쿼리가 100자 초과 → RPC 호출 없이 빈 배열 반환', async () => {
