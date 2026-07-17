@@ -95,3 +95,26 @@ class OutputDocument(BaseModel):
     source: str = "google-fonts-webfonts-api"
     record_count: int
     fonts: list[FontRecord]
+
+
+class NoonnuSeedRecord(BaseModel):
+    """눈누(noonnu.cc) 시드 수집 레코드."""
+
+    name_ko: str
+    name_en: str | None = None
+    maker: str
+    official_url: str
+    source_page: str
+    collected_at: str
+
+
+class NoonnuSeedOutput(BaseModel):
+    """눈누 시드 수집 결과 문서."""
+
+    schema_version: int = 1
+    generated_at: str
+    source: str = "noonnu-cc"
+    record_count: int
+    records: list[NoonnuSeedRecord]
+    skipped_count: int = 0
+    skip_reasons: dict[str, int] = {}
