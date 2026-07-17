@@ -1,134 +1,74 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  normalizeText,
-  comparePixelData,
   aggregateResults,
+  comparePixelData,
+  isGlyphSupported,
+  normalizeText,
 } from "./glyphSupport";
 
-describe("glyphSupport 순수 로직", () => {
-  describe("normalizeText", () => {
-    it("공백을 제거하고 고유 글자만 반환한다", () => {
-      const result = normalizeText("  abc  ");
-      expect(result).toEqual(["a", "b", "c"]);
-    });
+function pixels(alphaValues: number[]): Uint8ClampedArray {
+  return new Uint8ClampedArray(alphaValues.flatMap((alpha) => [0, 0, 0, alpha]));
+}
 
-    it("중복 글자를 제거한다", () => {
-      const result = normalizeText("aabbcc");
-      expect(result).toEqual(["a", "b", "c"]);
-    });
-
-    it("중복 글자를 제거하되 첫 등장 순서를 유지한다", () => {
-      const result = normalizeText("abcabc");
-      expect(result).toEqual(["a", "b", "c"]);
-    });
-
-    it("한글, 숫자, 특수문자를 포함한 입력을 처리한다", () => {
-      const result = normalizeText("한글a1!");
-      expect(result).toEqual(["한", "글", "a", "1", "!"]);
-    });
-
-    it("빈 문자열을 입력하면 빈 배열을 반환한다", () => {
-      const result = normalizeText("");
-      expect(result).toEqual([]);
-    });
-
-    it("공백만 입력하면 빈 배열을 반환한다", () => {
-      const result = normalizeText("   ");
-      expect(result).toEqual([]);
-    });
-
-    it("개행 문자를 포함한 입력을 처리한다", () => {
-      const result = normalizeText("a\nb\nc\na");
-      expect(result).toEqual(["a", "\n", "b", "c"]);
-    });
+describe("normalizeText", () => {
+  it("모든 공백과 중복을 제거하고 첫 등장 순서를 유지한다", () => {
+    expect(normalizeText("  가\n나 가\t다  ")).toEqual(["가", "나", "다"]);
   });
 
-  describe("comparePixelData", () => {
-    it("다른 픽셀이 임계값을 초과하면 true를 반환한다", () => {
-      const target = new Uint8ClampedArray([
-        255, 255, 255, 100, // 다름 (alpha: 100)
-        255, 255, 255, 100,
-        255, 255, 255, 100,
-        255, 255, 255, 100,
-      ]);
-      const fallback = new Uint8ClampedArray([
-        255, 255, 255, 0, // 다름 (alpha: 0)
-        255, 255, 255, 0,
-        255, 255, 255, 0,
-        255, 255, 255, 0,
-      ]);
-
-      const result = comparePixelData(target, fallback, 2);
-      expect(result).toBe(true);
-    });
-
-    it("다른 픽셀이 임계값 이하이면 false를 반환한다", () => {
-      const target = new Uint8ClampedArray([
-        255, 255, 255, 100,
-        255, 255, 255, 100,
-        255, 255, 255, 100,
-        255, 255, 255, 100,
-      ]);
-      const fallback = new Uint8ClampedArray([
-        255, 255, 255, 100,
-        255, 255, 255, 100,
-        255, 255, 255, 100,
-        255, 255, 255, 100,
-      ]);
-
-      const result = comparePixelData(target, fallback, 50);
-      expect(result).toBe(false);
-    });
-
-    it("배열 크기가 다르면 true를 반환한다", () => {
-      const target = new Uint8ClampedArray([255, 255, 255, 100]);
-      const fallback = new Uint8ClampedArray([255, 255, 255, 100, 255]);
-
-      const result = comparePixelData(target, fallback);
-      expect(result).toBe(true);
-    });
+  it("이모지를 한 글자로 처리한다", () => {
+    expect(normalizeText("가😀😀나")).toEqual(["가", "😀", "나"]);
   });
 
-  describe("aggregateResults", () => {
-    it("지원/미지원 글자를 분류한다", () => {
-      const results = [
-        { char: "a", supported: true },
-        { char: "b", supported: false },
-        { char: "c", supported: true },
-        { char: "d", supported: false },
-      ];
+  it("한 번에 최대 50개만 검사한다", () => {
+    const unique = Array.from({ length: 60 }, (_, index) => String.fromCodePoint(0x3400 + index)).join("");
 
-      const result = aggregateResults(results);
-      expect(result.supported).toEqual(["a", "c"]);
-      expect(result.unsupported).toEqual(["b", "d"]);
-    });
+    expect(normalizeText(unique)).toHaveLength(50);
+  });
+});
 
-    it("모든 글자가 지원되는 경우를 처리한다", () => {
-      const results = [
-        { char: "a", supported: true },
-        { char: "b", supported: true },
-      ];
+describe("comparePixelData", () => {
+  it("차이가 임계값보다 크면 다른 그림으로 판정한다", () => {
+    expect(comparePixelData(pixels([100, 100, 100]), pixels([0, 0, 0]), 2)).toBe(true);
+  });
 
-      const result = aggregateResults(results);
-      expect(result.supported).toEqual(["a", "b"]);
-      expect(result.unsupported).toEqual([]);
-    });
+  it("차이가 임계값 이하면 같은 그림으로 판정한다", () => {
+    expect(comparePixelData(pixels([100, 100]), pixels([100, 0]), 1)).toBe(false);
+  });
 
-    it("모든 글자가 미지원되는 경우를 처리한다", () => {
-      const results = [
-        { char: "a", supported: false },
-        { char: "b", supported: false },
-      ];
+  it("데이터 크기가 다르면 다른 그림으로 판정한다", () => {
+    expect(comparePixelData(pixels([100]), pixels([100, 100]))).toBe(true);
+  });
+});
 
-      const result = aggregateResults(results);
-      expect(result.supported).toEqual([]);
-      expect(result.unsupported).toEqual(["a", "b"]);
-    });
+describe("isGlyphSupported", () => {
+  it("두 대체 글꼴과 모두 다를 때만 지원으로 판정한다", () => {
+    const fallbackA = pixels([0, 0, 0]);
+    const fallbackB = pixels([20, 20, 20]);
+    const target = pixels([100, 100, 100]);
 
-    it("빈 배열을 입력받으면 빈 결과를 반환한다", () => {
-      const result = aggregateResults([]);
-      expect(result.supported).toEqual([]);
-      expect(result.unsupported).toEqual([]);
-    });
+    expect(isGlyphSupported(target, fallbackA, target, fallbackB, 2)).toBe(true);
+  });
+
+  it("한 대체 글꼴과 같으면 미지원으로 판정한다", () => {
+    const fallbackA = pixels([0, 0, 0]);
+    const fallbackB = pixels([20, 20, 20]);
+    const target = pixels([100, 100, 100]);
+
+    expect(isGlyphSupported(fallbackA, fallbackA, target, fallbackB, 2)).toBe(false);
+  });
+});
+
+describe("aggregateResults", () => {
+  it("지원과 미지원 글자를 나눈다", () => {
+    expect(
+      aggregateResults([
+        { char: "가", supported: true },
+        { char: "나", supported: false },
+      ]),
+    ).toEqual({ supported: ["가"], unsupported: ["나"] });
+  });
+
+  it("결과가 없으면 양쪽 모두 빈 배열이다", () => {
+    expect(aggregateResults([])).toEqual({ supported: [], unsupported: [] });
   });
 });

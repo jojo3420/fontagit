@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Font, FontKey } from "@/types/font";
+import type { Font } from "@/types/font";
 import { GlyphChecker } from "./GlyphChecker";
 import styles from "./GlyphCheckerSection.module.css";
 

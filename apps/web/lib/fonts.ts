@@ -90,6 +90,27 @@ export const fontKeyToVar: Record<FontKey, string> = {
   songMyung: "var(--font-song-myung), system-ui, sans-serif",
 };
 
+function primaryFamily(fontFamily: string): string {
+  return fontFamily.split(",")[0].trim();
+}
+
+const fontKeyToCanvasFamily: Record<FontKey, string> = {
+  pretendard: '"Pretendard Variable"',
+  blackHanSans: primaryFamily(blackHanSans.style.fontFamily),
+  jua: primaryFamily(jua.style.fontFamily),
+  doHyeon: primaryFamily(doHyeon.style.fontFamily),
+  gowunBatang: primaryFamily(gowunBatang.style.fontFamily),
+  nanumMyeongjo: primaryFamily(nanumMyeongjo.style.fontFamily),
+  kirangHaerang: primaryFamily(kirangHaerang.style.fontFamily),
+  gaegu: primaryFamily(gaegu.style.fontFamily),
+  songMyung: primaryFamily(songMyung.style.fontFamily),
+};
+
 export function familyOf(fontKey: FontKey | null): string {
   return fontKey ? fontKeyToVar[fontKey] : '"Pretendard Variable", "Pretendard", sans-serif';
+}
+
+/** Canvas API는 CSS var()를 해석하지 못하므로 실제 생성된 폰트명을 반환한다. */
+export function canvasFamilyOf(fontKey: FontKey | null): string | null {
+  return fontKey ? fontKeyToCanvasFamily[fontKey] : null;
 }
