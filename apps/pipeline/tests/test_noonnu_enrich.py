@@ -67,10 +67,15 @@ class TestParsePermissions:
         assert set(perms.keys()) == set(ne.PERMISSION_CATEGORIES)
 
     def test_parse_permissions_unknown_status_raises(self):
-        """알 수 없는 상태값: EnrichParseError (M4 검증)"""
+        """게이트 카테고리의 미지 상태값: EnrichParseError (M4 검증)"""
         html = """<table><tr><td></td><td></td><td></td></tr>
-                  <tr><td>인쇄</td><td></td><td>미알려진상태</td></tr></table>"""
-        with pytest.raises(ne.EnrichParseError, match="알 수 없는 상태값"):
+                  <tr><td>인쇄</td><td></td><td>미알려진상태</td></tr>
+                  <tr><td>웹사이트</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>포장지</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>영상</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>임베딩</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>BI/CI</td><td></td><td>사용 가능</td></tr></table>"""
+        with pytest.raises(ne.EnrichParseError, match="게이트 카테고리"):
             ne.parse_permissions(html)
 
     def test_parse_permissions_duplicate_category_raises(self):
@@ -79,6 +84,64 @@ class TestParsePermissions:
                   <tr><td>인쇄</td><td></td><td>사용 가능</td></tr>
                   <tr><td>인쇄</td><td></td><td>사용 불가</td></tr></table>"""
         with pytest.raises(ne.EnrichParseError, match="중복 카테고리"):
+            ne.parse_permissions(html)
+
+    def test_parse_permissions_embedding_empty_allowed(self):
+        """임베딩 빈값 + 상업4 allowed → embedding=None으로 저장, 파싱 성공"""
+        html = """<table><tr><td></td><td></td><td></td></tr>
+                  <tr><td>인쇄</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>웹사이트</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>포장지</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>영상</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>임베딩</td><td></td><td></td></tr>
+                  <tr><td>BI/CI</td><td></td><td>사용 가능</td></tr></table>"""
+        perms = ne.parse_permissions(html)
+        assert perms["print"] == "allowed"
+        assert perms["website"] == "allowed"
+        assert perms["packaging"] == "allowed"
+        assert perms["video"] == "allowed"
+        assert perms["embedding"] is None  # 빈값 → None
+        assert perms["branding"] == "allowed"
+
+    def test_parse_permissions_branding_empty_allowed(self):
+        """branding 빈값 + 상업4 allowed → branding=None으로 저장, 파싱 성공"""
+        html = """<table><tr><td></td><td></td><td></td></tr>
+                  <tr><td>인쇄</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>웹사이트</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>포장지</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>영상</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>임베딩</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>BI/CI</td><td></td><td></td></tr></table>"""
+        perms = ne.parse_permissions(html)
+        assert perms["print"] == "allowed"
+        assert perms["website"] == "allowed"
+        assert perms["packaging"] == "allowed"
+        assert perms["video"] == "allowed"
+        assert perms["embedding"] == "allowed"
+        assert perms["branding"] is None  # 빈값 → None
+
+    def test_parse_permissions_commercial_category_empty_raises(self):
+        """게이트 카테고리(website) 빈값 → EnrichParseError"""
+        html = """<table><tr><td></td><td></td><td></td></tr>
+                  <tr><td>인쇄</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>웹사이트</td><td></td><td></td></tr>
+                  <tr><td>포장지</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>영상</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>임베딩</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>BI/CI</td><td></td><td>사용 가능</td></tr></table>"""
+        with pytest.raises(ne.EnrichParseError, match="게이트 카테고리"):
+            ne.parse_permissions(html)
+
+    def test_parse_permissions_commercial_category_unknown_status_raises(self):
+        """게이트 카테고리(print) 미지 상태 → EnrichParseError"""
+        html = """<table><tr><td></td><td></td><td></td></tr>
+                  <tr><td>인쇄</td><td></td><td>미지상태</td></tr>
+                  <tr><td>웹사이트</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>포장지</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>영상</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>임베딩</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>BI/CI</td><td></td><td>사용 가능</td></tr></table>"""
+        with pytest.raises(ne.EnrichParseError, match="게이트 카테고리"):
             ne.parse_permissions(html)
 
 

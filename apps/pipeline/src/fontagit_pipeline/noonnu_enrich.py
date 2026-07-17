@@ -100,16 +100,25 @@ _CATEGORY_MAP = {
 }
 
 
-def parse_permissions(html: str) -> dict[str, str]:
+def parse_permissions(html: str) -> dict[str, Optional[str]]:
     """라이선스 허용표에서 6 카테고리별 허용 여부 추출
 
     구조: table > tr (1번째 이후) > td[0]=카테고리, td[2]=상태
 
+    게이트 카테고리 (print/website/packaging/video):
+    - 유효한 상태값(allowed/conditional/denied) 필수
+    - 빈값이거나 미지 상태값이면 EnrichParseError
+
+    게이트 밖 카테고리 (embedding/branding):
+    - 빈값 또는 미지 상태값이면 None으로 저장
+    - 행 자체가 없어도 None으로 초기화
+
     Returns:
-        {"print": "allowed", "website": "allowed", ...}
+        {"print": "allowed", ..., "embedding": None, ...}
+        게이트 밖 카테고리는 None 가능.
 
     Raises:
-        EnrichParseError: 정확히 6개 카테고리 추출 불가, 중복 카테고리, 알 수 없는 상태값
+        EnrichParseError: 게이트 4개 카테고리에 유효 상태 없음, 중복 카테고리
     """
     soup = BeautifulSoup(html, "html.parser")
     table = soup.find("table")
@@ -118,7 +127,7 @@ def parse_permissions(html: str) -> dict[str, str]:
         raise EnrichParseError("라이선스 허용표(table) 없음")
 
     rows = table.find_all("tr")[1:]  # 헤더 제외
-    result: dict[str, str] = {}
+    result: dict[str, Optional[str]] = {cat: None for cat in PERMISSION_CATEGORIES}
 
     for row in rows:
         cells = row.find_all(["td", "th"])
@@ -133,25 +142,31 @@ def parse_permissions(html: str) -> dict[str, str]:
         if not category_key:
             continue
 
-        # 상태 매핑 - 알 수 없는 값이면 즉시 실패 (파싱 오류)
-        status = _STATUS_MAP.get(status_text)
-        if status is None:
-            raise EnrichParseError(
-                f"알 수 없는 상태값: '{status_text}' (카테고리: {category_text})"
-            )
-
         # 중복 카테고리 검증 - 덮어쓰기로 denied가 allowed로 가려지는 것 방지
-        if category_key in result:
+        if result[category_key] is not None:
             raise EnrichParseError(
                 f"중복 카테고리: {category_key} ('{status_text}' vs '{result[category_key]}')"
             )
 
-        result[category_key] = status
+        # 상태 매핑
+        status = _STATUS_MAP.get(status_text)
 
-    # 정확히 6개 카테고리 필수
-    if set(result.keys()) != set(PERMISSION_CATEGORIES):
+        # 게이트 카테고리는 유효 상태 필수
+        if category_key in _COMMERCIAL_KEYS:
+            if status is None:
+                raise EnrichParseError(
+                    f"게이트 카테고리 '{category_key}' 유효하지 않은 상태값: '{status_text}'"
+                )
+            result[category_key] = status
+        else:
+            # 게이트 밖 카테고리(embedding, branding): 빈값/미지→None
+            result[category_key] = status
+
+    # 게이트 4개 카테고리는 모두 유효 상태 필수
+    missing_commercial = [k for k in _COMMERCIAL_KEYS if result[k] is None]
+    if missing_commercial:
         raise EnrichParseError(
-            f"6개 카테고리 미달: {set(result.keys())} vs {set(PERMISSION_CATEGORIES)}"
+            f"게이트 카테고리 미달 또는 무효 상태: {missing_commercial}"
         )
 
     return result
@@ -195,7 +210,7 @@ def guess_license_type(html: str) -> str:
 
 # Task 5b: 라이선스 4행 매핑
 def map_license_rows(
-    permissions: dict[str, str],
+    permissions: dict[str, Optional[str]],
     license_type: str
 ) -> dict[str, Optional[str | bool]]:
     """권한별 DB row 매핑
@@ -243,7 +258,7 @@ def map_license_rows(
 def classify(
     parse_ok: bool,
     price: Optional[float],
-    perms: Optional[dict[str, str]],
+    perms: Optional[dict[str, Optional[str]]],
     official_url: Optional[str] = None,
 ) -> str:
     """자동 발행 게이트(D6). 상업 4카테고리 전부 allowed + price 정확히 0.0 + 파싱성공 + 공식URL 필수만 auto_safe."""
@@ -272,7 +287,7 @@ def build_proposal(font_id: str, slug: str, source_url: str, official_url: str, 
     try:
         perms = parse_permissions(html)
         parse_status = "parsed"
-        raw_permissions_data: dict[str, str] = perms
+        raw_permissions_data: dict[str, Optional[str]] = perms
     except EnrichParseError as exc:
         logger.warning("허용표 파싱 실패(slug=%s): %s", slug, exc)
         perms, parse_status = None, "failed"
