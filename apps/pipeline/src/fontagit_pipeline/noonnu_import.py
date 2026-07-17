@@ -218,7 +218,7 @@ def import_noonnu_seeds(
                             schema.table("fonts")
                             .select("id, status")
                             .eq("slug", slug)
-                            .maybeSingle()
+                            .maybe_single()
                             .execute()
                         )
                         existing = existing_response.data
