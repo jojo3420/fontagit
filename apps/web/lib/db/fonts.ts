@@ -13,18 +13,23 @@ export async function getAllFonts(): Promise<Font[]> {
   if (error) throw error;
   if (!data || data.length === 0) return [];
 
-  // N+1 방지: 폰트 id 수집 후 aliases 한번에 로드
+  // aliases를 published 폰트 id 청크(50)로 조회: 거대 URL(수천자)과 PostgREST max-rows 무음 절단 동시 방지
+  // (RLS anon_read_aliases가 published alias만 반환하지만, 절단은 role 무관하게 발생하므로 청크로 상한 보장)
+  const CHUNK = 50;
   const fontIds = data.map((row) => row.id);
-  const { data: aliasRows, error: aliasError } = await supabaseClient
-    .from("aliases")
-    .select("*")
-    .in("font_id", fontIds);
-
-  if (aliasError) throw aliasError;
+  const aliasRows: AliasRow[] = [];
+  for (let i = 0; i < fontIds.length; i += CHUNK) {
+    const { data: rows, error: aliasError } = await supabaseClient
+      .from("aliases")
+      .select("*")
+      .in("font_id", fontIds.slice(i, i + CHUNK));
+    if (aliasError) throw aliasError;
+    if (rows) aliasRows.push(...(rows as AliasRow[]));
+  }
 
   // 메모리에서 Map<font_id, alias[]>로 그룹핑
   const aliasMap = new Map<string, string[]>();
-  (aliasRows || []).forEach((row: AliasRow) => {
+  aliasRows.forEach((row: AliasRow) => {
     if (!aliasMap.has(row.font_id)) {
       aliasMap.set(row.font_id, []);
     }
@@ -73,6 +78,7 @@ export async function getAllSlugs(): Promise<string[]> {
 export async function resolveFreeAlternatives(
   _font: Font
 ): Promise<Font[]> {
+  void _font;
   // Slice 3에서 구글폰트 매칭 테이블 추가 예정
   return [];
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { searchFonts } from './search';
+import { searchFonts, searchSuggestions } from './search';
 import { supabaseClient } from './client';
 
 vi.mock('./client', () => ({
@@ -7,6 +7,9 @@ vi.mock('./client', () => ({
     rpc: vi.fn(),
   },
 }));
+
+type RpcBuilder = ReturnType<typeof supabaseClient.rpc>;
+type RpcResponse = Awaited<RpcBuilder>;
 
 describe('searchFonts', () => {
   beforeEach(() => {
@@ -28,7 +31,7 @@ describe('searchFonts', () => {
     vi.mocked(supabaseClient.rpc).mockResolvedValueOnce({
       data: mockData,
       error: null,
-    } as any);
+    } as unknown as RpcResponse);
 
     const result = await searchFonts('본고딕');
 
@@ -62,7 +65,7 @@ describe('searchFonts', () => {
     vi.mocked(supabaseClient.rpc).mockResolvedValueOnce({
       data: null,
       error: mockError,
-    } as any);
+    } as unknown as RpcResponse);
 
     await expect(searchFonts('query')).rejects.toThrow('SEARCH_RPC_FAILED');
   });
@@ -91,11 +94,54 @@ describe('searchFonts', () => {
     vi.mocked(supabaseClient.rpc).mockResolvedValueOnce({
       data: mockData,
       error: null,
-    } as any);
+    } as unknown as RpcResponse);
 
     const result = await searchFonts(query100);
 
     expect(result.length).toBe(1);
     expect(supabaseClient.rpc).toHaveBeenCalled();
+  });
+});
+
+describe('searchSuggestions - 요청 취소(abort) 처리', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function mockAbortSignalResponse(response: { data: unknown; error: unknown }) {
+    const abortSignalMock = vi.fn().mockResolvedValue(response);
+    vi.mocked(supabaseClient.rpc).mockReturnValueOnce({
+      abortSignal: abortSignalMock,
+    } as unknown as RpcBuilder);
+  }
+
+  it('signal.aborted 상태의 취소 오류 → console.error 없이 조용히 throw', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    mockAbortSignalResponse({
+      data: null,
+      error: { message: 'AbortError: signal is aborted without reason', code: '' },
+    });
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      searchSuggestions('본고딕', 8, controller.signal)
+    ).rejects.toThrow('SEARCH_RPC_FAILED');
+    expect(errSpy).not.toHaveBeenCalled();
+
+    errSpy.mockRestore();
+  });
+
+  it('취소가 아닌 실제 RPC 오류 → console.error 로깅 + throw', async () => {
+    const realError = { message: 'RPC boom', code: 'P0001' };
+    mockAbortSignalResponse({ data: null, error: realError });
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      searchSuggestions('본고딕', 8, new AbortController().signal)
+    ).rejects.toThrow('SEARCH_RPC_FAILED');
+    expect(errSpy).toHaveBeenCalledWith('[search] RPC error:', realError);
+
+    errSpy.mockRestore();
   });
 });

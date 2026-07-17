@@ -41,4 +41,5 @@ export interface SearchResult {
   nameEn: string;
   tier: 'free' | 'paid';
   category: string;
+  foundry?: string | null;
 }

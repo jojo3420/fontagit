@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   commercialLabel, webfontLabel, redistributionLabel,
   commercialState, webfontState, redistributionState,
-  deriveSellerHost, type LicenseState,
+  deriveSellerHost,
 } from "./license";
 
 describe("license 라벨 매핑", () => {
