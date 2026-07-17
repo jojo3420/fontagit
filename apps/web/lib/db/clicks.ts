@@ -9,7 +9,8 @@ export function recordClick(slug: string): void {
     return;
   }
 
-  void Promise.resolve(supabaseClient.rpc("record_click", { p_slug: slug }))
+  void Promise.resolve()
+    .then(() => supabaseClient.rpc("record_click", { p_slug: slug }))
     .then(({ error }) => {
       if (error) {
         console.error("[clicks] record_click failed:", error);

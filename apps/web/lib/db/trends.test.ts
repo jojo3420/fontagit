@@ -69,4 +69,9 @@ describe("getTrends", () => {
     rpcMock.mockResolvedValue({ data: null, error: { message: "boom" } });
     await expect(getTrends()).rejects.toThrow("TRENDS_RPC_FAILED");
   });
+
+  it("data가 배열이 아니면 throw (null은 오류로 드러냄)", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+    await expect(getTrends()).rejects.toThrow("TRENDS_RPC_INVALID_PAYLOAD");
+  });
 });

@@ -73,14 +73,24 @@ do $$
 declare
   top_row record;
   n int;
+  v_other text;
 begin
+  delete from fontagit.font_clicks;
+
+  select f.slug into v_other from fontagit.fonts f
+    where f.status = 'published' and f.slug <> 'noto-sans-kr' limit 1;
+
   perform fontagit.record_click('noto-sans-kr');
   perform fontagit.record_click('noto-sans-kr');
   perform fontagit.record_click('noto-sans-kr');
+  perform fontagit.record_click(v_other);
 
   select * into top_row from fontagit.get_top_fonts() limit 1;
-  if top_row.slug is null or top_row.clicks < 3 then
-    raise exception 'C5: get_top_fonts 상위 결과 이상. slug=%, clicks=%', top_row.slug, top_row.clicks;
+  if top_row.slug is distinct from 'noto-sans-kr' then
+    raise exception 'C5: 최다 클릭 폰트가 1위 아님. got slug=%, clicks=%', top_row.slug, top_row.clicks;
+  end if;
+  if top_row.clicks <> 3 then
+    raise exception 'C5: 1위 클릭수 불일치. got %', top_row.clicks;
   end if;
   if top_row.tier not in ('free', 'paid') then
     raise exception 'C5: tier 값 계약 위반. got %', top_row.tier;

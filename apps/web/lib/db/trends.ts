@@ -32,7 +32,14 @@ export async function getTrends(): Promise<TrendsResult> {
     throw err;
   }
 
-  const rows = (data ?? []) as RPCTopFontRow[];
+  if (!Array.isArray(data)) {
+    console.error("[trends] get_top_fonts unexpected payload:", data);
+    const err = new Error("TRENDS_RPC_INVALID_PAYLOAD");
+    err.cause = data;
+    throw err;
+  }
+
+  const rows = data as RPCTopFontRow[];
   if (rows.length === 0) {
     return { source: "latest", items: await getLatestFallback() };
   }
