@@ -141,7 +141,7 @@ def main_noonnu_seed(args: argparse.Namespace) -> int:
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
     try:
-        output = collect_noonnu_seeds(batch_size=30)
+        output = collect_noonnu_seeds(batch_size=args.limit)
         logger.info("수집 완료: %d개", output.record_count)
         return 0
     except NoonnuSeedError as exc:
@@ -202,6 +202,9 @@ if __name__ == "__main__":
     seed_parser = subparsers.add_parser(
         "noonnu-seed",
         help="눈누 Tier B 시드 수집",
+    )
+    seed_parser.add_argument(
+        "--limit", type=int, default=30, help="수집할 폰트 페이지 최대 수"
     )
     seed_parser.set_defaults(func=main_noonnu_seed)
 
