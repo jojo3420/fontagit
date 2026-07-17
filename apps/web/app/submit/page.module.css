@@ -1,3 +1,6 @@
 .main { max-width: 520px; margin: 0 auto; width: 100%; padding: var(--pad-page); }
 .title { margin: 0 0 6px; font-size: 24px; font-weight: 800; letter-spacing: -.02em; color: var(--ink); }
 .lead { margin: 0 0 24px; font-size: 13px; line-height: 1.6; color: var(--sub); }
+.info { margin: 0 0 24px; padding: 12px 14px; background: rgba(0, 0, 0, 0.03); border-radius: 8px; border-left: 3px solid var(--sub); }
+.info p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--ink); }
+.info p:not(:last-child) { margin-bottom: 8px; }

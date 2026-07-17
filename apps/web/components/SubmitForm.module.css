@@ -5,6 +5,11 @@
 .req { color: var(--point); }
 .input { height: 44px; border: 1px solid var(--border); border-radius: var(--radius-btn); background: var(--surface); padding: 0 14px; font-family: inherit; font-size: 13px; color: var(--ink); }
 .input::placeholder { color: var(--sub-2); }
+.input:disabled { opacity: 0.6; cursor: not-allowed; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .submit { height: 48px; margin-top: 6px; background: var(--point); color: var(--on-point); border: none; border-radius: 11px; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.submit:disabled { opacity: 0.6; cursor: not-allowed; }
+.message { margin-top: 12px; padding: 12px 14px; border-radius: 8px; font-size: 13px; line-height: 1.5; }
+.message[data-type="success"] { background: rgba(34, 177, 76, 0.1); color: #22b14c; border: 1px solid rgba(34, 177, 76, 0.3); }
+.message[data-type="error"] { background: rgba(230, 124, 115, 0.1); color: #e67c73; border: 1px solid rgba(230, 124, 115, 0.3); }
 @media (max-width: 480px) { .row { grid-template-columns: 1fr; } }
