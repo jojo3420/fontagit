@@ -21,3 +21,18 @@ export const ADSENSE_SLOT = readValidatedEnv(process.env.NEXT_PUBLIC_ADSENSE_SLO
 
 export const isAnalyticsEnabled = Boolean(GA_ID);
 export const isAdSenseEnabled = Boolean(ADSENSE_CLIENT && ADSENSE_SLOT);
+
+/** 카카오 AdFit 광고단위(DAN) ID. AdFit 콘솔에서 fontagit.com용으로 발급. 빈값이면 미노출 */
+export const ADFIT_UNIT_HOME = readValidatedEnv(
+  process.env.NEXT_PUBLIC_ADFIT_UNIT_HOME,
+  /^DAN-[A-Za-z0-9]+$/,
+);
+
+/** 카카오 AdFit 광고단위(DAN) ID. AdFit 콘솔에서 fontagit.com용으로 발급. 빈값이면 미노출 */
+export const ADFIT_UNIT_DETAIL = readValidatedEnv(
+  process.env.NEXT_PUBLIC_ADFIT_UNIT_DETAIL,
+  /^DAN-[A-Za-z0-9]+$/,
+);
+
+/** AdFit 로더 스크립트 URL */
+export const ADFIT_LOADER_SRC = "//t1.kakaocdn.net/kas/static/ba.min.js";

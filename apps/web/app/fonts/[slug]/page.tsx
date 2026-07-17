@@ -8,6 +8,8 @@ import { SpecimenBox } from "@/components/SpecimenBox";
 import { LicenseSummaryCard } from "@/components/LicenseSummaryCard";
 import { AlternativesCard } from "@/components/AlternativesCard";
 import { TierChip } from "@/components/TierChip";
+import { AdFitUnit } from "@/components/AdFitUnit";
+import { ADFIT_UNIT_DETAIL } from "@/lib/analytics/constants";
 import { ReportForm } from "./ReportForm";
 import type { Font } from "@/types/font";
 import styles from "./page.module.css";
@@ -103,6 +105,7 @@ function PublishedFontDetail({ font, alternatives }: { font: Font; alternatives:
             {font.foundry} {String.fromCharCode(183)} {font.availableWeights.length}가지 굵기 {String.fromCharCode(183)} 이동 {font.moves.toLocaleString()}회
           </p>
           <SpecimenBox fontFamily={family} font={font} editable={!isPaid} caption={caption} />
+          <AdFitUnit unit={ADFIT_UNIT_DETAIL ?? ""} width={300} height={250} label />
           {font.id && <ReportForm fontId={font.id} fontName={font.nameKo} />}
         </div>
         <div className={styles.side}>

@@ -60,14 +60,14 @@ export default async function PrivacyPage() {
       </section>
 
       <section className={styles.section}>
-        <h2 className={styles.h2}>4. Google AdSense</h2>
+        <h2 className={styles.h2}>4. 광고</h2>
         <p className={styles.text}>
-          FontAgit는 Google AdSense를 통해 광고를 표시합니다.
+          FontAgit는 카카오 AdFit 및 Google AdSense를 통해 광고를 표시합니다. 광고 제공 과정에서 쿠키가 사용될 수 있습니다.
         </p>
         <ul className={styles.list}>
-          <li>Google AdSense는 타사 쿠키를 사용하여 광고를 표시합니다</li>
-          <li>사용자의 관심사에 맞춰 맞춤 광고를 제공할 수 있습니다</li>
-          <li>Google의 개인정보 보호정책을 따릅니다</li>
+          <li>카카오 AdFit: 맞춤형 광고를 제공하기 위해 쿠키를 사용할 수 있습니다</li>
+          <li>Google AdSense: 타사 쿠키를 사용하여 광고를 표시하며, 사용자의 관심사에 맞춰 맞춤 광고를 제공합니다</li>
+          <li>각 광고 플랫폼의 개인정보 보호정책을 따릅니다</li>
         </ul>
       </section>
 
