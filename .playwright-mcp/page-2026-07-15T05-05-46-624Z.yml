@@ -130,7 +130,7 @@
             - emphasis [ref=f8e117]: 이동
           - generic [ref=f8e118]: 무료
   - contentinfo [ref=f8e119]:
-    - generic [ref=f8e120]: 당신의 폰트 아지트. 오늘도 좋은 서체 찾으시길.
+    - generic [ref=f8e120]: 당신의 폰트 아지트
     - generic [ref=f8e121]:
       - link "폰트" [ref=f8e122] [cursor=pointer]:
         - /url: /fonts/

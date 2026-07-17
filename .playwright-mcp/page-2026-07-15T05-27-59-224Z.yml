@@ -53,7 +53,7 @@
           - button "조건부" [ref=f12e43] [cursor=pointer]
       - button "신청 보내기" [ref=f12e44] [cursor=pointer]
   - contentinfo [ref=f12e45]:
-    - generic [ref=f12e46]: 당신의 폰트 아지트. 오늘도 좋은 서체 찾으시길.
+    - generic [ref=f12e46]: 당신의 폰트 아지트
     - generic [ref=f12e47]:
       - link "폰트" [ref=f12e48] [cursor=pointer]:
         - /url: /fonts/

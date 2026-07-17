@@ -118,7 +118,7 @@
               - generic [ref=f5e107]: 무료
     - generic [ref=f5e108]: 광고
   - contentinfo [ref=f5e111]:
-    - generic [ref=f5e112]: 당신의 폰트 아지트. 오늘도 좋은 서체 찾으시길.
+    - generic [ref=f5e112]: 당신의 폰트 아지트 
     - generic [ref=f5e113]:
       - link "폰트" [ref=f5e114] [cursor=pointer]:
         - /url: /fonts/

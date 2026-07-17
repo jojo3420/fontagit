@@ -64,7 +64,7 @@
           - /url: https://fonts.google.com/specimen/Nanum+Myeongjo
         - paragraph [ref=f1e60]: 이동 → fonts.google.com
   - contentinfo [ref=f1e61]:
-    - generic [ref=f1e62]: 당신의 폰트 아지트. 오늘도 좋은 서체 찾으시길.
+    - generic [ref=f1e62]: 당신의 폰트 아지트 
     - generic [ref=f1e63]:
       - link "폰트" [ref=f1e64] [cursor=pointer]:
         - /url: /fonts/

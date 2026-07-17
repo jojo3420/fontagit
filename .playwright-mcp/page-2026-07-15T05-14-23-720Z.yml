@@ -78,7 +78,7 @@
           - generic [ref=f9e46]: 아지트
           - generic [ref=f9e47]: 좋은 폰트는 말을 걸지 않고 뜻을 전한다. ABCabc 0123
   - contentinfo [ref=f9e48]:
-    - generic [ref=f9e49]: 당신의 폰트 아지트. 오늘도 좋은 서체 찾으시길.
+    - generic [ref=f9e49]: 당신의 폰트 아지트
     - generic [ref=f9e50]:
       - link "폰트" [ref=f9e51] [cursor=pointer]:
         - /url: /fonts/

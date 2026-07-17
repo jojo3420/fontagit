@@ -119,7 +119,7 @@
             - heading "산돌 고딕 Neo" [level=3] [ref=f6e100]
             - generic [ref=f6e101]: 유료
   - contentinfo [ref=f6e102]:
-    - generic [ref=f6e103]: 당신의 폰트 아지트. 오늘도 좋은 서체 찾으시길.
+    - generic [ref=f6e103]: 당신의 폰트 아지트
     - generic [ref=f6e104]:
       - link "폰트" [ref=f6e105] [cursor=pointer]:
         - /url: /fonts/

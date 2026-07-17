@@ -110,7 +110,7 @@
                 - /url: /fonts/song-myung/
           - generic [ref=f10e98]: 아지트
   - contentinfo [ref=f10e99]:
-    - generic [ref=f10e100]: 당신의 폰트 아지트. 오늘도 좋은 서체 찾으시길.
+    - generic [ref=f10e100]: 당신의 폰트 아지트
     - generic [ref=f10e101]:
       - link "폰트" [ref=f10e102] [cursor=pointer]:
         - /url: /fonts/

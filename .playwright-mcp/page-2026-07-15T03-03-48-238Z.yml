@@ -81,7 +81,7 @@
                 - /url: /fonts/black-han-sans/
               - generic [ref=e74]: 무료
   - contentinfo [ref=e75]:
-    - generic [ref=e76]: 당신의 폰트 아지트. 오늘도 좋은 서체 찾으시길.
+    - generic [ref=e76]: 당신의 폰트 아지트
     - generic [ref=e77]:
       - link "폰트" [ref=e78] [cursor=pointer]:
         - /url: /fonts/
