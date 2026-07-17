@@ -1,6 +1,15 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { filterFreeAlternatives } from "@/lib/db/fonts";
 import { fonts } from "@/data/fonts";
+
+vi.mock("./client", () => ({
+  supabaseClient: {
+    from: vi.fn(),
+    select: vi.fn(),
+    eq: vi.fn(),
+    in: vi.fn(),
+  },
+}));
 
 describe("filterFreeAlternatives", () => {
   it("같은 카테고리의 무료 폰트 최대 3개를 반환한다", () => {

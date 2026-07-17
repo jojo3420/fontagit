@@ -46,7 +46,6 @@ export async function getFontBySlug(slug: string): Promise<Font | null> {
     .from("fonts")
     .select("*")
     .eq("slug", slug)
-    .eq("status", "published")
     .single();
 
   // PGRST116: no rows returned
@@ -68,7 +67,7 @@ export async function getAllSlugs(): Promise<string[]> {
   const { data, error } = await supabaseClient
     .from("fonts")
     .select("slug")
-    .eq("status", "published");
+    .in("status", ["published", "hold", "discontinued"]);
 
   if (error) throw error;
 

@@ -24,6 +24,10 @@ vi.mock("@/lib/db/clicks", () => ({
   recordClick: vi.fn(),
 }));
 
+vi.mock("@/app/fonts/[slug]/ReportForm", () => ({
+  ReportForm: () => null,
+}));
+
 async function renderDetail(slug: string) {
   const ui = await FontDetail({ params: Promise.resolve({ slug }) });
   render(ui);
