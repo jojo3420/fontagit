@@ -4,6 +4,12 @@
   background: var(--surface-2);
   border-top: 1px solid var(--border);
   display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.topRow {
+  display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
@@ -18,9 +24,18 @@
 .links {
   display: flex;
   gap: 18px;
+  flex-wrap: wrap;
 }
 
 .links a {
   font-size: 12px;
   color: var(--sub);
+}
+
+.disclaimer {
+  font-size: 12px;
+  color: var(--sub);
+  margin: 0;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
 }
