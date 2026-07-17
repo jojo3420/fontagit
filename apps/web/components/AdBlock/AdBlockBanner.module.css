@@ -1,16 +1,21 @@
 .banner {
-  background: var(--surface-secondary, #f5f5f5);
-  border: 1px solid var(--border-secondary, #e0e0e0);
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin: 16px 0;
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 30;
+  width: min(420px, calc(100vw - 48px));
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   font-size: 14px;
   line-height: 1.5;
-  color: var(--text-secondary, #666);
+  color: var(--sub);
 }
 
 .content {
@@ -25,6 +30,7 @@
   margin: 0;
   flex: 1;
   padding: 0;
+  text-wrap: pretty;
 }
 
 .closeButton {
@@ -32,22 +38,34 @@
   border: none;
   cursor: pointer;
   font-size: 18px;
-  color: var(--text-secondary, #999);
-  padding: 4px 8px;
+  color: var(--sub);
+  width: 36px;
+  height: 36px;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  transition: all 0.2s;
+  border-radius: var(--radius-btn);
+  transition:
+    background-color 160ms ease-out,
+    color 160ms ease-out;
   flex-shrink: 0;
 }
 
 .closeButton:hover {
-  background: var(--surface-hover, #efefef);
-  color: var(--text-primary, #333);
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
-.closeButton:focus {
-  outline: 2px solid var(--focus-ring, #4a90e2);
+.closeButton:focus-visible {
+  outline: 2px solid var(--point);
   outline-offset: 2px;
+}
+
+@media (max-width: 620px) {
+  .banner {
+    right: 16px;
+    bottom: calc(72px + env(safe-area-inset-bottom));
+    width: calc(100vw - 32px);
+  }
 }
