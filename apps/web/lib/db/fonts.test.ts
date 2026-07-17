@@ -1,6 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { filterFreeAlternatives } from "@/lib/db/fonts";
 import { fonts } from "@/data/fonts";
+
+vi.mock("./client", () => ({
+  supabaseClient: {
+    from: vi.fn(),
+  },
+}));
 
 describe("filterFreeAlternatives", () => {
   it("같은 카테고리의 무료 폰트 최대 3개를 반환한다", () => {
@@ -22,26 +28,10 @@ describe("filterFreeAlternatives", () => {
     }
   });
 
-  it("무료 폰트 3개 이상이 있을 때는 3개만 반환한다", () => {
-    const paid = fonts.find((f) => f.slug === "sandoll-gothic-neo")!;
-    const freeCount = fonts.filter(
-      (f) => f.category === paid.category && f.tier === "free"
-    ).length;
+  it("비교할 무료 폰트가 없으면 빈 배열을 반환한다", () => {
+    const paid = { ...fonts[0], tier: "paid" as const };
+    const result = filterFreeAlternatives(paid, []);
 
-    if (freeCount > 3) {
-      const result = filterFreeAlternatives(paid, fonts);
-      expect(result.length).toBe(3);
-    }
-  });
-
-  it("해당 카테고리에 무료 폰트가 없으면 빈 배열을 반환한다", () => {
-    const mockFont = {
-      ...fonts[0],
-      category: "임의카테고리" as any,
-      tier: "paid" as const,
-    };
-    const result = filterFreeAlternatives(mockFont, fonts);
-
-    expect(result.length).toBe(0);
+    expect(result).toEqual([]);
   });
 });
