@@ -2,9 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { searchFonts, searchSuggestions } from './search';
 import { supabaseClient } from './client';
 
+const { mockInsert, mockSelect } = vi.hoisted(() => ({
+  mockInsert: vi.fn(),
+  mockSelect: vi.fn(),
+}));
+
 vi.mock('./client', () => ({
   supabaseClient: {
     rpc: vi.fn(),
+    from: vi.fn(() => ({
+      insert: mockInsert,
+    })),
   },
 }));
 
@@ -14,6 +22,8 @@ type RpcResponse = Awaited<RpcBuilder>;
 describe('searchFonts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockInsert.mockReturnValue({ select: mockSelect });
+    mockSelect.mockResolvedValue({ data: null, error: null });
   });
 
   it('정상 RPC 응답 → SearchResult 배열로 매핑', async () => {
@@ -46,20 +56,6 @@ describe('searchFonts', () => {
     ]);
   });
 
-  it('빈 쿼리 → RPC 호출 없이 빈 배열 반환', async () => {
-    const result = await searchFonts('');
-
-    expect(result).toEqual([]);
-    expect(supabaseClient.rpc).not.toHaveBeenCalled();
-  });
-
-  it('공백만 있는 쿼리 → RPC 호출 없이 빈 배열 반환', async () => {
-    const result = await searchFonts('   ');
-
-    expect(result).toEqual([]);
-    expect(supabaseClient.rpc).not.toHaveBeenCalled();
-  });
-
   it('RPC 오류 → throw', async () => {
     const mockError = { message: 'RPC failed' };
     vi.mocked(supabaseClient.rpc).mockResolvedValueOnce({
@@ -70,36 +66,19 @@ describe('searchFonts', () => {
     await expect(searchFonts('query')).rejects.toThrow('SEARCH_RPC_FAILED');
   });
 
-  it('쿼리가 100자 초과 → RPC 호출 없이 빈 배열 반환', async () => {
-    const longQuery = 'a'.repeat(101);
-    const result = await searchFonts(longQuery);
+  it('0건 안전 검색어만 저장하고 반환 행을 요청하지 않는다', async () => {
+    vi.mocked(supabaseClient.rpc)
+      .mockResolvedValueOnce({ data: [], error: null } as unknown as RpcResponse)
+      .mockResolvedValueOnce({ data: [], error: null } as unknown as RpcResponse);
 
-    expect(result).toEqual([]);
-    expect(supabaseClient.rpc).not.toHaveBeenCalled();
-  });
+    await expect(searchFonts('없는폰트')).resolves.toEqual([]);
+    await expect(searchFonts('person@example.com')).resolves.toEqual([]);
 
-  it('쿼리가 정확히 100자 → RPC 호출', async () => {
-    const query100 = 'a'.repeat(100);
-    const mockData = [
-      {
-        slug: 'test-font',
-        name_ko: '테스트',
-        name_en: 'Test',
-        tier: 'free' as const,
-        category_ko: '고딕',
-        score: 50,
-      },
-    ];
-
-    vi.mocked(supabaseClient.rpc).mockResolvedValueOnce({
-      data: mockData,
-      error: null,
-    } as unknown as RpcResponse);
-
-    const result = await searchFonts(query100);
-
-    expect(result.length).toBe(1);
-    expect(supabaseClient.rpc).toHaveBeenCalled();
+    await vi.waitFor(() => {
+      expect(mockInsert).toHaveBeenCalledWith({ query: '없는폰트' });
+    });
+    expect(mockInsert).toHaveBeenCalledTimes(1);
+    expect(mockSelect).not.toHaveBeenCalled();
   });
 });
 

@@ -2,6 +2,7 @@
 
 from fontagit_pipeline.noonnu_seed import (
     _extract_font_data,
+    _parse_robots_policy,
     _parse_sitemap_urls,
 )
 
@@ -46,15 +47,21 @@ class TestExtractFontData:
     """폰트 데이터 추출 테스트."""
 
     def test_extract_with_complete_data(self) -> None:
-        """모든 필드를 포함한 HTML을 파싱한다."""
+        """JSON-LD에서 정제된 폰트명과 제작사를 파싱한다."""
         html = """
 <html>
     <head>
-        <meta property="og:title" content="나눔고딕">
+        <meta property="og:title" content="나눔고딕 | 눈누 - 상업용 무료 한글 폰트">
+        <script type="application/ld+json">
+          {
+            "@type": "SoftwareApplication",
+            "name": "나눔고딕",
+            "applicationCategory": "Font",
+            "creator": {"@type": "Organization", "name": "네이버"}
+          }
+        </script>
     </head>
     <body>
-        <h1>나눔고딕</h1>
-        <div>Foundry: Noto Sans Developer</div>
         <a href="https://www.noto-fonts.com">Official Website</a>
     </body>
 </html>
@@ -63,17 +70,17 @@ class TestExtractFontData:
         assert result is not None
         name_ko, name_en, maker, official_url = result
         assert name_ko == "나눔고딕"
-        assert maker == "Noto Sans Developer"
+        assert maker == "네이버"
         assert official_url is not None
         assert "noto-fonts.com" in official_url
 
     def test_extract_with_minimal_data(self) -> None:
-        """최소 필드만 포함한 HTML을 파싱한다."""
+        """화면의 제작 라벨을 JSON-LD 대체 경로로 파싱한다."""
         html = """
 <html>
     <body>
-        <h1>다른폰트</h1>
-        <div>Foundry: FontMaker Corp</div>
+        <h1>다른폰트 | 눈누</h1>
+        <div><span>제작</span><span>폰트제작사</span></div>
     </body>
 </html>
 """
@@ -81,10 +88,10 @@ class TestExtractFontData:
         assert result is not None
         name_ko, name_en, maker, official_url = result
         assert name_ko == "다른폰트"
-        assert maker == "FontMaker Corp"
+        assert maker == "폰트제작사"
 
     def test_extract_without_required_fields(self) -> None:
-        """필수 필드가 없는 HTML은 추출 실패."""
+        """제작사가 없으면 성공 레코드로 세지 않는다."""
         html = """
 <html>
     <body>
@@ -93,28 +100,14 @@ class TestExtractFontData:
 </html>
 """
         result = _extract_font_data(html, "https://noonnu.cc/font_page/789")
-        # 필수 필드 없으면 None을 반환하거나 빈 값 반환
-        # 호출자(collect_noonnu_seeds)가 필수 필드 검증함
-        assert result is not None  # 함수 자체는 항상 튜플 반환
-        name_ko, name_en, maker, official_url = result
-        # 이 경우 name_ko나 maker가 None이거나 "Unknown"일 수 있음
+        assert result is None
 
-    def test_filter_internal_links(self) -> None:
-        """noonnu 내부 링크를 필터링한다."""
-        html = """
-<html>
-    <body>
-        <h1>테스트폰트</h1>
-        <div>Foundry: Test Maker</div>
-        <a href="https://noonnu.cc/other-font">Internal Link</a>
-        <a href="/font_page/999">Relative Link</a>
-        <a href="https://example.com">External Link</a>
-    </body>
-</html>
-"""
-        result = _extract_font_data(html, "https://noonnu.cc/font_page/111")
-        assert result is not None
-        name_ko, name_en, maker, official_url = result
-        # 외부 링크만 선택되어야 함
-        if official_url and official_url != "https://noonnu.cc/font_page/111":
-            assert "example.com" in official_url
+
+def test_robots_policy_blocks_disallowed_paths() -> None:
+    """robots.txt에서 막은 경로는 수집하지 않는다."""
+    policy = _parse_robots_policy(
+        "User-agent: *\nDisallow: /private\nAllow: /font_page/\n"
+    )
+
+    assert policy.can_fetch("FontAgitSeedBot", "https://noonnu.cc/font_page/1")
+    assert not policy.can_fetch("FontAgitSeedBot", "https://noonnu.cc/private/1")

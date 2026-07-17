@@ -63,21 +63,21 @@ export default async function FontDetail({ params }: { params: Promise<{ slug: s
   if (status === "published") {
     const isPaid = font.tier === "paid";
     const alternatives = isPaid ? await resolveFreeAlternatives(font) : [];
-    return <PublishedFontDetail font={font} slug={slug} alternatives={alternatives} />;
+    return <PublishedFontDetail font={font} alternatives={alternatives} />;
   }
 
   if (status === "hold") {
-    return <HoldFontDetail font={font} slug={slug} />;
+    return <HoldFontDetail font={font} />;
   }
 
   if (status === "discontinued") {
-    return <DiscontinuedFontDetail font={font} slug={slug} />;
+    return <DiscontinuedFontDetail font={font} />;
   }
 
   notFound();
 }
 
-function PublishedFontDetail({ font, slug, alternatives }: { font: Font; slug: string; alternatives: Font[] }) {
+function PublishedFontDetail({ font, alternatives }: { font: Font; alternatives: Font[] }) {
   const family = familyOf(font.fontKey);
   const isPaid = font.tier === "paid";
   const caption = isPaid
@@ -114,7 +114,7 @@ function PublishedFontDetail({ font, slug, alternatives }: { font: Font; slug: s
   );
 }
 
-function HoldFontDetail({ font, slug }: { font: Font; slug: string }) {
+function HoldFontDetail({ font }: { font: Font }) {
   return (
     <main className={styles.wrap}>
       <Breadcrumb
@@ -146,7 +146,7 @@ function HoldFontDetail({ font, slug }: { font: Font; slug: string }) {
   );
 }
 
-function DiscontinuedFontDetail({ font, slug }: { font: Font; slug: string }) {
+function DiscontinuedFontDetail({ font }: { font: Font }) {
   return (
     <main className={styles.wrap}>
       <Breadcrumb
