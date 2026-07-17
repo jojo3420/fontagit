@@ -3,7 +3,7 @@ import styles from "./page.module.css";
 
 export const metadata: Metadata = {
   title: "소개 - FontAgit",
-  description: "FontAgit는 한국 폰트를 검색하고 비교하는 폰트 아지트입니다",
+  description: "FontAgit는 국내외 무료-유료 폰트를 검색하고 비교하는 폰트 아지트입니다",
 };
 
 export default async function AboutPage() {
@@ -11,13 +11,13 @@ export default async function AboutPage() {
     <main className={styles.main}>
       <div className={styles.head}>
         <h1 className={styles.h1}>FontAgit 소개</h1>
-        <p className={styles.lead}>한국 웹폰트를 한눈에 보는 폰트 아지트</p>
+        <p className={styles.lead}>국내외 무료-유료 폰트를 한눈에 보는 폰트 아지트</p>
       </div>
 
       <section className={styles.section}>
         <h2 className={styles.h2}>FontAgit란?</h2>
         <p className={styles.text}>
-          FontAgit는 한국 웹폰트를 효율적으로 검색하고 비교할 수 있는 서비스입니다.
+          FontAgit는 국내외 폰트를 효율적으로 검색하고 비교할 수 있는 서비스입니다.
           무료 폰트부터 유료 폰트까지 다양한 서체를 한 곳에서 찾아볼 수 있습니다.
         </p>
       </section>
