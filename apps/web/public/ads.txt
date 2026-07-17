@@ -1,0 +1,6 @@
+# AdSense ads.txt
+# Publisher ID를 아래와 같이 등록하세요:
+# google.com, pub-XXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0
+
+# 임시 placeholder (사용자가 AdSense 승인 후 교체)
+google.com, pub-TODO_REPLACE_WITH_PUBLISHER_ID, DIRECT, f08c47fec0942fa0

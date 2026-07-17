@@ -1,1 +1,20 @@
-.slot { height: 90px; border: 1px dashed var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--sub-2); font-size: 12px; background: var(--surface-2); }
+.container {
+  /* AdSense 표준 광고 높이 예약 (300x250 중간 크기 고려)
+     CLS 방지를 위해 광고 로드 전부터 최소 높이 확보 */
+  min-height: 280px;
+  margin: 16px 0;
+}
+
+.placeholder {
+  /* env 미설정 시 빈 박스만 표시 */
+  height: 100%;
+  min-height: 280px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sub-2);
+  font-size: 12px;
+  background: var(--surface-2);
+}
