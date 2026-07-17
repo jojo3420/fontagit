@@ -11,6 +11,7 @@ export interface FontRow {
   official_url: string | null;
   last_modified: string | null;
   status: "draft" | "published" | "archived" | "hold" | "discontinued";
+  subsets: string[];
 }
 
 export interface AliasRow {

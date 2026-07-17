@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
+import type { Font } from "@/types/font";
+import { getDefaultSpecimenText } from "@/lib/specimen";
 import styles from "./SpecimenBox.module.css";
-
-const DEFAULT_TEXT = "다람쥐 헌 쳇바퀴에 타고파";
 
 /**
  * 견본 박스. 대형 견본 텍스트를 fontFamily로 렌더한다.
@@ -11,16 +11,18 @@ const DEFAULT_TEXT = "다람쥐 헌 쳇바퀴에 타고파";
  */
 export function SpecimenBox({
   fontFamily,
+  font,
   editable,
   initialText,
   caption,
 }: {
   fontFamily: string;
+  font: Font;
   editable: boolean;
   initialText?: string;
   caption?: string;
 }) {
-  const [text, setText] = useState(initialText ?? DEFAULT_TEXT);
+  const [text, setText] = useState(initialText ?? getDefaultSpecimenText(font.subsets));
   return (
     <div className={styles.box}>
       <div className={styles.sample} style={{ fontFamily }}>{text || " "}</div>

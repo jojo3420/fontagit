@@ -4,10 +4,10 @@ import { useState } from "react";
 import { fonts } from "@/data/fonts";
 import { familyOf } from "@/lib/fonts";
 import { TierChip } from "./TierChip";
+import { getSpecimenText } from "@/lib/specimen";
 import styles from "./CompareBoard.module.css";
 
-const SAMPLE =
-  "좋은 폰트는 말을 걸지 않고 뜻을 전한다. ABCabc 0123";
+
 const OPTIONS = fonts.filter((f) => f.tier === "free");
 const DEFAULT_SLOTS = ["pretendard", "gowun-batang", "black-han-sans"];
 
@@ -69,7 +69,7 @@ export function CompareBoard() {
                 className={styles.sample}
                 style={{ fontFamily: family }}
               >
-                {SAMPLE}
+                {getSpecimenText(f.subsets, true)}
               </div>
             </div>
           );

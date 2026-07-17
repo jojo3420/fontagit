@@ -24,6 +24,7 @@ export function rowToFont(row: FontRow, aliases: string[]): Font {
     aliases,
     freeAlternatives: undefined,
     status: row.status,
+    subsets: row.subsets ?? [],
   };
 }
 

@@ -102,7 +102,7 @@ function PublishedFontDetail({ font, slug, alternatives }: { font: Font; slug: s
           <p className={styles.meta}>
             {font.foundry} {String.fromCharCode(183)} {font.availableWeights.length}가지 굵기 {String.fromCharCode(183)} 이동 {font.moves.toLocaleString()}회
           </p>
-          <SpecimenBox fontFamily={family} editable={!isPaid} caption={caption} />
+          <SpecimenBox fontFamily={family} font={font} editable={!isPaid} caption={caption} />
           {font.id && <ReportForm fontId={font.id} fontName={font.nameKo} />}
         </div>
         <div className={styles.side}>
