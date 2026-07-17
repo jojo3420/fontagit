@@ -32,7 +32,6 @@ export function PlaygroundCanvas() {
       <div className={styles.hero}>
         <div className={styles.heroLabel}>
           <span>대표 - {HERO.nameKo} - 96px</span>
-          <Link href={`/fonts/${HERO.slug}`}>상세 →</Link>
         </div>
         <div className={styles.heroSpecimen} style={{ fontFamily: familyOf(HERO.fontKey) }}>{shown}</div>
       </div>
