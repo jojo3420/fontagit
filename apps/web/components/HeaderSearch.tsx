@@ -2,15 +2,22 @@
 
 import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import SearchSuggestions from './SearchSuggestions';
+import { useDebouncedSuggestions } from '@/hooks/useDebouncedSuggestions';
 import styles from './HeaderSearch.module.css';
 
 export function HeaderSearch() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const [isComposing, setIsComposing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  const { items } = useDebouncedSuggestions(query);
+  const listboxId = 'header-suggest-listbox';
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
@@ -37,6 +44,28 @@ export function HeaderSearch() {
       document.removeEventListener('mousedown', onDown);
     };
   }, [open]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(i + 1, items.length - 1));
+      setOpen(true);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(i - 1, -1));
+    } else if (e.key === 'Enter') {
+      if (open && activeIndex >= 0 && items[activeIndex]) {
+        e.preventDefault();
+        router.push(`/fonts/${items[activeIndex].slug}`);
+        setOpen(false);
+      }
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+      setActiveIndex(-1);
+    }
+  };
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -81,14 +110,43 @@ export function HeaderSearch() {
                 type="text"
                 placeholder="폰트 이름을 검색하세요 (예: 프리텐다드)"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setOpen(true);
+                  setActiveIndex(-1);
+                }}
+                onCompositionStart={() => setIsComposing(true)}
+                onCompositionEnd={(e) => {
+                  setIsComposing(false);
+                  setQuery(e.currentTarget.value);
+                }}
+                onKeyDown={handleKeyDown}
+                onBlur={() => setOpen(false)}
                 className={styles.input}
                 aria-label="폰트 검색"
+                role="combobox"
+                aria-expanded={open && items.length > 0}
+                aria-controls={listboxId}
+                aria-autocomplete="list"
+                aria-activedescendant={activeIndex >= 0 ? `${listboxId}-opt-${activeIndex}` : undefined}
               />
             </div>
             <button type="submit" className={styles.searchBtn}>
               검색
             </button>
+            {open && !isComposing && items.length > 0 && (
+              <SearchSuggestions
+                items={items}
+                activeIndex={activeIndex}
+                query={query}
+                listboxId={listboxId}
+                onSelect={(slug) => {
+                  router.push(`/fonts/${slug}`);
+                  setOpen(false);
+                }}
+                onHover={setActiveIndex}
+              />
+            )}
           </form>
         </div>
       )}
