@@ -13,12 +13,10 @@ export async function getAllFonts(): Promise<Font[]> {
   if (error) throw error;
   if (!data || data.length === 0) return [];
 
-  // N+1 방지: 폰트 id 수집 후 aliases 한번에 로드
-  const fontIds = data.map((row) => row.id);
+  // aliases RLS(anon_read_aliases)가 published 폰트 alias만 반환 → 거대 in-list(수천자 URL) 없이 전체 조회 후 메모리 그룹핑
   const { data: aliasRows, error: aliasError } = await supabaseClient
     .from("aliases")
-    .select("*")
-    .in("font_id", fontIds);
+    .select("*");
 
   if (aliasError) throw aliasError;
 
