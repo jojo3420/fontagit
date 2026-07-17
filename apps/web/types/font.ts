@@ -34,6 +34,7 @@ export interface Font {
   freeAlternatives?: string[]; // 실제 slug, 최대 3
   priceFrom?: number;
   status?: "draft" | "published" | "archived" | "hold" | "discontinued";
+  subsets: string[]; // 예: ["korean"], ["latin"], ["korean", "latin"]
 }
 
 export interface TrendItem {

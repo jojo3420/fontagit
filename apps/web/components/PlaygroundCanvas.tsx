@@ -6,7 +6,7 @@ import { familyOf } from "@/lib/fonts";
 import { TierChip } from "./TierChip";
 import styles from "./PlaygroundCanvas.module.css";
 
-const PRESETS = ["다람쥐 헌 쳇바퀴에 타고파", "당신의 폰트 아지트", "가나다라 ABC 0123"];
+const PRESETS = ["다람쥐 헌 쳇바퀴에 타고파", "당신의 폰트 아지트", "가나다라 ABC 0123", "The quick brown fox"];
 const HERO = fonts.find((f) => f.slug === "pretendard")!;
 const GRID = fonts.filter((f) => f.tier === "free" && f.slug !== HERO.slug);
 
