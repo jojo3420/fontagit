@@ -6,6 +6,30 @@ export const metadata: Metadata = {
   description: "FontAgit에 문의하기",
 };
 
+function EmailLink({ subject }: { subject: string }) {
+  const href = `mailto:contact@fontagit.com?subject=${encodeURIComponent(subject)}`;
+
+  return (
+    <a className={styles.emailLink} href={href}>
+      <svg
+        className={styles.emailIcon}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <rect x="3" y="5" width="18" height="14" rx="2" />
+        <path d="m4 7 8 6 8-6" />
+      </svg>
+      <span>contact@fontagit.com</span>
+    </a>
+  );
+}
+
 export default async function ContactPage() {
   return (
     <main className={styles.main}>
@@ -19,9 +43,7 @@ export default async function ContactPage() {
         <p className={styles.text}>
           기능 제안, 데이터 오류, 기타 문의는 아래 이메일로 보내주시기 바랍니다.
         </p>
-        <p className={styles.textHighlight}>
-          📧 {/* TODO: 문의 이메일 주소 */}
-        </p>
+        <EmailLink subject="[일반 문의] FontAgit" />
       </section>
 
       <section className={styles.section}>
@@ -33,9 +55,7 @@ export default async function ContactPage() {
           <li>신고 시 다음 정보를 포함해주세요: 폰트명, 문제 설명, 이메일</li>
           <li>신고 후 48시간 이내에 해당 정보를 검토하고 필요시 보류 조치합니다</li>
         </ul>
-        <p className={styles.textHighlight}>
-          📧 {/* TODO: 저작권 신고 이메일 주소 */}
-        </p>
+        <EmailLink subject="[저작권 신고] FontAgit" />
       </section>
 
       <section className={styles.section}>
@@ -44,12 +64,10 @@ export default async function ContactPage() {
           FontAgit을 사용하면서 느낀 점, 개선 의견, 새로운 기능 제안 등
           어떤 피드백이든 환영합니다. 모든 의견은 서비스 개선에 소중하게 사용됩니다.
         </p>
-        <p className={styles.textHighlight}>
-          📧 {/* TODO: 피드백 이메일 주소 */}
-        </p>
+        <EmailLink subject="[피드백] FontAgit" />
       </section>
 
-      <section className={styles.section}>
+      <section className={`${styles.section} ${styles.responseSection}`}>
         <h2 className={styles.h2}>응답 시간</h2>
         <p className={styles.text}>
           일반적으로 문의 후 2~3 영업일 이내에 회신드립니다.

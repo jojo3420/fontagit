@@ -1,21 +1,32 @@
 .container {
+  --glyph-success: #2c7a5b;
+  --glyph-warning: #8a641f;
+  --glyph-danger: #b4564b;
+
   padding: 1.5rem;
-  border: 1px solid var(--color-border, #e0e0e0);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background-color: var(--color-bg-secondary, #f9f9f9);
+  background-color: var(--surface-2);
+}
+
+:global(:root[data-theme="dark"]) .container {
+  --glyph-success: #7fc2a2;
+  --glyph-warning: #e0b65e;
+  --glyph-danger: #dc8c84;
 }
 
 .title {
   margin: 0 0 1rem 0;
   font-size: 1rem;
   font-weight: 600;
-  color: var(--color-text-primary, #000);
+  color: var(--ink);
+  text-wrap: balance;
 }
 
 .alert {
   padding: 1rem;
-  background-color: var(--color-bg-warning, #fef3c7);
-  border: 1px solid var(--color-border-warning, #fde68a);
+  background-color: color-mix(in srgb, var(--glyph-warning) 16%, var(--surface));
+  border: 1px solid var(--glyph-warning);
   border-radius: 6px;
   margin-bottom: 1rem;
 }
@@ -23,12 +34,13 @@
 .alert p {
   margin: 0.25rem 0;
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #333);
+  color: var(--ink);
+  text-wrap: pretty;
 }
 
 .alertSubtext {
   font-size: 0.8125rem;
-  color: var(--color-text-tertiary, #666);
+  color: var(--sub);
   font-style: italic;
 }
 
@@ -41,42 +53,48 @@
 .input {
   flex: 1;
   padding: 0.75rem;
-  border: 1px solid var(--color-border, #d0d0d0);
+  border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 1rem;
   font-family: inherit;
-  transition: border-color 0.2s;
+  background-color: var(--surface);
+  color: var(--ink);
+  transition: border-color 160ms ease-out;
 }
 
-.input:focus {
-  outline: none;
-  border-color: var(--color-primary, #0066cc);
-  box-shadow: 0 0 0 2px var(--color-primary-alpha, rgba(0, 102, 204, 0.1));
+.input:focus-visible {
+  outline: 2px solid var(--point);
+  outline-offset: 2px;
+  border-color: var(--point);
 }
 
 .input:disabled {
-  background-color: var(--color-bg-disabled, #f5f5f5);
-  color: var(--color-text-disabled, #999);
+  background-color: var(--surface-2);
+  color: var(--sub-2);
   cursor: not-allowed;
 }
 
 .button,
 .clearButton {
   padding: 0.75rem 1.5rem;
-  border: 1px solid var(--color-border, #d0d0d0);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background-color: var(--color-button-bg, #fff);
-  color: var(--color-button-text, #000);
+  background-color: var(--surface);
+  color: var(--ink);
   font-size: 1rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition:
+    background-color 160ms ease-out,
+    border-color 160ms ease-out,
+    color 160ms ease-out,
+    transform 160ms ease-out;
 }
 
 .button:hover:not(:disabled) {
-  background-color: var(--color-button-bg-hover, #f0f0f0);
-  border-color: var(--color-primary, #0066cc);
-  color: var(--color-primary, #0066cc);
+  background-color: var(--point-weak);
+  border-color: var(--point);
+  color: var(--point);
 }
 
 .button:active:not(:disabled) {
@@ -85,10 +103,10 @@
 
 .button:disabled,
 .clearButton:disabled {
-  background-color: var(--color-bg-disabled, #f5f5f5);
-  color: var(--color-text-disabled, #999);
+  background-color: var(--surface-2);
+  color: var(--sub-2);
   cursor: not-allowed;
-  border-color: var(--color-border-disabled, #d0d0d0);
+  border-color: var(--border);
 }
 
 .clearButton {
@@ -96,17 +114,23 @@
 }
 
 .clearButton:hover:not(:disabled) {
-  background-color: var(--color-bg-danger-light, #fee2e2);
-  border-color: var(--color-danger, #dc2626);
-  color: var(--color-danger, #dc2626);
+  background-color: color-mix(in srgb, var(--glyph-danger) 12%, var(--surface));
+  border-color: var(--glyph-danger);
+  color: var(--glyph-danger);
+}
+
+.button:focus-visible,
+.clearButton:focus-visible {
+  outline: 2px solid var(--point);
+  outline-offset: 2px;
 }
 
 .error {
   padding: 1rem;
-  background-color: var(--color-bg-error, #fee2e2);
-  border: 1px solid var(--color-border-error, #fecaca);
+  background-color: color-mix(in srgb, var(--glyph-danger) 12%, var(--surface));
+  border: 1px solid var(--glyph-danger);
   border-radius: 6px;
-  color: var(--color-error, #dc2626);
+  color: var(--glyph-danger);
   font-size: 0.875rem;
   margin-bottom: 1rem;
 }
@@ -125,36 +149,39 @@
 
 .badge {
   padding: 0.5rem 1rem;
-  background-color: var(--color-bg-badge, #e5e7eb);
+  background-color: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 4px;
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #333);
+  color: var(--sub);
   display: inline-flex;
   gap: 0.5rem;
   align-items: center;
 }
 
 .badge strong {
-  color: var(--color-text-primary, #000);
+  color: var(--ink);
   font-weight: 600;
 }
 
 .badge.supported {
-  background-color: var(--color-bg-success-light, #dcfce7);
-  color: var(--color-text-success, #166534);
+  background-color: color-mix(in srgb, var(--glyph-success) 14%, var(--surface));
+  border-color: var(--glyph-success);
+  color: var(--glyph-success);
 }
 
 .badge.supported strong {
-  color: var(--color-success, #16a34a);
+  color: var(--glyph-success);
 }
 
 .badge.unsupported {
-  background-color: var(--color-bg-warning-light, #fef3c7);
-  color: var(--color-text-warning, #92400e);
+  background-color: color-mix(in srgb, var(--glyph-warning) 14%, var(--surface));
+  border-color: var(--glyph-warning);
+  color: var(--glyph-warning);
 }
 
 .badge.unsupported strong {
-  color: var(--color-warning, #f59e0b);
+  color: var(--glyph-warning);
 }
 
 .charGrid {
@@ -169,43 +196,46 @@
   align-items: center;
   justify-content: center;
   padding: 0.75rem;
-  border: 1px solid var(--color-border, #d0d0d0);
+  border: 1px solid var(--border);
   border-radius: 4px;
-  background-color: var(--color-bg-secondary, #fff);
+  background-color: var(--surface);
   cursor: pointer;
-  transition: all 0.2s;
+  transition:
+    background-color 160ms ease-out,
+    border-color 160ms ease-out,
+    box-shadow 160ms ease-out;
   min-height: 80px;
 }
 
 .charItem:hover {
-  border-color: var(--color-primary, #0066cc);
+  border-color: var(--point);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .charItemSupported {
-  border-color: var(--color-success, #16a34a);
-  background-color: var(--color-bg-success-light, #dcfce7);
+  border-color: var(--glyph-success);
+  background-color: color-mix(in srgb, var(--glyph-success) 14%, var(--surface));
 }
 
 .charItemSupported:hover {
-  border-color: var(--color-success-dark, #15803d);
+  border-color: var(--glyph-success);
   box-shadow: 0 2px 8px rgba(22, 163, 74, 0.2);
 }
 
 .charItemUnsupported {
-  border-color: var(--color-warning, #f59e0b);
-  background-color: var(--color-bg-warning-light, #fef3c7);
+  border-color: var(--glyph-warning);
+  background-color: color-mix(in srgb, var(--glyph-warning) 14%, var(--surface));
 }
 
 .charItemUnsupported:hover {
-  border-color: var(--color-warning-dark, #d97706);
+  border-color: var(--glyph-warning);
   box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2);
 }
 
 .char {
   font-size: 1.5rem;
   font-weight: 500;
-  color: var(--color-text-primary, #000);
+  color: var(--ink);
   word-break: break-all;
   text-align: center;
   flex: 1;
@@ -218,16 +248,16 @@
 .status {
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--color-text-secondary, #666);
+  color: var(--sub);
   margin-top: 0.25rem;
 }
 
 .charItemSupported .status {
-  color: var(--color-success, #16a34a);
+  color: var(--glyph-success);
 }
 
 .charItemUnsupported .status {
-  color: var(--color-warning, #f59e0b);
+  color: var(--glyph-warning);
 }
 
 @media (max-width: 640px) {

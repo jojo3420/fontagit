@@ -1,8 +1,8 @@
 .section {
   margin-top: 3rem;
   padding: 2rem;
-  border-top: 2px solid var(--color-border, #e0e0e0);
-  background-color: var(--color-bg-primary, #fff);
+  border-top: 2px solid var(--border);
+  background-color: var(--surface);
 }
 
 .header {
@@ -13,13 +13,15 @@
   margin: 0 0 0.5rem 0;
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--color-text-primary, #000);
+  color: var(--ink);
+  text-wrap: balance;
 }
 
 .description {
   margin: 0;
   font-size: 1rem;
-  color: var(--color-text-secondary, #666);
+  color: var(--sub);
+  text-wrap: pretty;
 }
 
 .fontSelector {
@@ -31,30 +33,30 @@
   margin-bottom: 0.5rem;
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--color-text-primary, #000);
+  color: var(--ink);
 }
 
 .select {
   width: 100%;
   padding: 0.75rem;
-  border: 1px solid var(--color-border, #d0d0d0);
+  border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 1rem;
   font-family: inherit;
-  background-color: var(--color-bg-secondary, #fff);
-  color: var(--color-text-primary, #000);
+  background-color: var(--surface-2);
+  color: var(--ink);
   cursor: pointer;
-  transition: border-color 0.2s;
+  transition: border-color 160ms ease-out;
 }
 
 .select:hover {
-  border-color: var(--color-primary, #0066cc);
+  border-color: var(--point);
 }
 
-.select:focus {
-  outline: none;
-  border-color: var(--color-primary, #0066cc);
-  box-shadow: 0 0 0 2px var(--color-primary-alpha, rgba(0, 102, 204, 0.1));
+.select:focus-visible {
+  outline: 2px solid var(--point);
+  outline-offset: 2px;
+  border-color: var(--point);
 }
 
 @media (max-width: 640px) {
