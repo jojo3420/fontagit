@@ -199,6 +199,46 @@ make web-dev          # 개발 서버 실행 (pnpm --filter web dev)
 | `make lint` | ruff + mypy 검사 |
 | `make web-dev` | 웹 개발 서버 실행 |
 
+## 배포 (Cloudflare Pages)
+
+웹은 정적 사이트(static export)라 **Cloudflare Pages**에 올립니다. 서버가 없고, 페이지는 빌드 시점에 Supabase 데이터를 구워 넣습니다. 실서비스 도메인은 **fontagit.com**입니다.
+
+전제:
+- Cloudflare Pages 프로젝트 이름: `fontagit`
+- Pages 배포 토큰: `apps/web/.env.local`의 `CF_TOKEN` (권한: Account > Cloudflare Pages > Edit). git 비추적 파일이며 절대 커밋 금지.
+- account id: `2686c11634da0d924f089b7e56a9e227`
+
+### production 배포 (2단계)
+
+```bash
+# 1) prod 데이터로 빌드
+#    주의: .env.local(dev Supabase)이 .env.production(prod ollidam)을 덮어쓰므로,
+#    prod 값을 process env로 먼저 주입해 우선순위를 뒤집는다.
+set -a && source apps/web/.env.production && set +a
+pnpm --filter web build     # 결과: apps/web/out/
+
+# 2) production(main 브랜치)로 배포 → 라이브 URL + 커스텀 도메인 갱신
+export CLOUDFLARE_API_TOKEN=$(grep '^CF_TOKEN=' apps/web/.env.local | cut -d= -f2-)
+export CLOUDFLARE_ACCOUNT_ID=2686c11634da0d924f089b7e56a9e227
+npx wrangler pages deploy apps/web/out --project-name fontagit --branch main
+```
+
+데이터가 바뀌면 위 2단계를 다시 실행합니다.
+
+### preview 배포
+
+`--branch main` 대신 다른 브랜치명을 주면 라이브에 영향 없는 미리보기 URL만 생깁니다.
+
+```bash
+npx wrangler pages deploy apps/web/out --project-name fontagit --branch preview
+```
+
+### 도메인-리다이렉트
+
+- `fontagit.com`(apex) → Pages 프로젝트에 연결(CNAME → `fontagit.pages.dev`, proxied).
+- `www.fontagit.com` → `fontagit.com` 301 리다이렉트(Redirect Rule), http → https 강제(Always Use HTTPS).
+- 상세 절차-롤백-검증: `docs/superpowers/specs/2026-07-17-prod-deploy-cloudflare-pages-design.md`
+
 ## 문서
 
 - 설계-진행 이력: `docs/` (마스터 플랜, 진행 일지 등)
