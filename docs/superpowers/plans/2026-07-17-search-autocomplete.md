@@ -526,7 +526,9 @@ git commit -m "feat: searchSuggestions 데이터 계층 + foundry 매핑 (F-19)"
 
 ---
 
-## Task 5: Route Handler `/api/suggest`
+## Task 5: Route Handler `/api/suggest` (미채택 — 아래 노트)
+
+> ⚠️ 구현 변경(PR #19 반영, 2026-07-17): `next.config.ts` `output: 'export'`(정적 내보내기)로 동적 Route Handler 불가. 이 Task는 생략하고, `useDebouncedSuggestions`(Task 6)가 `searchSuggestions` RPC를 브라우저에서 직접 호출한다. `searchFonts`와 동일 패턴이라 일관. 아래 route.ts 절차는 참고용으로 남긴다.
 
 **Files:**
 - Create: `apps/web/app/api/suggest/route.ts`

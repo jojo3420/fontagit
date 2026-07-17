@@ -80,7 +80,9 @@
 
 ## 6. API 계층
 
-### `apps/web/app/api/suggest/route.ts` (신규)
+> ⚠️ 구현 변경(PR #19 반영, 2026-07-17): `next.config.ts`가 `output: 'export'`(정적 내보내기)라 동적 Route Handler를 쓸 수 없다. 아래 `/api/suggest` 설계는 **미채택**하고, `useDebouncedSuggestions` 훅이 `searchSuggestions` RPC를 브라우저에서 직접 호출한다. 기존 `searchFonts`도 동일한 클라이언트 직접 호출 패턴이라 일관되며, 보안 경계는 하단의 RLS-published 필터-lim clamp-100자 제한으로 유지된다.
+
+### `apps/web/app/api/suggest/route.ts` (신규 — 미채택)
 - `GET`, 쿼리 파라미터 `q`.
 - 검증: `q.trim()` 후 빈 문자열-100자 초과면 `200` + `{ items: [] }`(기존 `MAX_QUERY_LENGTH=100` 규칙 재사용).
 - 정상: `searchSuggestions(q, 8)` → `200` + `{ items: [{ slug, nameKo, nameEn, foundry, tier, category }] }`.
