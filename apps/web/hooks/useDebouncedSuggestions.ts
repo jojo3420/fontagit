@@ -36,7 +36,7 @@ export function useDebouncedSuggestions(
       return;
     }
 
-    setResult((prev) => ({ ...prev, loading: true, error: false }));
+    setResult({ items: [], loading: true, error: false });
 
     const controller = new AbortController();
 

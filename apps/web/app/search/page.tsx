@@ -33,7 +33,7 @@ function SearchContent() {
               setLoading(false);
             }
           })
-          .catch((err) => {
+          .catch(() => {
             if (!cancelled) {
               setError(true);
               setResults([]);
