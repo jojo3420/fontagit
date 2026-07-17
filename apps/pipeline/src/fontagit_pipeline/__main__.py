@@ -14,6 +14,7 @@ from fontagit_pipeline.config import load_settings
 from fontagit_pipeline.korean_names import load_korean_names, KoreanNamesError
 from fontagit_pipeline.licenses import fetch_license_map, LicenseFetchError
 from fontagit_pipeline.models import GoogleFontRaw, KoreanNameEntry, OutputDocument
+from fontagit_pipeline.noonnu_enrich import enrich_fonts, NoonnuEnrichError
 from fontagit_pipeline.noonnu_import import import_noonnu_seeds, NoonnuImportError
 from fontagit_pipeline.noonnu_seed import collect_noonnu_seeds, NoonnuSeedError
 from fontagit_pipeline.transform import build_records
@@ -185,6 +186,206 @@ def main_noonnu_import(args: argparse.Namespace) -> int:
         return 3
 
 
+def main_noonnu_enrich(args: argparse.Namespace) -> int:
+    """눈누 Tier B 라이선스 제안 적재 진입점."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    try:
+        settings = load_settings()
+    except ValidationError:
+        logger.error(
+            "Supabase 설정이 없습니다. apps/pipeline/.env를 확인하세요."
+        )
+        return 2
+
+    try:
+        auto, proposed, skipped = enrich_fonts(
+            supabase_url=settings.supabase_url,
+            secret_key=settings.supabase_secret_key,
+            limit=args.limit,
+            only_slug=args.slug,
+        )
+        logger.info(
+            "enrich 완료: 자동발행 %d개, 검수대기 %d개, 스킵 %d개",
+            auto,
+            proposed,
+            skipped,
+        )
+        return 0
+    except NoonnuEnrichError as exc:
+        logger.error("enrich 실패: %s", exc)
+        return 3
+    except Exception as exc:
+        logger.error("예상치 못한 오류: %s", exc)
+        return 3
+
+
+def main_noonnu_review(args: argparse.Namespace) -> int:
+    """눈누 라이선스 제안 검수 진입점."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+    from supabase import create_client
+
+    from .noonnu_review import (
+        approve,
+        list_pending,
+        reject,
+        sample_auto_published,
+        unpublish,
+    )
+
+    try:
+        settings = load_settings()
+    except ValidationError:
+        logger.error(
+            "Supabase 설정이 없습니다. apps/pipeline/.env를 확인하세요."
+        )
+        return 2
+
+    if not settings.supabase_url or not settings.supabase_secret_key:
+        logger.error("Supabase URL 및 secret key가 필요합니다.")
+        return 2
+
+    try:
+        client = create_client(settings.supabase_url, settings.supabase_secret_key)
+        schema = client.schema("fontagit")
+
+        action = args.action
+
+        if action == "list":
+            proposals = list_pending(schema)
+            logger.info("검수 대기: %d건", len(proposals))
+            for p in proposals:
+                logger.info(
+                    "  - %s (%s): %s",
+                    p.get("slug"),
+                    p.get("proposed_license_type"),
+                    p.get("source_url"),
+                )
+            return 0
+
+        elif action == "approve":
+            approve(schema, args.slug, note=args.note)
+            return 0
+
+        elif action == "reject":
+            if not args.note:
+                logger.error("--note는 필수입니다")
+                return 1
+            reject(schema, args.slug, note=args.note)
+            return 0
+
+        elif action == "audit-sample":
+            pct = getattr(args, "pct", 5)
+            samples = sample_auto_published(schema, pct=pct)
+            logger.info("표본 감시: %d건 (전체의 %d%%)", len(samples), pct)
+            for s in samples:
+                logger.info(
+                    "  - %s (%s): %s",
+                    s.get("slug"),
+                    s.get("name_ko"),
+                    s.get("official_url"),
+                )
+            return 0
+
+        elif action == "unpublish":
+            if not args.note:
+                logger.error("--note는 필수입니다")
+                return 1
+            unpublish(schema, args.slug, note=args.note)
+            return 0
+
+        else:
+            logger.error("미지원 액션: %s", action)
+            return 1
+
+    except Exception as exc:
+        logger.error("검수 실패: %s", exc)
+        return 3
+
+
+def main_noonnu_publish(args: argparse.Namespace) -> int:
+    """prod 폰트 발행 명령 진입점."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+    from supabase import create_client
+
+    from .noonnu_publish import publish_to_prod
+
+    try:
+        settings = load_settings()
+    except ValidationError:
+        logger.error(
+            "설정 로드 실패: apps/pipeline/.env를 확인하세요."
+        )
+        return 2
+
+    # dev 접속 설정
+    if not settings.supabase_url or not settings.supabase_secret_key:
+        logger.error("Dev Supabase 설정이 필요합니다.")
+        return 2
+
+    # prod 접속 설정 (필수)
+    if not settings.supabase_prod_url or not settings.supabase_prod_secret_key:
+        logger.error(
+            "Prod Supabase 설정이 필요합니다 "
+            "(SUPABASE_PROD_URL, SUPABASE_PROD_SECRET_KEY)."
+        )
+        return 2
+
+    try:
+        # Dev 스키마 접속
+        dev_client = create_client(settings.supabase_url, settings.supabase_secret_key)
+        dev_schema = dev_client.schema("fontagit")
+
+        # prod 환경 오염 방지: dev URL로 prod 쓰기 금지
+        if settings.supabase_prod_url == settings.supabase_url:
+            logger.error(
+                "prod URL이 dev URL과 동일합니다. 설정을 확인하세요."
+            )
+            return 2
+
+        # dry_run 여부 결정
+        dry_run = not getattr(args, "confirm", False)
+
+        if not dry_run:
+            # 실제 쓰기를 위한 대화형 확인
+            total_rows, _ = publish_to_prod(
+                dev_schema,
+                settings.supabase_prod_url,
+                settings.supabase_prod_secret_key,
+                dry_run=True,
+            )
+            confirm_input = input(
+                f"prod에 {total_rows}건 발행합니다. 계속하려면 'yes' 입력: "
+            )
+            if confirm_input.strip() != "yes":
+                logger.info("사용자 취소")
+                return 1
+
+        # 실행
+        total, written = publish_to_prod(
+            dev_schema,
+            settings.supabase_prod_url,
+            settings.supabase_prod_secret_key,
+            dry_run=dry_run,
+        )
+        logger.info("완료: 대상 %d개, 쓰기 %d개", total, written)
+        return 0
+
+    except Exception as exc:
+        logger.error("발행 실패: %s", exc)
+        return 3
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="FontAgit 파이프라인",
@@ -214,6 +415,52 @@ if __name__ == "__main__":
         help="눈누 Tier B draft 임포트",
     )
     import_parser.set_defaults(func=main_noonnu_import)
+
+    # noonnu-enrich 명령
+    enrich_parser = subparsers.add_parser(
+        "noonnu-enrich",
+        help="눈누 Tier B 라이선스 제안 적재",
+    )
+    enrich_parser.add_argument(
+        "--limit", type=int, default=None, help="처리할 최대 폰트 수"
+    )
+    enrich_parser.add_argument(
+        "--slug", type=str, default=None, help="특정 슬러그만 처리"
+    )
+    enrich_parser.set_defaults(func=main_noonnu_enrich)
+
+    # noonnu-review 명령
+    review_parser = subparsers.add_parser(
+        "noonnu-review",
+        help="눈누 라이선스 제안 검수",
+    )
+    review_parser.add_argument(
+        "action",
+        choices=["list", "approve", "reject", "audit-sample", "unpublish"],
+        help="실행 액션",
+    )
+    review_parser.add_argument(
+        "--slug", type=str, default=None, help="폰트 슬러그(approve/reject/unpublish에서 필수)"
+    )
+    review_parser.add_argument(
+        "--note", type=str, default=None, help="검수자 코멘트(approve에서 선택, reject/unpublish에서 필수)"
+    )
+    review_parser.add_argument(
+        "--pct", type=int, default=5, help="표본 백분율(audit-sample, 기본값 5)"
+    )
+    review_parser.set_defaults(func=main_noonnu_review)
+
+    # noonnu-publish 명령
+    publish_parser = subparsers.add_parser(
+        "noonnu-publish",
+        help="눈누 Tier B prod 발행 (dev→prod 동기화, 기본 dry-run)",
+    )
+    publish_parser.add_argument(
+        "--confirm",
+        action="store_true",
+        help="실제 prod 쓰기 활성화 (이중 확인 필수)",
+    )
+    publish_parser.set_defaults(func=main_noonnu_publish)
 
     args = parser.parse_args()
 
