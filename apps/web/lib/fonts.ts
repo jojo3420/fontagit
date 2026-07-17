@@ -80,14 +80,14 @@ export const fontClassNames = [
 
 export const fontKeyToVar: Record<FontKey, string> = {
   pretendard: '"Pretendard Variable", "Pretendard", sans-serif',
-  blackHanSans: "var(--font-black-han-sans)",
-  jua: "var(--font-jua)",
-  doHyeon: "var(--font-do-hyeon)",
-  gowunBatang: "var(--font-gowun-batang)",
-  nanumMyeongjo: "var(--font-nanum-myeongjo)",
-  kirangHaerang: "var(--font-kirang-haerang)",
-  gaegu: "var(--font-gaegu)",
-  songMyung: "var(--font-song-myung)",
+  blackHanSans: "var(--font-black-han-sans), system-ui, sans-serif",
+  jua: "var(--font-jua), system-ui, sans-serif",
+  doHyeon: "var(--font-do-hyeon), system-ui, sans-serif",
+  gowunBatang: "var(--font-gowun-batang), system-ui, sans-serif",
+  nanumMyeongjo: "var(--font-nanum-myeongjo), system-ui, sans-serif",
+  kirangHaerang: "var(--font-kirang-haerang), system-ui, sans-serif",
+  gaegu: "var(--font-gaegu), system-ui, sans-serif",
+  songMyung: "var(--font-song-myung), system-ui, sans-serif",
 };
 
 export function familyOf(fontKey: FontKey | null): string {

@@ -75,10 +75,22 @@ export async function getAllSlugs(): Promise<string[]> {
   return (data || []).map((row: { slug: string }) => row.slug);
 }
 
-export async function resolveFreeAlternatives(
-  _font: Font
-): Promise<Font[]> {
-  void _font;
-  // Slice 3에서 구글폰트 매칭 테이블 추가 예정
-  return [];
+export function filterFreeAlternatives(
+  targetFont: Font,
+  allFonts: Font[]
+): Font[] {
+  return allFonts
+    .filter(
+      (f) =>
+        f.category === targetFont.category &&
+        f.tier === "free" &&
+        f.slug !== targetFont.slug
+    )
+    .sort((a, b) => b.moves - a.moves)
+    .slice(0, 3);
+}
+
+export async function resolveFreeAlternatives(font: Font): Promise<Font[]> {
+  const allFonts = await getAllFonts();
+  return filterFreeAlternatives(font, allFonts);
 }
