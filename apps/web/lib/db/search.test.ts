@@ -56,6 +56,20 @@ describe('searchFonts', () => {
     ]);
   });
 
+  it('빈 쿼리 → RPC 호출 없이 빈 배열 반환', async () => {
+    const result = await searchFonts('');
+
+    expect(result).toEqual([]);
+    expect(supabaseClient.rpc).not.toHaveBeenCalled();
+  });
+
+  it('공백만 있는 쿼리 → RPC 호출 없이 빈 배열 반환', async () => {
+    const result = await searchFonts('   ');
+
+    expect(result).toEqual([]);
+    expect(supabaseClient.rpc).not.toHaveBeenCalled();
+  });
+
   it('RPC 오류 → throw', async () => {
     const mockError = { message: 'RPC failed' };
     vi.mocked(supabaseClient.rpc).mockResolvedValueOnce({
@@ -64,6 +78,38 @@ describe('searchFonts', () => {
     } as unknown as RpcResponse);
 
     await expect(searchFonts('query')).rejects.toThrow('SEARCH_RPC_FAILED');
+  });
+
+  it('쿼리가 100자 초과 → RPC 호출 없이 빈 배열 반환', async () => {
+    const longQuery = 'a'.repeat(101);
+    const result = await searchFonts(longQuery);
+
+    expect(result).toEqual([]);
+    expect(supabaseClient.rpc).not.toHaveBeenCalled();
+  });
+
+  it('쿼리가 정확히 100자 → RPC 호출', async () => {
+    const query100 = 'a'.repeat(100);
+    const mockData = [
+      {
+        slug: 'test-font',
+        name_ko: '테스트',
+        name_en: 'Test',
+        tier: 'free' as const,
+        category_ko: '고딕',
+        score: 50,
+      },
+    ];
+
+    vi.mocked(supabaseClient.rpc).mockResolvedValueOnce({
+      data: mockData,
+      error: null,
+    } as unknown as RpcResponse);
+
+    const result = await searchFonts(query100);
+
+    expect(result.length).toBe(1);
+    expect(supabaseClient.rpc).toHaveBeenCalled();
   });
 
   it('0건 안전 검색어만 저장하고 반환 행을 요청하지 않는다', async () => {
