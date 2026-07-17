@@ -11,13 +11,6 @@ interface ReportFormProps {
 
 type ReportReason = "copyright" | "misinformation" | "inappropriate" | "other";
 
-const REASON_LABELS: Record<ReportReason, string> = {
-  copyright: "저작권 침해",
-  misinformation: "잘못된 정보",
-  inappropriate: "부적절한 콘텐츠",
-  other: "기타",
-};
-
 export function ReportForm({ fontId, fontName }: ReportFormProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedReason, setSelectedReason] = useState<ReportReason | "">("");

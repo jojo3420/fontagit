@@ -45,9 +45,18 @@ create policy "anon_read_aliases"
 create table if not exists fontagit.font_reports (
   id uuid primary key default gen_random_uuid(),
   font_id uuid null references fontagit.fonts(id) on delete set null,
-  reason text not null,
-  detail text,
-  contact text,
+  reason text not null check (
+    reason in ('copyright', 'misinformation', 'inappropriate', 'other')
+  ),
+  detail text check (
+    detail is null or char_length(trim(detail)) between 1 and 1000
+  ),
+  contact text check (
+    contact is null or (
+      char_length(contact) between 3 and 254
+      and contact ~* '^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$'
+    )
+  ),
   created_at timestamp with time zone not null default now()
 );
 
@@ -60,12 +69,9 @@ comment on column fontagit.font_reports.contact is '신고자 연락처 - 이메
 -- 5. font_reports RLS 설정
 alter table fontagit.font_reports enable row level security;
 
--- 6. font_reports 정책: anon은 INSERT만
-create policy "anon_insert_font_reports"
-  on fontagit.font_reports
-  for insert
-  to anon
-  with check (true);
+-- 6. 테이블 직접 쓰기는 차단하고 검증·속도 제한 RPC만 공개
+revoke all on fontagit.font_reports from public, anon, authenticated;
+grant select, delete on fontagit.font_reports to service_role;
 
 -- 7. font_reports 정책: service_role(운영자) SELECT/DELETE
 create policy "service_role_all_font_reports"
@@ -86,3 +92,83 @@ create index if not exists idx_font_reports_created_at
 
 create index if not exists idx_font_reports_font_id
   on fontagit.font_reports (font_id);
+
+-- 9. 익명 신고 RPC: 입력 재검증 + 전체/폰트별 과다 요청 방어
+create or replace function fontagit.submit_font_report(
+  p_font_id uuid,
+  p_reason text,
+  p_detail text default null,
+  p_contact text default null
+) returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if p_reason is null
+     or p_reason not in ('copyright', 'misinformation', 'inappropriate', 'other') then
+    raise exception 'INVALID_REPORT_REASON';
+  end if;
+
+  if p_detail is not null
+     and char_length(trim(p_detail)) not between 1 and 1000 then
+    raise exception 'INVALID_REPORT_DETAIL';
+  end if;
+
+  if p_contact is not null
+     and (
+       char_length(p_contact) not between 3 and 254
+       or p_contact !~* '^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$'
+     ) then
+    raise exception 'INVALID_REPORT_CONTACT';
+  end if;
+
+  if p_font_id is not null
+     and not exists (
+       select 1
+       from fontagit.fonts
+       where id = p_font_id
+         and status in ('published', 'hold', 'discontinued')
+     ) then
+    raise exception 'INVALID_REPORT_FONT';
+  end if;
+
+  -- 짧은 트랜잭션 잠금으로 동시 요청이 제한 검사를 우회하지 못하게 한다.
+  perform pg_advisory_xact_lock(hashtext('fontagit.submit_font_report'));
+
+  if (
+    select count(*)
+    from fontagit.font_reports
+    where created_at >= now() - interval '1 minute'
+  ) >= 100 then
+    raise exception 'REPORT_RATE_LIMITED';
+  end if;
+
+  if p_font_id is not null and (
+    select count(*)
+    from fontagit.font_reports
+    where font_id = p_font_id
+      and created_at >= now() - interval '10 minutes'
+  ) >= 10 then
+    raise exception 'REPORT_RATE_LIMITED';
+  end if;
+
+  insert into fontagit.font_reports (font_id, reason, detail, contact)
+  values (
+    p_font_id,
+    p_reason,
+    nullif(trim(p_detail), ''),
+    nullif(trim(p_contact), '')
+  );
+end;
+$$;
+
+revoke all on function fontagit.submit_font_report(uuid, text, text, text)
+  from public;
+grant execute on function fontagit.submit_font_report(uuid, text, text, text)
+  to anon, authenticated;
+
+comment on function fontagit.submit_font_report(uuid, text, text, text) is
+  '익명 폰트 신고 접수: 입력 검증과 전체/폰트별 과다 요청 제한 적용';
+
+notify pgrst, 'reload schema';

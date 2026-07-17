@@ -3,6 +3,8 @@ import type { SearchResult } from './types';
 
 const MAX_QUERY_LENGTH = 100;
 const SEARCH_LOG_DEBOUNCE_MS = 1000;
+const DIRECT_IDENTIFIER_PATTERN =
+  /@|https?:\/\/|www\.|(?:\d[\s()-]?){7,}/i;
 
 interface RPCSearchRow {
   slug: string;
@@ -73,19 +75,33 @@ let lastLoggedTime = 0;
  * best-effort: 로깅 실패는 무시(검색 UX에 영향 없음)
  */
 async function logSearchQuery(query: string): Promise<void> {
-  const now = Date.now();
-  if (query === lastLoggedQuery && now - lastLoggedTime < SEARCH_LOG_DEBOUNCE_MS) {
+  const trimmedQuery = query.trim();
+  if (
+    !trimmedQuery ||
+    trimmedQuery.length > MAX_QUERY_LENGTH ||
+    DIRECT_IDENTIFIER_PATTERN.test(trimmedQuery)
+  ) {
     return;
   }
 
-  lastLoggedQuery = query;
+  const now = Date.now();
+  if (
+    trimmedQuery === lastLoggedQuery &&
+    now - lastLoggedTime < SEARCH_LOG_DEBOUNCE_MS
+  ) {
+    return;
+  }
+
+  lastLoggedQuery = trimmedQuery;
   lastLoggedTime = now;
 
   try {
-    await supabaseClient
+    const { error } = await supabaseClient
       .from('search_logs')
-      .insert({ query: query.trim() })
-      .select();
+      .insert({ query: trimmedQuery });
+    if (error) {
+      throw error;
+    }
   } catch {
     // 로깅 실패는 조용히 무시(테이블 미적용 환경 대비, 로깅 인프라 실패 대비)
   }
