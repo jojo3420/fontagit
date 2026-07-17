@@ -1,4 +1,4 @@
-.PHONY: web-dev collect test lint
+.PHONY: web-dev collect test lint deploy
 
 web-dev:
 	pnpm --filter web dev
@@ -11,3 +11,6 @@ test:
 
 lint:
 	cd apps/pipeline && uv run ruff check . && uv run mypy src
+
+deploy:
+	./scripts/deploy.sh

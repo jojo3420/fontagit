@@ -208,7 +208,15 @@ make web-dev          # 개발 서버 실행 (pnpm --filter web dev)
 - Pages 배포 토큰: `apps/web/.env.local`의 `CF_TOKEN` (권한: Account > Cloudflare Pages > Edit). git 비추적 파일이며 절대 커밋 금지.
 - account id: `2686c11634da0d924f089b7e56a9e227`
 
-### production 배포 (2단계)
+### 한 번에 배포 (권장)
+
+```bash
+./scripts/deploy.sh     # 또는  make deploy
+```
+
+`scripts/deploy.sh`가 아래 2단계(prod 빌드 → Pages 배포)와 스모크 체크까지 자동 실행합니다. 내부 동작을 알고 싶으면 아래를 참고하세요.
+
+### production 배포 (2단계, 수동)
 
 ```bash
 # 1) prod 데이터로 빌드
