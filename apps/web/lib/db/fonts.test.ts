@@ -1,12 +1,33 @@
-import { describe, it, expect, vi } from "vitest";
-import { filterFreeAlternatives } from "@/lib/db/fonts";
+import { beforeEach, describe, it, expect, vi } from "vitest";
+import { filterFreeAlternatives, getPublishedSlugs } from "@/lib/db/fonts";
 import { fonts } from "@/data/fonts";
+import { supabaseClient } from "./client";
 
 vi.mock("./client", () => ({
   supabaseClient: {
     from: vi.fn(),
   },
 }));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+describe("getPublishedSlugs", () => {
+  it("published 상태의 slug만 조회한다", async () => {
+    const eq = vi.fn().mockResolvedValue({
+      data: [{ slug: "noto-sans-kr" }],
+      error: null,
+    });
+    const select = vi.fn().mockReturnValue({ eq });
+    vi.mocked(supabaseClient.from).mockReturnValue({ select } as never);
+
+    await expect(getPublishedSlugs()).resolves.toEqual(["noto-sans-kr"]);
+    expect(supabaseClient.from).toHaveBeenCalledWith("fonts");
+    expect(select).toHaveBeenCalledWith("slug");
+    expect(eq).toHaveBeenCalledWith("status", "published");
+  });
+});
 
 describe("filterFreeAlternatives", () => {
   it("같은 카테고리의 무료 폰트 최대 3개를 반환한다", () => {

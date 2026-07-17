@@ -66,12 +66,18 @@ describe("generateMetadata", () => {
     expect(metadata.openGraph?.title).toBe("나눔명조 - FontAgit");
   });
 
-  it("유료 폰트: tier 표시 (유료)", async () => {
-    const metadata = await generateMetadata({
-      params: Promise.resolve({ slug: "sandoll-gothic-neo" }),
-    });
-    expect(metadata.title).toBe("산돌 고딕 Neo - FontAgit");
-    expect(metadata.description).toContain("유료");
+  it("보류 폰트: 접근은 유지하되 검색 색인을 막는다", async () => {
+    const original = mockFonts.get("nanum-myeongjo")!;
+    mockFonts.set("nanum-myeongjo", { ...original, status: "hold" });
+
+    try {
+      const metadata = await generateMetadata({
+        params: Promise.resolve({ slug: "nanum-myeongjo" }),
+      });
+      expect(metadata.robots).toEqual({ index: false, follow: true });
+    } finally {
+      mockFonts.set("nanum-myeongjo", original);
+    }
   });
 
   it("존재하지 않는 폰트: 안전 처리", async () => {
@@ -80,5 +86,6 @@ describe("generateMetadata", () => {
     });
     expect(metadata.title).toBe("폰트를 찾을 수 없습니다");
     expect(metadata.description).toContain("존재하지 않습니다");
+    expect(metadata.robots).toEqual({ index: false, follow: false });
   });
 });

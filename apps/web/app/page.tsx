@@ -1,9 +1,14 @@
+import type { Metadata } from "next";
 import { Hero } from "@/components/Hero";
 import { WeeklyRankPanel } from "@/components/WeeklyRankPanel";
 import { AdFitUnit } from "@/components/AdFitUnit";
 import { ADFIT_UNIT_HOME } from "@/lib/analytics/constants";
 import { getTrends } from "@/lib/data";
 import styles from "./page.module.css";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 export default async function Home() {
   const { items, source } = await getTrends();

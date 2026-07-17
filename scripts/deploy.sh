@@ -23,6 +23,9 @@ echo "==> [1/4] prod(.env.production) 값으로 빌드"
 # 2) 정적 빌드
 pnpm --filter web build
 [ -d "$OUT_DIR" ] || { echo "ERROR: $OUT_DIR 생성 안 됨(빌드 실패)"; exit 1; }
+command -v xmllint >/dev/null 2>&1 || { echo "ERROR: sitemap XML 검증용 xmllint 없음"; exit 1; }
+xmllint --noout "$OUT_DIR/sitemap.xml"
+pnpm --filter web verify:seo
 
 # 3) Pages 배포 토큰 로드 (.env.local의 CF_TOKEN)
 CF_TOKEN="$(grep -E '^CF_TOKEN=' "$ENV_LOCAL" 2>/dev/null | head -1 | cut -d= -f2- || true)"

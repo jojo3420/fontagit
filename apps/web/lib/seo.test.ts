@@ -20,9 +20,8 @@ describe("SEO utilities", () => {
   });
 
   describe("BASE_URL", () => {
-    it("기본값은 https://fontagit.example.com", () => {
-      expect(BASE_URL).toBeDefined();
-      expect(BASE_URL).toContain("fontagit");
+    it("운영 대표 주소를 사용한다", () => {
+      expect(BASE_URL).toBe("https://fontagit.com");
     });
   });
 

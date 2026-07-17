@@ -4,6 +4,7 @@ import styles from "./page.module.css";
 export const metadata: Metadata = {
   title: "소개 - FontAgit",
   description: "FontAgit는 국내외 무료-유료 폰트를 검색하고 비교하는 폰트 아지트입니다",
+  alternates: { canonical: "/about/" },
 };
 
 export default async function AboutPage() {

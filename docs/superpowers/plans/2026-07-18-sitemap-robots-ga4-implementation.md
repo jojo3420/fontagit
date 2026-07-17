@@ -34,21 +34,21 @@
 - Produces: `getPublishedSlugs(): Promise<string[]>`
 - Consumes: `getAllCollectionSlugs(): Promise<string[]>`
 
-- [ ] **Step 1: 실패 테스트 작성**
+- [x] **Step 1: 실패 테스트 작성**
 
 `seo.test.ts`가 실제 origin을 요구하고, `fonts.test.ts`가 published 전용 쿼리를 요구하며, `sitemap.test.ts`가 정적 7개와 published slug만 포함하고 빈 메타 필드를 요구하도록 수정한다.
 
-- [ ] **Step 2: RED 확인**
+- [x] **Step 2: RED 확인**
 
 Run: `pnpm --dir apps/web test -- lib/seo.test.ts lib/db/fonts.test.ts app/sitemap.test.ts`
 
 Expected: 기존 `fontagit.example.com`, 없는 `getPublishedSlugs`, 누락된 정적 경로 때문에 FAIL.
 
-- [ ] **Step 3: 최소 구현**
+- [x] **Step 3: 최소 구현**
 
 `BASE_URL`을 실제 origin으로 고정한다. `getPublishedSlugs()`는 Supabase `fonts`에서 `status = published`인 slug만 조회한다. sitemap은 정적 7개와 published 폰트·컬렉션을 URL만 가진 항목으로 반환한다.
 
-- [ ] **Step 4: GREEN 확인**
+- [x] **Step 4: GREEN 확인**
 
 Run: `pnpm --dir apps/web test -- lib/seo.test.ts lib/db/fonts.test.ts app/sitemap.test.ts`
 
@@ -69,21 +69,21 @@ Expected: 대상 테스트 전부 PASS.
 - Produces: sitemap 페이지별 `alternates.canonical`
 - Produces: 검색 및 비공개 상태의 `robots: { index: false, follow: true }`
 
-- [ ] **Step 1: 실패 테스트 작성**
+- [x] **Step 1: 실패 테스트 작성**
 
 폰트 메타데이터 테스트에 `hold` 상태의 `noindex,follow` 사례를 추가하고 published 사례는 canonical과 index 허용을 확인한다.
 
-- [ ] **Step 2: RED 확인**
+- [x] **Step 2: RED 확인**
 
 Run: `pnpm --dir apps/web test -- 'app/fonts/[slug]/page.test.tsx'`
 
 Expected: hold 상태가 현재 robots 메타데이터를 반환하지 않아 FAIL.
 
-- [ ] **Step 3: 최소 구현**
+- [x] **Step 3: 최소 구현**
 
 검색 전용 layout에 `noindex,follow`를 선언한다. 폰트 `generateMetadata()`는 published가 아니면 `noindex,follow`를 반환한다. sitemap 정적 페이지와 컬렉션 상세는 후행 슬래시 canonical을 반환한다.
 
-- [ ] **Step 4: GREEN 확인**
+- [x] **Step 4: GREEN 확인**
 
 Run: `pnpm --dir apps/web test -- 'app/fonts/[slug]/page.test.tsx'`
 
@@ -101,21 +101,21 @@ Expected: 대상 테스트 PASS.
 - Produces: `validateSeoOutput(sitemapXml: string, robotsText: string): { urlCount: number }`
 - Produces: `pnpm --dir apps/web verify:seo`
 
-- [ ] **Step 1: 실패 테스트 작성**
+- [x] **Step 1: 실패 테스트 작성**
 
 Node 내장 테스트로 정상 파일 1개, 잘못된 origin 또는 중복 URL을 거부하는 치명적 예외 2개만 작성한다.
 
-- [ ] **Step 2: RED 확인**
+- [x] **Step 2: RED 확인**
 
 Run: `node --test apps/web/scripts/verify-seo-output.test.mjs`
 
 Expected: 검증 모듈이 없어 FAIL.
 
-- [ ] **Step 3: 최소 구현**
+- [x] **Step 3: 최소 구현**
 
 검증기는 sitemap XML의 `<loc>`을 읽어 필수 정적 URL 7개, origin 전수 일치, 중복 없음, 금지 origin 없음과 robots의 정확한 Sitemap 행을 검사한다. `deploy.sh`는 빌드 후 업로드 전에 `verify:seo`를 실행한다.
 
-- [ ] **Step 4: GREEN 확인**
+- [x] **Step 4: GREEN 확인**
 
 Run: `node --test apps/web/scripts/verify-seo-output.test.mjs`
 
@@ -126,17 +126,17 @@ Expected: 3 tests PASS.
 **Files:**
 - Review: 이번 기능의 전체 diff와 호출처
 
-- [ ] **Step 1: 전체 검사**
+- [x] **Step 1: 전체 검사**
 
 Run: `pnpm --dir apps/web test && pnpm --dir apps/web lint && pnpm --dir apps/web build && pnpm --dir apps/web verify:seo`
 
 Expected: 모든 명령 exit 0, sitemap origin 전수 일치.
 
-- [ ] **Step 2: 실패 경로 적대적 리뷰**
+- [x] **Step 2: 실패 경로 적대적 리뷰**
 
 `unhappy-path-check` 기준으로 DB 빈 결과, 잘못된 origin, 중복 URL, 누락 robots, GA4 ID 누락, 배포 롤백을 추적한다. HIGH/MEDIUM이 있으면 테스트를 먼저 추가한 뒤 수정한다.
 
-- [ ] **Step 3: 품질 게이트 재실행**
+- [x] **Step 3: 품질 게이트 재실행**
 
 수정 후 전체 테스트·lint·build·SEO 검증을 새로 실행하고 AS-IS/TO-BE 증거를 기록한다.
 
@@ -146,11 +146,11 @@ Expected: 모든 명령 exit 0, sitemap origin 전수 일치.
 - Modify without commit: `apps/web/.env.production`
 - External: Google Analytics, Cloudflare Pages, Google Search Console
 
-- [ ] **Step 1: GA4 생성**
+- [x] **Step 1: GA4 생성**
 
 로그인된 Chrome에서 `FontAgit` 속성, 대한민국 시간대, KRW 통화, `https://fontagit.com` 웹 스트림을 생성한다. 향상된 측정의 페이지 로드와 기록 변경을 켠다.
 
-- [ ] **Step 2: 측정 ID 연결**
+- [x] **Step 2: 측정 ID 연결**
 
 발급된 `G-...` 값을 `.env.production`의 `NEXT_PUBLIC_GA_ID`에 저장하되 커밋하지 않는다.
 

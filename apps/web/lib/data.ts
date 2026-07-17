@@ -2,6 +2,7 @@ export {
   getAllFonts,
   getFontBySlug,
   getAllSlugs,
+  getPublishedSlugs,
   resolveFreeAlternatives,
 } from "./db/fonts";
 export {

@@ -74,6 +74,17 @@ export async function getAllSlugs(): Promise<string[]> {
   return (data || []).map((row: { slug: string }) => row.slug);
 }
 
+export async function getPublishedSlugs(): Promise<string[]> {
+  const { data, error } = await supabaseClient
+    .from("fonts")
+    .select("slug")
+    .eq("status", "published");
+
+  if (error) throw error;
+
+  return (data || []).map((row: { slug: string }) => row.slug);
+}
+
 export function filterFreeAlternatives(
   targetFont: Font,
   allFonts: Font[]

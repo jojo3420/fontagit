@@ -33,16 +33,19 @@ export async function generateMetadata({
     return {
       title: "폰트를 찾을 수 없습니다",
       description: "요청하신 폰트가 존재하지 않습니다.",
+      robots: { index: false, follow: false },
     };
   }
 
   const fontUrl = getSiteUrl(`/fonts/${font.slug}/`);
   const tierLabel = font.tier === "free" ? "무료" : "유료";
   const description = `${font.foundry} 제작 서체. ${tierLabel} 라이선스. ${font.availableWeights.length}가지 굵기.`;
+  const isPublished = (font.status ?? "published") === "published";
 
   return {
     title: `${font.nameKo} - FontAgit`,
     description,
+    ...(!isPublished && { robots: { index: false, follow: true } }),
     alternates: {
       canonical: fontUrl,
     },
