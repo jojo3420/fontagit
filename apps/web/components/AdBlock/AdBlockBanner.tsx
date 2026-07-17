@@ -1,37 +1,28 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { isAdSenseEnabled } from "@/lib/analytics/constants";
 import styles from "./AdBlockBanner.module.css";
 
-/**
- * 애드블록 감지 배너
- * - 광고 로드 실패 감지 시 정중한 안내 배너 표시
- * - 사용자가 닫기 가능
- * - 강제 차단이 아닌 정중한 권유 수준
- */
+/** AdSense를 켠 환경에서만 광고 차단 안내를 표시한다. */
 export function AdBlockBanner(): React.ReactNode {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    // adsbygoogle가 로드되지 않았거나 광고 푸시 실패 감지
-    const checkAdBlock = () => {
-      if (
-        typeof window !== "undefined" &&
-        (!window.adsbygoogle || (window.adsbygoogle && window.adsbygoogle.loaded === false))
-      ) {
-        // 짧은 지연 후 확인 (광고 로드 완료 대기)
-        setTimeout(() => {
-          if (!window.adsbygoogle || window.adsbygoogle.loaded === false) {
-            setIsVisible(true);
-          }
-        }, 2000);
-      }
-    };
+    if (!isAdSenseEnabled) {
+      return;
+    }
 
-    checkAdBlock();
+    const timer = window.setTimeout(() => {
+      if (!window.adsbygoogle || window.adsbygoogle.loaded === false) {
+        setIsVisible(true);
+      }
+    }, 3000);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
-  if (!isVisible) {
+  if (!isAdSenseEnabled || !isVisible) {
     return null;
   }
 
