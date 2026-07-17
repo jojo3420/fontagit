@@ -100,8 +100,8 @@ comment on function fontagit.record_click(text) is
 
 - [ ] **Step 2: 문법 정적 확인 (파일만, 적용은 Task 2)**
 
-Run: `grep -c "pg_advisory_xact_lock" supabase/migrations/0008_record_click_rate_limit.sql`
-Expected: `1` (advisory lock 호출 존재)
+Run: `grep -c "perform pg_advisory_xact_lock" supabase/migrations/0008_record_click_rate_limit.sql`
+Expected: `1` (advisory lock 실제 호출 존재. `perform` 접두로 좁혀 매치 — 넓은 패턴은 설명 주석까지 세어 2가 나온다)
 
 - [ ] **Step 3: Commit**
 
