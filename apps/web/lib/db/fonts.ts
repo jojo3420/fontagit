@@ -78,6 +78,7 @@ export async function getAllSlugs(): Promise<string[]> {
 export async function resolveFreeAlternatives(
   _font: Font
 ): Promise<Font[]> {
+  void _font;
   // Slice 3에서 구글폰트 매칭 테이블 추가 예정
   return [];
 }

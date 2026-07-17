@@ -117,11 +117,8 @@ describe('검색 페이지 (page.tsx)', () => {
   });
 
   it('요청 진행 중 입력을 전부 삭제하면 로딩 표시가 사라진다', async () => {
-    // 지연된 Promise로 모킹 (수동 resolve)
-    let resolveSearch: ((value: SearchResult[]) => void) | null = null;
-    const delayedPromise = new Promise<SearchResult[]>((resolve) => {
-      resolveSearch = resolve;
-    });
+    // 완료되지 않는 Promise로 진행 중 요청을 재현
+    const delayedPromise = new Promise<SearchResult[]>(() => {});
     mockSearchFonts.mockReturnValue(delayedPromise);
 
     const user = userEvent.setup({ delay: null });

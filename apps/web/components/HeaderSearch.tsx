@@ -136,7 +136,6 @@ export function HeaderSearch() {
                   setQuery(e.currentTarget.value);
                 }}
                 onKeyDown={handleKeyDown}
-                onBlur={() => setOpen(false)}
                 className={styles.input}
                 aria-label="폰트 검색"
                 role="combobox"

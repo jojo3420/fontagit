@@ -8,6 +8,9 @@ vi.mock('./client', () => ({
   },
 }));
 
+type RpcBuilder = ReturnType<typeof supabaseClient.rpc>;
+type RpcResponse = Awaited<RpcBuilder>;
+
 describe('searchFonts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -28,7 +31,7 @@ describe('searchFonts', () => {
     vi.mocked(supabaseClient.rpc).mockResolvedValueOnce({
       data: mockData,
       error: null,
-    } as any);
+    } as unknown as RpcResponse);
 
     const result = await searchFonts('본고딕');
 
@@ -62,7 +65,7 @@ describe('searchFonts', () => {
     vi.mocked(supabaseClient.rpc).mockResolvedValueOnce({
       data: null,
       error: mockError,
-    } as any);
+    } as unknown as RpcResponse);
 
     await expect(searchFonts('query')).rejects.toThrow('SEARCH_RPC_FAILED');
   });
@@ -91,7 +94,7 @@ describe('searchFonts', () => {
     vi.mocked(supabaseClient.rpc).mockResolvedValueOnce({
       data: mockData,
       error: null,
-    } as any);
+    } as unknown as RpcResponse);
 
     const result = await searchFonts(query100);
 
@@ -109,7 +112,7 @@ describe('searchSuggestions - 요청 취소(abort) 처리', () => {
     const abortSignalMock = vi.fn().mockResolvedValue(response);
     vi.mocked(supabaseClient.rpc).mockReturnValueOnce({
       abortSignal: abortSignalMock,
-    } as any);
+    } as unknown as RpcBuilder);
   }
 
   it('signal.aborted 상태의 취소 오류 → console.error 없이 조용히 throw', async () => {

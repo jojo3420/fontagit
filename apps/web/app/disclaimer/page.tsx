@@ -17,7 +17,7 @@ export default async function DisclaimerPage() {
       <section className={styles.section}>
         <h2 className={styles.h2}>1. 서비스 현황 제공</h2>
         <p className={styles.text}>
-          FontAgit는 본 서비스를 "있는 그대로(as-is)" 제공합니다.
+          FontAgit는 본 서비스를 &quot;있는 그대로(as-is)&quot; 제공합니다.
           <strong>서비스가 안전함, 무결함, 또는 문제없음을 보증하지 않습니다.</strong>
           데이터의 정확성, 완전성, 최신성에 대해 어떠한 보장도 하지 않습니다.
         </p>
