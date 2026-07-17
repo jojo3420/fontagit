@@ -59,3 +59,5 @@ create policy "service_role_delete_search_logs"
   for delete
   to service_role
   using (true);
+
+notify pgrst, 'reload schema';
