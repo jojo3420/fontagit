@@ -18,6 +18,16 @@ FontAgit(폰트 아지트)는 국내외 무료-유료 폰트를 검색-비교하
 
 ## 진행 기록
 
+## 2026-07-17 - 클릭 rate limiting DB 최후방어 (슬라이스3 후속)
+
+- 상태: 완료 (PR #18 생성, 리뷰 대기 — 미머지)
+- 완료한 일: 클릭 기록(record_click)의 어뷰징 방어를 DB 계층에 구현. 같은 폰트를 짧은 시간에 대량 클릭(봇 연타)하면 조용히 무시하도록 폰트별 10초 20건 상한을 걸고, 동시 요청이 상한을 우회하는 경합(race)을 advisory lock으로 차단. IP 기반 정밀 차단(Kong 게이트웨이)은 자체호스팅 prod 인프라 작업이라 설계 문서로 인계.
+- 커밋/PR: `8d34c14`(마이그레이션 0008), `e9d6d56`(SQL 테스트), `83ff5b0`/`a8c6914`(설계-계획-리뷰 문서). PR #18 (https://github.com/jojo3420/fontagit/pull/18). dev psql 실측: RED(0007 상태 상한없음 노출)→0008 적용→GREEN(click_rate_limit_test ALL PASS)→회귀(font_clicks_test ALL PASS). 최종 리뷰(Opus) Ready to merge YES, Critical 0.
+- 결정사항: rate limit 마이그레이션=0008, 등록 신청=0009로 재배치(순번 연속성). B(DB)는 폰트별 전역 상한(IP 미사용), A(Kong)는 IP당 분당 30건 인계(real IP/route 플러그인 상속 주의). dev MCP self-signed 인증서 블로커는 psql `sslmode=require`로 우회 가능(실증됨). Codex 듀얼리뷰 Must 3건(race/Kong IP/route 상속)+Should 3건 설계 반영.
+- 남은 일: (1) prod에 0008 적용(명시 승인 — prod는 0007도 미적용이라 배포 트랙에서 함께). (2) Kong IP 제한 적용(설계 5장). (3) 배포 전 병렬 부하 테스트(R4 동시성 실증, wrk/ghz). (4) PR #18 리뷰-머지.
+- 관련 문서: `docs/superpowers/specs/2026-07-17-click-rate-limiting-design.md`, `docs/superpowers/plans/2026-07-17-click-rate-limiting.md`, `docs/review/review-result-dual-20260717-125336.md`
+- 상세 히스토리: 없음
+
 ## 2026-07-17 - Top10 이동 클릭 집계 완성 (슬라이스3, F-03)
 
 - 상태: 완료 (PR #17 MERGED)
