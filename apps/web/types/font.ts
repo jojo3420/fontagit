@@ -18,6 +18,7 @@ export interface License {
 }
 
 export interface Font {
+  id?: string;
   slug: string;
   nameKo: string;
   nameEn: string;
@@ -32,6 +33,7 @@ export interface Font {
   aliases: string[];
   freeAlternatives?: string[]; // 실제 slug, 최대 3
   priceFrom?: number;
+  status?: "draft" | "published" | "archived" | "hold" | "discontinued";
 }
 
 export interface TrendItem {

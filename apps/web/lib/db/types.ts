@@ -10,6 +10,7 @@ export interface FontRow {
   license_type: string | null;
   official_url: string | null;
   last_modified: string | null;
+  status: "draft" | "published" | "archived" | "hold" | "discontinued";
 }
 
 export interface AliasRow {
@@ -42,4 +43,13 @@ export interface SearchResult {
   tier: 'free' | 'paid';
   category: string;
   foundry?: string | null;
+}
+
+export interface ReportRow {
+  id: string;
+  font_id: string | null;
+  reason: string;
+  detail: string | null;
+  contact: string | null;
+  created_at: string;
 }

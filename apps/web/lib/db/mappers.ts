@@ -3,6 +3,7 @@ import { FontRow, CollectionRow } from "./types";
 
 export function rowToFont(row: FontRow, aliases: string[]): Font {
   return {
+    id: row.id,
     slug: row.slug,
     nameKo: row.name_ko ?? row.name_en,
     nameEn: row.name_en,
@@ -22,6 +23,7 @@ export function rowToFont(row: FontRow, aliases: string[]): Font {
     officialUrl: row.official_url ?? "",
     aliases,
     freeAlternatives: undefined,
+    status: row.status,
   };
 }
 
