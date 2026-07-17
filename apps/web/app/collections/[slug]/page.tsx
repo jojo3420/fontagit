@@ -9,6 +9,14 @@ import styles from "./page.module.css";
 
 export const dynamicParams = false;
 
+function decodeRouteSlug(slug: string): string {
+  try {
+    return decodeURIComponent(slug);
+  } catch {
+    return slug;
+  }
+}
+
 export async function generateStaticParams() {
   const slugs = await getAllCollectionSlugs();
   return slugs.map((slug) => ({ slug }));
@@ -19,7 +27,8 @@ export async function generateMetadata({
 }: {
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
-  const { slug } = await params;
+  const { slug: encodedSlug } = await params;
+  const slug = decodeRouteSlug(encodedSlug);
   const collection = await getCollectionBySlug(slug);
 
   if (!collection) {
@@ -37,7 +46,8 @@ export async function generateMetadata({
 }
 
 export default async function CollectionDetail({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
+  const { slug: encodedSlug } = await params;
+  const slug = decodeRouteSlug(encodedSlug);
   const collection = await getCollectionBySlug(slug);
 
   if (!collection) {

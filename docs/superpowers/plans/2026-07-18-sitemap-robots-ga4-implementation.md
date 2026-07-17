@@ -155,25 +155,28 @@ Expected: 모든 명령 exit 0, sitemap origin 전수 일치.
 - Modify: `apps/web/lib/db/fonts.ts`
 - Modify: `apps/web/lib/db/fonts.test.ts`
 - Modify: `apps/web/lib/db/collections.ts`
-- Modify: `apps/web/lib/db/collections.test.ts`
+- Create: `apps/web/lib/db/collections.test.ts`
 - Modify: `apps/web/app/fonts/[slug]/page.tsx`
 - Modify: `apps/web/app/fonts/[slug]/page.test.tsx`
+- Modify: `apps/web/app/collections/[slug]/page.tsx`
 
 > **Hard dependency:** Task 4A 전체가 끝나기 전에는 Task 5의 main 승격·운영 배포를 실행하지 않는다.
 
-- [ ] **Step 1: 빌드 산출물 집합 대조 추가**
+- [x] **Step 1: 빌드 산출물 집합 대조 추가**
 
 폰트·컬렉션 slug 조회는 명시적 페이지네이션과 exact count를 사용하고 `수집 개수 == count`가 아니면 빌드를 실패시킨다. `out/`의 sitemap 대상 HTML을 읽어 `noindex`가 없는 자기참조 canonical 집합을 만든다. sitemap URL 집합과 누락·초과 없이 정확히 같은지 검사한다. `/search/index.html`은 `noindex`이고 sitemap에는 없는지 별도로 확인한다. 핵심 테스트는 정상 1개와 1,000행 절단·canonical 집합 불일치 같은 치명적 예외 2개 이내로 제한한다.
 
-- [ ] **Step 2: 깨진 메타 설명 방어**
+실제 빌드 검증에서 Next.js가 한글 동적 slug를 인코딩해 전달해 상세 HTML이 404 `noindex`로 생성되는 문제도 발견했다. 폰트·컬렉션 상세 진입 시 slug를 안전하게 디코딩해 sitemap과 실제 HTML을 일치시켰다.
+
+- [x] **Step 2: 깨진 메타 설명 방어**
 
 폰트 제작사 값이 null·빈 문자열이면 `" 제작 서체"`가 생기지 않도록 확인 가능한 조각만 이어 붙인다. 빈 제작사와 정상 제작사 사례 중 핵심 사례만 기존 메타데이터 테스트에 반영한다.
 
-- [ ] **Step 3: 배포 출처 고정**
+- [x] **Step 3: 배포 출처 고정**
 
 `scripts/deploy.sh`는 `git fetch`가 완료된 전용 worktree에서 현재 브랜치가 `main`, `HEAD == origin/main`, 추적 파일이 clean인지 확인한다. `wrangler pages deploy`의 `--commit-dirty=true`는 제거한다. gitignore된 `.env.production`은 검증 대상에서 제외한다. `.env.production`의 Supabase URL이 존재하고 `.env.local` 개발 URL과 다름을 비밀값 출력 없이 확인한다.
 
-- [ ] **Step 4: 회귀 검증**
+- [x] **Step 4: 회귀 검증**
 
 Run: `node --test apps/web/scripts/verify-seo-output.node-test.mjs && pnpm --dir apps/web test -- 'app/fonts/[slug]/page.test.tsx' && pnpm --dir apps/web lint && pnpm --dir apps/web build && pnpm --dir apps/web verify:seo`
 

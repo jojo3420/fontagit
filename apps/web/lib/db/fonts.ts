@@ -87,20 +87,34 @@ export async function getAllSlugs(): Promise<string[]> {
 export async function getPublishedSlugs(): Promise<string[]> {
   const slugs: string[] = [];
   const pageSize = 1000;
-  for (let from = 0; ; from += pageSize) {
-    const { data, error } = await supabaseClient
+  let expectedCount: number | null = null;
+
+  for (let from = 0; expectedCount === null || slugs.length < expectedCount; ) {
+    const { data, error, count } = await supabaseClient
       .from("fonts")
-      .select("slug")
+      .select("slug", { count: "exact" })
       .eq("status", "published")
       .order("slug")
       .range(from, from + pageSize - 1);
 
     if (error) throw error;
+    if (count === null) throw new Error("published font exact count를 확인할 수 없습니다");
+    if (expectedCount !== null && count !== expectedCount) {
+      throw new Error(`published font count가 조회 중 변경됐습니다: ${expectedCount} -> ${count}`);
+    }
+    expectedCount ??= count;
 
     const batch = (data || []).map((row: { slug: string }) => row.slug);
     slugs.push(...batch);
+    if (batch.length === 0) break;
+    from += batch.length;
+  }
 
-    if (batch.length < pageSize) break;
+  if (slugs.length !== expectedCount) {
+    throw new Error(`published font count=${expectedCount}, 실제 수집=${slugs.length}`);
+  }
+  if (new Set(slugs).size !== slugs.length) {
+    throw new Error("published font slug가 중복됐습니다");
   }
   return slugs;
 }

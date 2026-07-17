@@ -18,6 +18,7 @@ describe("getPublishedSlugs", () => {
     const range = vi.fn().mockResolvedValue({
       data: [{ slug: "noto-sans-kr" }],
       error: null,
+      count: 1,
     });
     const order = vi.fn().mockReturnValue({ range });
     const eq = vi.fn().mockReturnValue({ order });
@@ -26,7 +27,7 @@ describe("getPublishedSlugs", () => {
 
     await expect(getPublishedSlugs()).resolves.toEqual(["noto-sans-kr"]);
     expect(supabaseClient.from).toHaveBeenCalledWith("fonts");
-    expect(select).toHaveBeenCalledWith("slug");
+    expect(select).toHaveBeenCalledWith("slug", { count: "exact" });
     expect(eq).toHaveBeenCalledWith("status", "published");
     expect(order).toHaveBeenCalledWith("slug");
     expect(range).toHaveBeenCalledWith(0, 999);
@@ -40,8 +41,8 @@ describe("getPublishedSlugs", () => {
 
     const range = vi
       .fn()
-      .mockResolvedValueOnce({ data: firstBatch, error: null })
-      .mockResolvedValueOnce({ data: secondBatch, error: null });
+      .mockResolvedValueOnce({ data: firstBatch, error: null, count: 1001 })
+      .mockResolvedValueOnce({ data: secondBatch, error: null, count: 1001 });
     const order = vi.fn().mockReturnValue({ range });
     const eq = vi.fn().mockReturnValue({ order });
     const select = vi.fn().mockReturnValue({ eq });
@@ -54,6 +55,19 @@ describe("getPublishedSlugs", () => {
     expect(range).toHaveBeenCalledTimes(2);
     expect(range).toHaveBeenNthCalledWith(1, 0, 999);
     expect(range).toHaveBeenNthCalledWith(2, 1000, 1999);
+  });
+
+  it("exact count와 실제 수집 개수가 다르면 빌드를 중단한다", async () => {
+    const range = vi
+      .fn()
+      .mockResolvedValueOnce({ data: [{ slug: "font-0000" }], error: null, count: 2 })
+      .mockResolvedValueOnce({ data: [], error: null, count: 2 });
+    const order = vi.fn().mockReturnValue({ range });
+    const eq = vi.fn().mockReturnValue({ order });
+    const select = vi.fn().mockReturnValue({ eq });
+    vi.mocked(supabaseClient.from).mockReturnValue({ select } as never);
+
+    await expect(getPublishedSlugs()).rejects.toThrow(/count.*2.*수집.*1/i);
   });
 });
 
