@@ -261,3 +261,27 @@ class TestBuildProposal:
             "parse_status", "classification", "review_status", "_font_update"
         }
         assert required_keys.issubset(set(p.keys()))
+
+
+class TestDeriveSlug:
+    """_derive_slug 함수 테스트."""
+
+    def test_derive_slug_with_name_en(self) -> None:
+        """name_en이 있으면 build_slug 적용."""
+        from fontagit_pipeline.noonnu_enrich import _derive_slug
+        slug = _derive_slug("한글명", "English Font")
+        assert slug == "english-font"
+
+    def test_derive_slug_without_name_en(self) -> None:
+        """name_en이 None이면 name_ko 소문자-하이픈정규화."""
+        from fontagit_pipeline.noonnu_enrich import _derive_slug
+        slug = _derive_slug("한글 폰트 명", None)
+        # 한글은 [^a-z0-9]+ 매칭이므로 모두 하이픈으로 변환되고 정리됨
+        assert slug == ""
+
+    def test_derive_slug_with_empty_name_en_ascii_fallback(self) -> None:
+        """name_en이 빈 문자열이지만 name_ko가 ASCII면 사용."""
+        from fontagit_pipeline.noonnu_enrich import _derive_slug
+        slug = _derive_slug("test font name", "")
+        # 빈 name_en이므로 name_ko 사용: "test font name" -> "test-font-name"
+        assert slug == "test-font-name"

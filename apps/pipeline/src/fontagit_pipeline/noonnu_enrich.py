@@ -5,15 +5,36 @@ LLM 불사용, BeautifulSoup과 정규식만으로 사실 추출 (결정론적).
 import json
 import logging
 import re
-from typing import Optional
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Optional
 
+import httpx
 from bs4 import BeautifulSoup
+from supabase import create_client
+
+from fontagit_pipeline.models import NoonnuSeedOutput
+from fontagit_pipeline.noonnu_seed import (
+    _ROBOT_USER_AGENT,
+    _REQUEST_DELAY,
+    _ROBOTS_URL,
+    _USER_AGENT,
+    clean_font_name,
+    _parse_robots_policy,
+)
+from fontagit_pipeline.transform import build_slug
 
 logger = logging.getLogger(__name__)
 
 
 class EnrichParseError(Exception):
     """눈누 페이지 파싱 실패"""
+    pass
+
+
+class NoonnuEnrichError(Exception):
+    """눈누 enrich 오류 (외부 경계)"""
     pass
 
 
@@ -24,7 +45,7 @@ PERMISSION_CATEGORIES: tuple[str, ...] = (
 _COMMERCIAL_KEYS = ("print", "website", "packaging", "video")
 
 
-def _extract_json_ld_blocks(html: str) -> list[dict]:
+def _extract_json_ld_blocks(html: str) -> list[dict]:  # type: ignore[type-arg]
     """JSON-LD 블록 모두 추출"""
     soup = BeautifulSoup(html, "html.parser")
     blocks = []
@@ -199,7 +220,7 @@ def classify(parse_ok: bool, price: Optional[int], perms: Optional[dict[str, str
 
 
 # Task 7: 제안 조립
-def build_proposal(font_id: str, slug: str, source_url: str, official_url: str, html: str) -> dict:
+def build_proposal(font_id: str, slug: str, source_url: str, official_url: str, html: str) -> dict:  # type: ignore[type-arg]
     """눈누 HTML에서 license_proposals insert용 dict를 조립한다.
 
     파싱 실패 시 예외를 던지지 않고 parse_status='failed' + needs_review로 담아,
@@ -244,8 +265,8 @@ def build_proposal(font_id: str, slug: str, source_url: str, official_url: str, 
     return proposal
 
 
-def _font_update_for(rows: dict, license_type: str, weights: list[int],
-                     italic: bool, official_url: str) -> dict:
+def _font_update_for(rows: dict, license_type: str, weights: list[int],  # type: ignore[type-arg]
+                     italic: bool, official_url: str) -> dict:  # type: ignore[type-arg]
     """auto_safe 제안을 fonts 발행 업데이트로 변환."""
     return {
         "is_commercial_free": bool(rows["is_commercial_free"]),
@@ -261,3 +282,160 @@ def _font_update_for(rows: dict, license_type: str, weights: list[int],
         "license_source_url": official_url,
         "status": "published",
     }
+
+
+
+def _derive_slug(name_ko: str, name_en: Optional[str]) -> str:
+    """눈누 폰트명에서 슬러그를 도출한다.
+    
+    규칙: name_en이 있으면 clean + build_slug, 없으면 name_ko를 소문자-하이픈정규화.
+    
+    Args:
+        name_ko: 한글 폰트명.
+        name_en: 영문 폰트명 (선택사항).
+    
+    Returns:
+        URL 슬러그.
+    """
+    if name_en:
+        cleaned = clean_font_name(name_en)
+        if cleaned:
+            return build_slug(cleaned)
+    
+    slug = re.sub(r"[^a-z0-9]+", "-", name_ko.lower()).strip("-")
+    return slug
+
+
+def enrich_fonts(
+    seed_path: Optional[Path] = None,
+    supabase_url: Optional[str] = None,
+    secret_key: Optional[str] = None,
+    *,
+    limit: Optional[int] = None,
+    only_slug: Optional[str] = None,
+) -> tuple[int, int, int]:
+    """seed의 눈누 URL을 재방문해 제안 적재 + auto_safe 자동 발행.
+    
+    Args:
+        seed_path: seed JSON 경로 (기본: output/tier-b-noonnu-seed.json).
+        supabase_url: Supabase URL.
+        secret_key: Supabase secret key.
+        limit: 처리할 최대 폰트 수 (None=모두).
+        only_slug: 특정 슬러그만 처리 (None=모두).
+    
+    Returns:
+        (auto_published, proposed, skipped) 튜플.
+    
+    Raises:
+        NoonnuEnrichError: 파일/DB 오류.
+    """
+    if seed_path is None:
+        seed_path = Path("output") / "tier-b-noonnu-seed.json"
+    
+    if not supabase_url or not secret_key:
+        raise NoonnuEnrichError(
+            "SUPABASE_URL과 SUPABASE_SECRET_KEY가 필수입니다"
+        )
+    
+    try:
+        with open(seed_path, encoding="utf-8") as f:
+            doc = NoonnuSeedOutput(**json.load(f))
+    except FileNotFoundError as exc:
+        raise NoonnuEnrichError(f"seed JSON 없음: {seed_path}") from exc
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise NoonnuEnrichError(f"seed JSON 파싱 오류: {exc}") from exc
+    
+    client = create_client(supabase_url, secret_key)
+    schema = client.schema("fontagit")
+    
+    try:
+        robots_response = httpx.get(_ROBOTS_URL, timeout=10.0)
+        robots_response.raise_for_status()
+        robots_policy = _parse_robots_policy(robots_response.text)
+    except httpx.HTTPError as exc:
+        raise NoonnuEnrichError(f"robots.txt fetch 실패: {exc}") from exc
+    
+    auto, proposed, skipped = 0, 0, 0
+    records = doc.records[:limit] if limit else doc.records
+    
+    with httpx.Client(follow_redirects=True) as http:
+        for rec in records:
+            slug = _derive_slug(rec.name_ko, rec.name_en)
+            
+            if only_slug and slug != only_slug:
+                continue
+            
+            try:
+                result: Any = (schema.table("fonts")
+                         .select("id,status,official_url")
+                         .eq("slug", slug)
+                         .maybe_single()
+                         .execute())
+                font: Any = result.data if result else None
+            except Exception as exc:
+                logger.warning("폰트 조회 실패(slug=%s): %s", slug, exc.__class__.__name__)
+                skipped += 1
+                continue
+            
+            if not font or font.get("status") == "published":
+                skipped += 1
+                continue
+            
+            if not robots_policy.can_fetch(_ROBOT_USER_AGENT, rec.source_page):
+                logger.info("robots.txt 차단(slug=%s)", slug)
+                skipped += 1
+                continue
+            
+            time.sleep(_REQUEST_DELAY)
+            try:
+                html_response = http.get(
+                    rec.source_page,
+                    headers={"User-Agent": _USER_AGENT},
+                    timeout=10.0,
+                )
+                html_response.raise_for_status()
+                html = html_response.text
+            except httpx.HTTPError as exc:
+                logger.warning("HTML fetch 실패(slug=%s): %s", slug, exc.__class__.__name__)
+                skipped += 1
+                continue
+            
+            try:
+                proposal = build_proposal(
+                    font["id"],
+                    slug,
+                    rec.source_page,
+                    font.get("official_url") or rec.official_url,
+                    html,
+                )
+            except Exception as exc:
+                logger.warning("제안 생성 실패(slug=%s): %s", slug, exc.__class__.__name__)
+                skipped += 1
+                continue
+            
+            fu = proposal.pop("_font_update")
+            
+            try:
+                schema.table("license_proposals").upsert(
+                    proposal, on_conflict="font_id"
+                ).execute()
+            except Exception as exc:
+                logger.warning("proposal 저장 실패(slug=%s): %s", slug, exc.__class__.__name__)
+                skipped += 1
+                continue
+            
+            if fu is not None:
+                fu["verified_at"] = datetime.now(timezone.utc).isoformat()
+                try:
+                    schema.table("fonts").update(fu).eq("id", font["id"]).execute()
+                    auto += 1
+                    logger.info("자동발행 완료: %s", slug)
+                except Exception as exc:
+                    logger.warning("폰트 발행 실패(slug=%s): %s", slug, exc.__class__.__name__)
+                    skipped += 1
+            else:
+                proposed += 1
+                logger.info("검수 제안 추가: %s", slug)
+    
+    logger.info("enrich 완료: 자동발행 %d, 검수대기 %d, 스킵 %d", auto, proposed, skipped)
+    return auto, proposed, skipped

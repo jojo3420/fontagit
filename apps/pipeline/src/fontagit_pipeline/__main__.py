@@ -14,6 +14,7 @@ from fontagit_pipeline.config import load_settings
 from fontagit_pipeline.korean_names import load_korean_names, KoreanNamesError
 from fontagit_pipeline.licenses import fetch_license_map, LicenseFetchError
 from fontagit_pipeline.models import GoogleFontRaw, KoreanNameEntry, OutputDocument
+from fontagit_pipeline.noonnu_enrich import enrich_fonts, NoonnuEnrichError
 from fontagit_pipeline.noonnu_import import import_noonnu_seeds, NoonnuImportError
 from fontagit_pipeline.noonnu_seed import collect_noonnu_seeds, NoonnuSeedError
 from fontagit_pipeline.transform import build_records
@@ -185,6 +186,42 @@ def main_noonnu_import(args: argparse.Namespace) -> int:
         return 3
 
 
+def main_noonnu_enrich(args: argparse.Namespace) -> int:
+    """눈누 Tier B 라이선스 제안 적재 진입점."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    try:
+        settings = load_settings()
+    except ValidationError:
+        logger.error(
+            "Supabase 설정이 없습니다. apps/pipeline/.env를 확인하세요."
+        )
+        return 2
+
+    try:
+        auto, proposed, skipped = enrich_fonts(
+            supabase_url=settings.supabase_url,
+            secret_key=settings.supabase_secret_key,
+            limit=args.limit,
+            only_slug=args.slug,
+        )
+        logger.info(
+            "enrich 완료: 자동발행 %d개, 검수대기 %d개, 스킵 %d개",
+            auto,
+            proposed,
+            skipped,
+        )
+        return 0
+    except NoonnuEnrichError as exc:
+        logger.error("enrich 실패: %s", exc)
+        return 3
+    except Exception as exc:
+        logger.error("예상치 못한 오류: %s", exc)
+        return 3
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="FontAgit 파이프라인",
@@ -214,6 +251,19 @@ if __name__ == "__main__":
         help="눈누 Tier B draft 임포트",
     )
     import_parser.set_defaults(func=main_noonnu_import)
+
+    # noonnu-enrich 명령
+    enrich_parser = subparsers.add_parser(
+        "noonnu-enrich",
+        help="눈누 Tier B 라이선스 제안 적재",
+    )
+    enrich_parser.add_argument(
+        "--limit", type=int, default=None, help="처리할 최대 폰트 수"
+    )
+    enrich_parser.add_argument(
+        "--slug", type=str, default=None, help="특정 슬러그만 처리"
+    )
+    enrich_parser.set_defaults(func=main_noonnu_enrich)
 
     args = parser.parse_args()
 
