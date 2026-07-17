@@ -13,16 +13,23 @@ export async function getAllFonts(): Promise<Font[]> {
   if (error) throw error;
   if (!data || data.length === 0) return [];
 
-  // aliases RLS(anon_read_aliases)가 published 폰트 alias만 반환 → 거대 in-list(수천자 URL) 없이 전체 조회 후 메모리 그룹핑
-  const { data: aliasRows, error: aliasError } = await supabaseClient
-    .from("aliases")
-    .select("*");
-
-  if (aliasError) throw aliasError;
+  // aliases를 published 폰트 id 청크(50)로 조회: 거대 URL(수천자)과 PostgREST max-rows 무음 절단 동시 방지
+  // (RLS anon_read_aliases가 published alias만 반환하지만, 절단은 role 무관하게 발생하므로 청크로 상한 보장)
+  const CHUNK = 50;
+  const fontIds = data.map((row) => row.id);
+  const aliasRows: AliasRow[] = [];
+  for (let i = 0; i < fontIds.length; i += CHUNK) {
+    const { data: rows, error: aliasError } = await supabaseClient
+      .from("aliases")
+      .select("*")
+      .in("font_id", fontIds.slice(i, i + CHUNK));
+    if (aliasError) throw aliasError;
+    if (rows) aliasRows.push(...(rows as AliasRow[]));
+  }
 
   // 메모리에서 Map<font_id, alias[]>로 그룹핑
   const aliasMap = new Map<string, string[]>();
-  (aliasRows || []).forEach((row: AliasRow) => {
+  aliasRows.forEach((row: AliasRow) => {
     if (!aliasMap.has(row.font_id)) {
       aliasMap.set(row.font_id, []);
     }
