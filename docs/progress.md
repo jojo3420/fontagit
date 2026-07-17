@@ -21,7 +21,7 @@ FontAgit(폰트 아지트)는 국내외 무료-유료 폰트를 검색-비교하
 슬라이스2 검색 브랜치를 develop에 병합, 문서 충돌 3건 전부 develop(상위 집합) 채택. 커밋 `6837594`(origin 반영). 남은: 자동완성(F-19)은 계획 문서만 — `plans/2026-07-17-search-autocomplete.md`. 상세: 없음
 
 ## 2026-07-17 - 클릭 rate limiting DB 최후방어 (슬라이스3 후속)
-클릭 기록 봇 어뷰징 방어를 DB 계층(폰트별 10초 20건 상한 + try advisory lock)으로 구현. PR #18 MERGED(`496361b`, 마이그레이션 0008). 남은: prod 배포 트랙(0007+0008 스키마+폰트 적재+Kong), 배포 전 부하 테스트. 상세: 없음(`specs/plans` click-rate-limiting)
+클릭 기록 봇 어뷰징 방어를 DB 계층(폰트별 10초 20건 상한 + try advisory lock)으로 구현. PR #18 MERGED(`496361b`, 마이그레이션 0008). prod fontagit 0005~0008 스키마 적용 완료(supabase_admin+SSH docker exec, `postgres`는 권한 없음). 남은: prod 폰트 적재 + Kong rate limit(공유 게이트웨이), 배포 전 부하 테스트. 상세: 없음(`specs/plans` click-rate-limiting, handoff `2026-07-17-1455`)
 
 ## 2026-07-17 - Top10 이동 클릭 집계 완성 (슬라이스3, F-03)
 공식 링크 '이동' 클릭을 익명 집계해 홈/트렌드 TOP 10을 실측 인기순 표시(데이터 0건이면 '최신 등록' 폴백). PR #17 MERGED(`bfe2632`). 남은: 일별 롤업 cron, prod 0007 적용. 상세: 없음(`plans/2026-07-16-slice3-click-tracking.md`)
