@@ -75,7 +75,10 @@ export async function searchSuggestions(
     const { data, error } = await builder;
 
     if (error) {
-      console.error('[search] RPC error:', error);
+      // 디바운스 취소(signal.aborted)는 정상 흐름 — 에러로 로깅하지 않는다
+      if (!signal?.aborted) {
+        console.error('[search] RPC error:', error);
+      }
       const err = new Error('SEARCH_RPC_FAILED');
       err.cause = error;
       throw err;
@@ -97,7 +100,10 @@ export async function searchSuggestions(
     if (err instanceof Error && err.message === 'SEARCH_RPC_FAILED') {
       throw err;
     }
-    console.error('[search] RPC error:', err);
+    // 디바운스 취소로 던져진 AbortError는 정상 흐름 — 로깅하지 않는다
+    if (!signal?.aborted) {
+      console.error('[search] RPC error:', err);
+    }
     const e = new Error('SEARCH_RPC_FAILED');
     e.cause = err;
     throw e;
