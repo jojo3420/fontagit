@@ -3,7 +3,7 @@
 - 작성일: 2026-07-17
 - 대상 기능: 공식 링크 '이동' 클릭 집계(F-03, 슬라이스3)의 어뷰징 방어
 - 선행: 마이그레이션 0007(`font_clicks`/`record_click`/`get_top_fonts`) 완료-머지(PR #17)
-- 상태: 설계 확정 대기(브레인스토밍 결정 반영)
+- 상태: 구현 완료, PR #18 리뷰 반영(try advisory lock으로 리소스 보호 강화 — S2)
 
 ## 1. 목적과 위협 모델
 
@@ -43,7 +43,7 @@
 `record_click`을 `create or replace`로 교체. insert 직전에 폰트별 슬라이딩 윈도우 상한 검사를 추가한다.
 
 - **규칙**: 같은 `font_id`가 **최근 10초에 20건 이상** 이미 기록됐으면 이번 클릭을 **무시**(insert 스킵).
-- **동시성 방어(race 제거)**: `count(*)` 후 `insert`는 원자적이지 않아, 동시 요청이 같은 스냅샷을 읽고 모두 통과하는 TOCTOU(Time-Of-Check-To-Time-Of-Use) 결함이 있다. font_id 확정 직후 `pg_advisory_xact_lock(hashtext(p_slug))`으로 **같은 폰트 요청을 트랜잭션 단위로 직렬화**해 이 창을 닫는다. 서로 다른 폰트는 다른 락이라 병렬 유지, fire-and-forget이라 짧은 대기는 허용. (리뷰 M1)
+- **동시성 방어(race 제거) + 리소스 보호(S2)**: `count(*)` 후 `insert`는 원자적이지 않아, 동시 요청이 같은 스냅샷을 읽고 모두 통과하는 TOCTOU(Time-Of-Check-To-Time-Of-Use) 결함이 있다. font_id 확정 직후 `pg_try_advisory_xact_lock(hashtext('fontagit.record_click'), hashtext(p_slug))`으로 **같은 폰트 요청을 직렬화**하되, 대기(blocking)가 아니라 **획득 실패 시 조용히 무시**한다 → 봇 폭주 시 락 대기로 DB/PostgREST 연결이 점유되는 것을 막는다. 경합 시 일부 요청이 카운트 없이 무시되지만 rate limit 목적(과다 기록 차단)엔 안전하고 fire-and-forget과 일치. 2-key namespace로 타 기능 락과 충돌 방지, 다른 폰트는 다른 키라 병렬 유지. (리뷰 M1+S2)
 - **fire-and-forget 계약 유지**: 초과 시에도 오류를 던지지 않고 `return`(클라이언트는 성공/실패를 구분하지 않음).
 - **인덱스 재사용**: 0007의 `idx_font_clicks_font_time (font_id, clicked_at)`를 그대로 활용 → count 쿼리 저비용.
 
@@ -79,9 +79,11 @@ begin
     return;
   end if;
 
-  -- race 제거(M1): 같은 폰트 동시 요청을 트랜잭션 단위로 직렬화 → count 후 insert의 TOCTOU 차단.
-  -- hashtext는 pg_catalog 함수라 search_path 무관. 다른 폰트는 다른 락값이라 병렬 유지.
-  perform pg_advisory_xact_lock(hashtext(p_slug));
+  -- race 제거(M1) + 리소스 보호(S2): 같은 폰트 동시 요청을 직렬화하되 대기 대신 try 방식으로
+  -- 획득 실패 시 조용히 무시(blocking 연결 점유 회피). 2-key namespace로 타 기능 락과 충돌 방지.
+  if not pg_try_advisory_xact_lock(hashtext('fontagit.record_click'), hashtext(p_slug)) then
+    return;
+  end if;
 
   -- 2차 안전밸브: 폰트별 최근 윈도우 삽입량이 상한 이상이면 조용히 무시
   select count(*) into v_recent

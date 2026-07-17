@@ -27,9 +27,12 @@ begin
     return;
   end if;
 
-  -- race 제거(M1): 같은 폰트 동시 요청을 트랜잭션 단위로 직렬화 → count 후 insert의 TOCTOU 차단.
-  -- hashtext/pg_advisory_xact_lock은 pg_catalog 함수라 search_path 무관. 다른 폰트는 다른 락값이라 병렬 유지.
-  perform pg_advisory_xact_lock(hashtext(p_slug));
+  -- race 제거(M1) + 리소스 보호(S2): 같은 폰트 동시 요청을 트랜잭션 단위로 직렬화해 count 후 insert의
+  -- TOCTOU를 차단하되, 대기(blocking) 대신 try 방식으로 획득 실패 시 조용히 무시 → 봇 폭주 시 연결 점유 회피.
+  -- 2-key namespace로 타 기능 락과 우연 충돌 방지. 내장 락 함수는 search_path 무관, 다른 폰트는 다른 키라 병렬 유지.
+  if not pg_try_advisory_xact_lock(hashtext('fontagit.record_click'), hashtext(p_slug)) then
+    return;
+  end if;
 
   -- 2차 안전밸브: 폰트별 최근 윈도우 삽입량이 상한 이상이면 조용히 무시
   select count(*) into v_recent
@@ -50,4 +53,4 @@ revoke execute on function fontagit.record_click(text) from public;
 grant execute on function fontagit.record_click(text) to anon;
 
 comment on function fontagit.record_click(text) is
-  '슬라이스3 클릭 기록(익명). published slug만 기록. 폰트별 10초 20건 상한 + advisory lock 직렬화(0008 후속). anon 공개 fire-and-forget RPC.';
+  '슬라이스3 클릭 기록(익명). published slug만 기록. 폰트별 10초 20건 상한 + try advisory lock 직렬화(획득 실패 시 무시, 0008 후속). anon 공개 fire-and-forget RPC.';

@@ -69,14 +69,23 @@ begin
   end if;
 end $$;
 
--- R4: 동시성 직렬화 정적 확인 — 함수 정의에 advisory lock 존재 (SQL 단일 세션은 진짜 병렬 재현 불가)
+-- R4: 동시성 직렬화 정적 확인 — try advisory lock 실행문이 count보다 앞에 존재해야 race 방어 유효.
+--     함수 본문 주석엔 락 함수명이 없어 문자열 매치가 실행문만 잡음(가짜 통과 방지, S1).
+--     SQL 단일 세션은 진짜 병렬 재현 불가 → 배포 전 병렬 부하 테스트로 실증(설계 6.1).
 do $$
 declare
   v_def text;
+  v_lock_pos int;
+  v_count_pos int;
 begin
   v_def := pg_get_functiondef('fontagit.record_click(text)'::regprocedure);
-  if position('pg_advisory_xact_lock' in v_def) = 0 then
-    raise exception 'R4: record_click에 advisory lock 부재 (race 방어 누락)';
+  v_lock_pos := position('pg_try_advisory_xact_lock' in v_def);
+  v_count_pos := position('count(*)' in v_def);
+  if v_lock_pos = 0 then
+    raise exception 'R4: record_click에 try advisory lock 실행문 부재 (race 방어 누락)';
+  end if;
+  if v_lock_pos > v_count_pos then
+    raise exception 'R4: advisory lock이 count 이후에 위치 (TOCTOU 방어 무의미)';
   end if;
 end $$;
 
