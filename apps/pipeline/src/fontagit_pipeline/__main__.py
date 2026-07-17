@@ -222,6 +222,93 @@ def main_noonnu_enrich(args: argparse.Namespace) -> int:
         return 3
 
 
+def main_noonnu_review(args: argparse.Namespace) -> int:
+    """눈누 라이선스 제안 검수 진입점."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+    from supabase import create_client
+
+    from .noonnu_review import (
+        approve,
+        list_pending,
+        reject,
+        sample_auto_published,
+        unpublish,
+    )
+
+    try:
+        settings = load_settings()
+    except ValidationError:
+        logger.error(
+            "Supabase 설정이 없습니다. apps/pipeline/.env를 확인하세요."
+        )
+        return 2
+
+    if not settings.supabase_url or not settings.supabase_secret_key:
+        logger.error("Supabase URL 및 secret key가 필요합니다.")
+        return 2
+
+    try:
+        client = create_client(settings.supabase_url, settings.supabase_secret_key)
+        schema = client.schema("fontagit")
+
+        action = args.action
+
+        if action == "list":
+            proposals = list_pending(schema)
+            logger.info("검수 대기: %d건", len(proposals))
+            for p in proposals:
+                logger.info(
+                    "  - %s (%s): %s",
+                    p.get("slug"),
+                    p.get("proposed_license_type"),
+                    p.get("source_url"),
+                )
+            return 0
+
+        elif action == "approve":
+            approve(schema, args.slug, note=args.note)
+            return 0
+
+        elif action == "reject":
+            if not args.note:
+                logger.error("--note는 필수입니다")
+                return 1
+            reject(schema, args.slug, note=args.note)
+            return 0
+
+        elif action == "audit-sample":
+            pct = getattr(args, "pct", 5)
+            samples = sample_auto_published(schema, pct=pct)
+            logger.info("표본 감시: %d건 (전체의 %d%%)", len(samples), pct)
+            for s in samples:
+                logger.info(
+                    "  - %s (%s): %s",
+                    s.get("slug"),
+                    s.get("name_ko"),
+                    s.get("official_url"),
+                )
+            return 0
+
+        elif action == "unpublish":
+            if not args.note:
+                logger.error("--note는 필수입니다")
+                return 1
+            unpublish(schema, args.slug, note=args.note)
+            return 0
+
+        else:
+            logger.error("미지원 액션: %s", action)
+            return 1
+
+    except Exception as exc:
+        logger.error("검수 실패: %s", exc)
+        return 3
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="FontAgit 파이프라인",
@@ -264,6 +351,27 @@ if __name__ == "__main__":
         "--slug", type=str, default=None, help="특정 슬러그만 처리"
     )
     enrich_parser.set_defaults(func=main_noonnu_enrich)
+
+    # noonnu-review 명령
+    review_parser = subparsers.add_parser(
+        "noonnu-review",
+        help="눈누 라이선스 제안 검수",
+    )
+    review_parser.add_argument(
+        "action",
+        choices=["list", "approve", "reject", "audit-sample", "unpublish"],
+        help="실행 액션",
+    )
+    review_parser.add_argument(
+        "--slug", type=str, default=None, help="폰트 슬러그(approve/reject/unpublish에서 필수)"
+    )
+    review_parser.add_argument(
+        "--note", type=str, default=None, help="검수자 코멘트(approve에서 선택, reject/unpublish에서 필수)"
+    )
+    review_parser.add_argument(
+        "--pct", type=int, default=5, help="표본 백분율(audit-sample, 기본값 5)"
+    )
+    review_parser.set_defaults(func=main_noonnu_review)
 
     args = parser.parse_args()
 
