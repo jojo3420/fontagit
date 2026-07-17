@@ -2,6 +2,9 @@ import { supabaseClient } from './client';
 import type { SearchResult } from './types';
 
 const MAX_QUERY_LENGTH = 100;
+const SEARCH_LOG_DEBOUNCE_MS = 1000;
+const DIRECT_IDENTIFIER_PATTERN =
+  /@|https?:\/\/|www\.|(?:\d[\s()-]?){7,}/i;
 
 interface RPCSearchRow {
   slug: string;
@@ -37,7 +40,7 @@ export async function searchFonts(q: string): Promise<SearchResult[]> {
       return [];
     }
 
-    return (data as RPCSearchRow[]).map((row: RPCSearchRow): SearchResult => ({
+    const results = (data as RPCSearchRow[]).map((row: RPCSearchRow): SearchResult => ({
       slug: row.slug,
       nameKo: row.name_ko,
       nameEn: row.name_en,
@@ -45,6 +48,13 @@ export async function searchFonts(q: string): Promise<SearchResult[]> {
       category: row.category_ko,
       foundry: row.foundry,
     }));
+
+    // 0건 결과이면 검색어 로깅 (비동기, 무시)
+    if (results.length === 0) {
+      logSearchQuery(q).catch(() => {});
+    }
+
+    return results;
   } catch (err) {
     if (err instanceof Error && err.message === 'SEARCH_RPC_FAILED') {
       throw err;
@@ -53,6 +63,47 @@ export async function searchFonts(q: string): Promise<SearchResult[]> {
     const e = new Error('SEARCH_RPC_FAILED');
     e.cause = err;
     throw e;
+  }
+}
+
+let lastLoggedQuery = '';
+let lastLoggedTime = 0;
+
+/**
+ * 검색 실패어(0건 결과)를 익명 로그
+ * @param query 검색어 (정규화 전)
+ * best-effort: 로깅 실패는 무시(검색 UX에 영향 없음)
+ */
+async function logSearchQuery(query: string): Promise<void> {
+  const trimmedQuery = query.trim();
+  if (
+    !trimmedQuery ||
+    trimmedQuery.length > MAX_QUERY_LENGTH ||
+    DIRECT_IDENTIFIER_PATTERN.test(trimmedQuery)
+  ) {
+    return;
+  }
+
+  const now = Date.now();
+  if (
+    trimmedQuery === lastLoggedQuery &&
+    now - lastLoggedTime < SEARCH_LOG_DEBOUNCE_MS
+  ) {
+    return;
+  }
+
+  lastLoggedQuery = trimmedQuery;
+  lastLoggedTime = now;
+
+  try {
+    const { error } = await supabaseClient
+      .from('search_logs')
+      .insert({ query: trimmedQuery });
+    if (error) {
+      throw error;
+    }
+  } catch {
+    // 로깅 실패는 조용히 무시(테이블 미적용 환경 대비, 로깅 인프라 실패 대비)
   }
 }
 
@@ -88,7 +139,7 @@ export async function searchSuggestions(
       return [];
     }
 
-    return (data as RPCSearchRow[]).map((row: RPCSearchRow): SearchResult => ({
+    const results = (data as RPCSearchRow[]).map((row: RPCSearchRow): SearchResult => ({
       slug: row.slug,
       nameKo: row.name_ko,
       nameEn: row.name_en,
@@ -96,6 +147,13 @@ export async function searchSuggestions(
       category: row.category_ko,
       foundry: row.foundry,
     }));
+
+    // 0건 결과이면 검색어 로깅 (비동기, 무시)
+    if (results.length === 0) {
+      logSearchQuery(q).catch(() => {});
+    }
+
+    return results;
   } catch (err) {
     if (err instanceof Error && err.message === 'SEARCH_RPC_FAILED') {
       throw err;

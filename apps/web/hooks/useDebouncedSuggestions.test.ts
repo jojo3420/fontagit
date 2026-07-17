@@ -79,4 +79,5 @@ describe('useDebouncedSuggestions', () => {
 
     expect(result.current.items).toEqual([]);
   });
+
 });

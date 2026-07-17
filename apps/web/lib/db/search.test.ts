@@ -2,9 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { searchFonts, searchSuggestions } from './search';
 import { supabaseClient } from './client';
 
+const { mockInsert, mockSelect } = vi.hoisted(() => ({
+  mockInsert: vi.fn(),
+  mockSelect: vi.fn(),
+}));
+
 vi.mock('./client', () => ({
   supabaseClient: {
     rpc: vi.fn(),
+    from: vi.fn(() => ({
+      insert: mockInsert,
+    })),
   },
 }));
 
@@ -14,6 +22,8 @@ type RpcResponse = Awaited<RpcBuilder>;
 describe('searchFonts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockInsert.mockReturnValue({ select: mockSelect });
+    mockSelect.mockResolvedValue({ data: null, error: null });
   });
 
   it('정상 RPC 응답 → SearchResult 배열로 매핑', async () => {
@@ -100,6 +110,21 @@ describe('searchFonts', () => {
 
     expect(result.length).toBe(1);
     expect(supabaseClient.rpc).toHaveBeenCalled();
+  });
+
+  it('0건 안전 검색어만 저장하고 반환 행을 요청하지 않는다', async () => {
+    vi.mocked(supabaseClient.rpc)
+      .mockResolvedValueOnce({ data: [], error: null } as unknown as RpcResponse)
+      .mockResolvedValueOnce({ data: [], error: null } as unknown as RpcResponse);
+
+    await expect(searchFonts('없는폰트')).resolves.toEqual([]);
+    await expect(searchFonts('person@example.com')).resolves.toEqual([]);
+
+    await vi.waitFor(() => {
+      expect(mockInsert).toHaveBeenCalledWith({ query: '없는폰트' });
+    });
+    expect(mockInsert).toHaveBeenCalledTimes(1);
+    expect(mockSelect).not.toHaveBeenCalled();
   });
 });
 
