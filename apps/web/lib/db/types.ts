@@ -1,9 +1,12 @@
+import type { SourceTier } from "@/types/font";
+
 export interface FontRow {
   id: string;
   slug: string;
   name_en: string;
   name_ko: string | null;
   foundry: string | null;
+  source_tier?: SourceTier;
   category_ko: string;
   weights: number[];
   is_commercial_free: boolean;

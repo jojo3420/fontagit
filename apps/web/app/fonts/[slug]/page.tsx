@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getFontBySlug, getAllSlugs, resolveFreeAlternatives } from "@/lib/data";
-import { familyOf } from "@/lib/fonts";
 import { getSiteUrl } from "@/lib/seo";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { SpecimenBox } from "@/components/SpecimenBox";
@@ -83,7 +82,6 @@ export default async function FontDetail({ params }: { params: Promise<{ slug: s
 }
 
 function PublishedFontDetail({ font, alternatives }: { font: Font; alternatives: Font[] }) {
-  const family = familyOf(font.fontKey);
   const isPaid = font.tier === "paid";
   const caption = isPaid
     ? "견본은 유사 서체로 대체 표시 — 실제 서체는 공식 페이지에서 확인하세요."
@@ -107,7 +105,7 @@ function PublishedFontDetail({ font, alternatives }: { font: Font; alternatives:
           <p className={styles.meta}>
             {font.foundry} {String.fromCharCode(183)} {font.availableWeights.length}가지 굵기 {String.fromCharCode(183)} 이동 {font.moves.toLocaleString()}회
           </p>
-          <SpecimenBox fontFamily={family} font={font} editable={!isPaid} caption={caption} />
+          <SpecimenBox font={font} editable={!isPaid} caption={caption} />
           <AdFitUnit unit={ADFIT_UNIT_DETAIL ?? ""} width={300} height={250} label />
           {font.id && <ReportForm fontId={font.id} fontName={font.nameKo} />}
         </div>

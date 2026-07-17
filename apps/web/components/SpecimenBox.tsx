@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { Font } from "@/types/font";
 import { getDefaultSpecimenText } from "@/lib/specimen";
+import { LazyFontPreview } from "./LazyFontPreview";
 import styles from "./SpecimenBox.module.css";
 
 /**
@@ -10,13 +11,11 @@ import styles from "./SpecimenBox.module.css";
  * caption이 있으면 견본 아래 회색 주석 표시(유료 대체 견본 안내).
  */
 export function SpecimenBox({
-  fontFamily,
   font,
   editable,
   initialText,
   caption,
 }: {
-  fontFamily: string;
   font: Font;
   editable: boolean;
   initialText?: string;
@@ -25,7 +24,9 @@ export function SpecimenBox({
   const [text, setText] = useState(initialText ?? getDefaultSpecimenText(font.subsets));
   return (
     <div className={styles.box}>
-      <div className={styles.sample} style={{ fontFamily }}>{text || " "}</div>
+      <LazyFontPreview font={font} className={styles.sample}>
+        {text || " "}
+      </LazyFontPreview>
       {caption && <p className={styles.caption}>{caption}</p>}
       {editable && (
         <input
