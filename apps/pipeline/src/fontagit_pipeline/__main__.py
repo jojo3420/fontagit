@@ -309,6 +309,76 @@ def main_noonnu_review(args: argparse.Namespace) -> int:
         return 3
 
 
+def main_noonnu_publish(args: argparse.Namespace) -> int:
+    """prod 폰트 발행 명령 진입점."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+    from supabase import create_client
+
+    from .noonnu_publish import publish_to_prod
+
+    try:
+        settings = load_settings()
+    except ValidationError:
+        logger.error(
+            "설정 로드 실패: apps/pipeline/.env를 확인하세요."
+        )
+        return 2
+
+    # dev 접속 설정
+    if not settings.supabase_url or not settings.supabase_secret_key:
+        logger.error("Dev Supabase 설정이 필요합니다.")
+        return 2
+
+    # prod 접속 설정 (필수)
+    if not settings.supabase_prod_url or not settings.supabase_prod_secret_key:
+        logger.error(
+            "Prod Supabase 설정이 필요합니다 "
+            "(SUPABASE_PROD_URL, SUPABASE_PROD_SECRET_KEY)."
+        )
+        return 2
+
+    try:
+        # Dev 스키마 접속
+        dev_client = create_client(settings.supabase_url, settings.supabase_secret_key)
+        dev_schema = dev_client.schema("fontagit")
+
+        # dry_run 여부 결정
+        dry_run = not getattr(args, "confirm", False)
+
+        if not dry_run:
+            # 실제 쓰기를 위한 대화형 확인
+            total_rows, _ = publish_to_prod(
+                dev_schema,
+                settings.supabase_prod_url,
+                settings.supabase_prod_secret_key,
+                dry_run=True,
+            )
+            confirm_input = input(
+                f"prod에 {total_rows}건 발행합니다. 계속하려면 'yes' 입력: "
+            )
+            if confirm_input.strip() != "yes":
+                logger.info("사용자 취소")
+                return 1
+
+        # 실행
+        total, written = publish_to_prod(
+            dev_schema,
+            settings.supabase_prod_url,
+            settings.supabase_prod_secret_key,
+            dry_run=dry_run,
+        )
+        logger.info("완료: 대상 %d개, 쓰기 %d개", total, written)
+        return 0
+
+    except Exception as exc:
+        logger.error("발행 실패: %s", exc)
+        return 3
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="FontAgit 파이프라인",
@@ -372,6 +442,18 @@ if __name__ == "__main__":
         "--pct", type=int, default=5, help="표본 백분율(audit-sample, 기본값 5)"
     )
     review_parser.set_defaults(func=main_noonnu_review)
+
+    # noonnu-publish 명령
+    publish_parser = subparsers.add_parser(
+        "noonnu-publish",
+        help="눈누 Tier B prod 발행 (dev→prod 동기화, 기본 dry-run)",
+    )
+    publish_parser.add_argument(
+        "--confirm",
+        action="store_true",
+        help="실제 prod 쓰기 활성화 (이중 확인 필수)",
+    )
+    publish_parser.set_defaults(func=main_noonnu_publish)
 
     args = parser.parse_args()
 
