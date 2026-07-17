@@ -18,7 +18,9 @@
 
 create table if not exists fontagit.search_logs (
   id uuid primary key default gen_random_uuid(),
-  query text not null,
+  query text not null check (
+    char_length(trim(query)) between 1 and 100
+  ),
   created_at timestamp with time zone not null default now()
 );
 
@@ -31,6 +33,12 @@ create index if not exists idx_search_logs_created_at
 
 -- RLS: 기본 거부
 alter table fontagit.search_logs enable row level security;
+
+-- 새 테이블은 0001의 "all tables" 권한에 포함되지 않으므로 명시 부여한다.
+revoke all on fontagit.search_logs from public;
+revoke select, update, delete on fontagit.search_logs from anon, authenticated;
+grant insert on fontagit.search_logs to anon;
+grant select, delete on fontagit.search_logs to service_role;
 
 -- 정책: anon은 INSERT만
 create policy "anon_insert_search_logs"
@@ -51,3 +59,5 @@ create policy "service_role_delete_search_logs"
   for delete
   to service_role
   using (true);
+
+notify pgrst, 'reload schema';
