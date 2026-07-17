@@ -16,8 +16,23 @@ export function HeaderSearch() {
   const toggleRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const { items } = useDebouncedSuggestions(query);
+  const { items, loading, error } = useDebouncedSuggestions(query);
   const listboxId = 'header-suggest-listbox';
+  const stateStyle: React.CSSProperties = {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    margin: 0,
+    padding: '12px 16px',
+    fontSize: 14,
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderTop: 'none',
+    borderRadius: '0 0 var(--radius-card) var(--radius-card)',
+    color: 'var(--text-secondary, #888)',
+  };
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
@@ -134,18 +149,26 @@ export function HeaderSearch() {
             <button type="submit" className={styles.searchBtn}>
               검색
             </button>
-            {open && !isComposing && items.length > 0 && (
-              <SearchSuggestions
-                items={items}
-                activeIndex={activeIndex}
-                query={query}
-                listboxId={listboxId}
-                onSelect={(slug) => {
-                  router.push(`/fonts/${slug}`);
-                  setOpen(false);
-                }}
-                onHover={setActiveIndex}
-              />
+            {open && !isComposing && query.trim().length > 0 && (
+              items.length > 0 ? (
+                <SearchSuggestions
+                  items={items}
+                  activeIndex={activeIndex}
+                  query={query}
+                  listboxId={listboxId}
+                  onSelect={(slug) => {
+                    router.push(`/fonts/${slug}`);
+                    setOpen(false);
+                  }}
+                  onHover={setActiveIndex}
+                />
+              ) : error ? (
+                <p style={stateStyle} role="status">검색 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.</p>
+              ) : loading ? (
+                <p style={stateStyle} role="status">검색 중...</p>
+              ) : (
+                <p style={stateStyle} role="status">일치하는 폰트가 없어요.</p>
+              )
             )}
           </form>
         </div>

@@ -28,7 +28,7 @@ describe('useDebouncedSuggestions', () => {
 
   it('쿼리 디바운스 후 searchSuggestions 호출', async () => {
     const mockSearch = vi.spyOn(searchModule, 'searchSuggestions').mockResolvedValueOnce([
-      { slug: 'gmarket-sans', nameKo: '지마켓 산스', nameEn: 'Gmarket Sans', tier: 'free', category: '고딕', foundry: 'G마켓' } as unknown as Parameters<typeof searchModule.searchSuggestions>[0],
+      { slug: 'gmarket-sans', nameKo: '지마켓 산스', nameEn: 'Gmarket Sans', tier: 'free', category: '고딕', foundry: 'G마켓' },
     ]);
 
     const { result, rerender } = renderHook(
@@ -42,7 +42,7 @@ describe('useDebouncedSuggestions', () => {
     vi.advanceTimersByTime(200);
     await vi.runAllTimersAsync();
 
-    expect(mockSearch).toHaveBeenCalledWith('지마켓', 8);
+    expect(mockSearch).toHaveBeenCalledWith('지마켓', 8, expect.any(AbortSignal));
   });
 
   it('쿼리 변경 시 이전 타이머 취소', () => {
@@ -60,5 +60,23 @@ describe('useDebouncedSuggestions', () => {
     vi.advanceTimersByTime(100);
 
     expect(mockSearch).toHaveBeenCalledTimes(0);
+  });
+
+  it('RPC in-flight 중 빈 쿼리로 지우면 이전 응답이 덮지 않음', async () => {
+    vi.spyOn(searchModule, 'searchSuggestions').mockResolvedValueOnce([
+      { slug: 'gmarket-sans', nameKo: '지마켓 산스', nameEn: 'Gmarket Sans', tier: 'free', category: '고딕', foundry: null },
+    ]);
+
+    const { result, rerender } = renderHook(
+      ({ q }: { q: string }) => useDebouncedSuggestions(q),
+      { initialProps: { q: '' } }
+    );
+
+    rerender({ q: '지마켓' });
+    vi.advanceTimersByTime(200);
+    rerender({ q: '' });
+    await vi.runAllTimersAsync();
+
+    expect(result.current.items).toEqual([]);
   });
 });

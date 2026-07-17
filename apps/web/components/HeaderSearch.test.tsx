@@ -18,9 +18,19 @@ vi.mock('@/hooks/useDebouncedSuggestions', () => ({
 }));
 
 import { HeaderSearch } from './HeaderSearch';
+import { useDebouncedSuggestions } from '@/hooks/useDebouncedSuggestions';
 
 describe('HeaderSearch (헤더 클릭-펼침 검색)', () => {
-  beforeEach(() => mockPush.mockClear());
+  beforeEach(() => {
+    mockPush.mockClear();
+    vi.mocked(useDebouncedSuggestions).mockReturnValue({
+      items: [
+        { slug: 'gmarket-sans', nameKo: '지마켓 산스', nameEn: 'Gmarket Sans', tier: 'free', category: '고딕', foundry: 'G마켓', score: 45 },
+      ],
+      loading: false,
+      error: false,
+    });
+  });
 
   it('초기에는 검색 패널이 닫혀 있다', () => {
     render(<HeaderSearch />);
@@ -83,5 +93,14 @@ describe('HeaderSearch (헤더 클릭-펼침 검색)', () => {
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     fireEvent.compositionEnd(input, { target: { value: '지마켓' } });
     expect(screen.getByRole('listbox')).toBeInTheDocument();
+  });
+
+  it('검색 실패 시 실패 안내가 표시된다', async () => {
+    vi.mocked(useDebouncedSuggestions).mockReturnValue({ items: [], loading: false, error: true });
+    const user = userEvent.setup();
+    render(<HeaderSearch />);
+    await user.click(screen.getByRole('button', { name: '검색' }));
+    await user.type(screen.getByRole('combobox'), '지마켓');
+    expect(screen.getByText(/검색 중 문제/)).toBeInTheDocument();
   });
 });

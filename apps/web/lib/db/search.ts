@@ -56,7 +56,11 @@ export async function searchFonts(q: string): Promise<SearchResult[]> {
   }
 }
 
-export async function searchSuggestions(q: string, limit: number = 8): Promise<SearchResult[]> {
+export async function searchSuggestions(
+  q: string,
+  limit: number = 8,
+  signal?: AbortSignal
+): Promise<SearchResult[]> {
   const query = q.trim();
 
   if (!query || query.length > MAX_QUERY_LENGTH) {
@@ -64,10 +68,11 @@ export async function searchSuggestions(q: string, limit: number = 8): Promise<S
   }
 
   try {
-    const { data, error } = await supabaseClient.rpc(
-      'search_fonts',
-      { q: query, lim: limit }
-    );
+    let builder = supabaseClient.rpc('search_fonts', { q: query, lim: limit });
+    if (signal) {
+      builder = builder.abortSignal(signal);
+    }
+    const { data, error } = await builder;
 
     if (error) {
       console.error('[search] RPC error:', error);
