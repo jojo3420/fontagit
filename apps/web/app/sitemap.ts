@@ -9,12 +9,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const collectionSlugs = await getAllCollectionSlugs();
 
   const fontEntries: MetadataRoute.Sitemap = fontSlugs.map((slug) => ({
-    url: `${BASE_URL}/fonts/${slug}/`,
+    url: `${BASE_URL}/fonts/${encodeURIComponent(slug)}/`,
   }));
 
   const collectionEntries: MetadataRoute.Sitemap = collectionSlugs.map(
     (slug) => ({
-      url: `${BASE_URL}/collections/${slug}/`,
+      url: `${BASE_URL}/collections/${encodeURIComponent(slug)}/`,
     })
   );
 

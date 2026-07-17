@@ -15,10 +15,12 @@ beforeEach(() => {
 
 describe("getPublishedSlugs", () => {
   it("published 상태의 slug만 조회한다", async () => {
-    const eq = vi.fn().mockResolvedValue({
+    const range = vi.fn().mockResolvedValue({
       data: [{ slug: "noto-sans-kr" }],
       error: null,
     });
+    const order = vi.fn().mockReturnValue({ range });
+    const eq = vi.fn().mockReturnValue({ order });
     const select = vi.fn().mockReturnValue({ eq });
     vi.mocked(supabaseClient.from).mockReturnValue({ select } as never);
 
@@ -26,6 +28,32 @@ describe("getPublishedSlugs", () => {
     expect(supabaseClient.from).toHaveBeenCalledWith("fonts");
     expect(select).toHaveBeenCalledWith("slug");
     expect(eq).toHaveBeenCalledWith("status", "published");
+    expect(order).toHaveBeenCalledWith("slug");
+    expect(range).toHaveBeenCalledWith(0, 999);
+  });
+
+  it("1000개 초과 폰트는 페이지네이션으로 전량 조회한다", async () => {
+    const firstBatch = Array.from({ length: 1000 }, (_, i) => ({
+      slug: `font-${String(i).padStart(4, "0")}`,
+    }));
+    const secondBatch = [{ slug: "font-1000" }];
+
+    const range = vi
+      .fn()
+      .mockResolvedValueOnce({ data: firstBatch, error: null })
+      .mockResolvedValueOnce({ data: secondBatch, error: null });
+    const order = vi.fn().mockReturnValue({ range });
+    const eq = vi.fn().mockReturnValue({ order });
+    const select = vi.fn().mockReturnValue({ eq });
+    vi.mocked(supabaseClient.from).mockReturnValue({ select } as never);
+
+    const result = await getPublishedSlugs();
+
+    expect(result).toHaveLength(1001);
+    expect(result).toContain("font-1000");
+    expect(range).toHaveBeenCalledTimes(2);
+    expect(range).toHaveBeenNthCalledWith(1, 0, 999);
+    expect(range).toHaveBeenNthCalledWith(2, 1000, 1999);
   });
 });
 
