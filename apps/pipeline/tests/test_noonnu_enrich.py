@@ -16,16 +16,18 @@ def _html(name: str) -> str:
 class TestExtractMeta:
     """Task 2: JSON-LD 메타 추출"""
 
-    def test_extract_meta_gets_name_creator_description(self):
+    def test_extract_meta_gets_name_price_creator(self):
         html = _html("noonnu_conditional")
-        name, font_page_id, description = ne.extract_meta(html)
+        name, price, creator = ne.extract_meta(html)
         assert name is not None
-        assert font_page_id == 1
-        assert description is not None
+        assert price == 0
+        assert creator is not None
 
-    def test_extract_meta_no_schema_raises(self):
-        with pytest.raises(ne.EnrichParseError):
-            ne.extract_meta("<html><body>no schema</body></html>")
+    def test_extract_meta_returns_none_when_no_schema(self):
+        name, price, creator = ne.extract_meta("<html><body>no schema</body></html>")
+        assert name is None
+        assert price is None
+        assert creator is None
 
 
 class TestParsePermissions:
@@ -74,7 +76,6 @@ class TestExtractStyles:
         weights, italic = ne.extract_styles(html)
         assert isinstance(weights, list)
         assert all(isinstance(w, int) for w in weights)
-        assert 400 in weights  # 일반 무게
 
     def test_extract_styles_detects_italic(self):
         """italic 여부 감지"""
@@ -82,10 +83,11 @@ class TestExtractStyles:
         weights, italic = ne.extract_styles(html)
         assert isinstance(italic, bool)
 
-    def test_extract_styles_no_font_face_raises(self):
-        """@font-face 없음: EnrichParseError"""
-        with pytest.raises(ne.EnrichParseError):
-            ne.extract_styles("<html><head></head></html>")
+    def test_extract_styles_no_font_face_returns_empty(self):
+        """@font-face 없음: ([], False) 반환"""
+        weights, italic = ne.extract_styles("<html><head></head></html>")
+        assert weights == []
+        assert italic is False
 
 
 class TestGuessLicenseType:
@@ -93,23 +95,22 @@ class TestGuessLicenseType:
 
     def test_guess_license_type_ofl(self):
         """OFL 라이선스 감지"""
-        html = _html("noonnu_conditional")
+        html = "<p>본 폰트는 SIL OFL 1.1 라이선스</p>"
         license_type = ne.guess_license_type(html)
-        # 실제 페이지 내용에 따라 조정
-        assert license_type in ["OFL", "commercial", "CC0", "custom-free"]
+        assert license_type == "OFL"
 
-    def test_guess_license_type_default_commercial(self):
-        """감지 실패 시 commercial 기본값"""
+    def test_guess_license_type_default_custom_free(self):
+        """감지 실패 시 custom-free 기본값"""
         html = "<html><body></body></html>"
         license_type = ne.guess_license_type(html)
-        assert license_type == "commercial"
+        assert license_type == "custom-free"
 
 
 class TestMapLicenseRows:
     """Task 5b: 라이선스 4행 매핑"""
 
-    def test_map_rows_conditional_embedding_creates_note(self):
-        """conditional 임베딩: license_note에 조건 기재"""
+    def test_map_rows_commercial_free_when_four_allowed(self):
+        """상업 4 카테고리 전부 allowed: is_commercial_free=True"""
         perms = {
             "print": "allowed",
             "website": "allowed",
@@ -118,7 +119,7 @@ class TestMapLicenseRows:
             "embedding": "conditional",
             "branding": "allowed",
         }
-        rows = ne.map_license_rows(perms, "commercial")
+        rows = ne.map_license_rows(perms, "custom-free")
         assert rows["is_commercial_free"] is True
         assert rows["allow_embedding"] == "conditional"
         assert "임베딩" in rows["license_note"]
@@ -130,7 +131,7 @@ class TestMapLicenseRows:
         assert rows["allow_redistribute"] == "conditional"
         assert rows["allow_modify"] == "allowed"
 
-    def test_map_rows_not_commercial_when_denied(self):
+    def test_map_rows_not_commercial_when_one_denied(self):
         """print=denied: is_commercial_free=False"""
         perms = {
             "print": "denied",
@@ -148,13 +149,13 @@ class TestClassify:
     """Task 6: 분류 게이트"""
 
     def test_classify_auto_safe_all_allowed(self):
-        """모두 allowed: auto_safe"""
+        """상업 4카테고리 모두 allowed + price 0: auto_safe"""
         perms = {k: "allowed" for k in ne.PERMISSION_CATEGORIES}
-        result = ne.classify(parse_ok=True, perms=perms, license_type="commercial")
+        result = ne.classify(parse_ok=True, price=0, perms=perms)
         assert result == "auto_safe"
 
-    def test_classify_conditional_needs_review(self):
-        """conditional 있음: needs_review"""
+    def test_classify_embedding_conditional_still_auto_safe(self):
+        """임베딩 conditional이어도 상업 4 allowed + price 0: auto_safe"""
         perms = {
             "print": "allowed",
             "website": "allowed",
@@ -163,20 +164,39 @@ class TestClassify:
             "embedding": "conditional",
             "branding": "allowed",
         }
-        result = ne.classify(parse_ok=True, perms=perms, license_type="commercial")
+        result = ne.classify(parse_ok=True, price=0, perms=perms)
+        assert result == "auto_safe"
+
+    def test_classify_commercial_category_conditional_needs_review(self):
+        """상업 카테고리 조건부: needs_review"""
+        perms = {
+            "print": "allowed",
+            "website": "conditional",
+            "packaging": "allowed",
+            "video": "allowed",
+            "embedding": "allowed",
+            "branding": "allowed",
+        }
+        result = ne.classify(parse_ok=True, price=0, perms=perms)
+        assert result == "needs_review"
+
+    def test_classify_price_nonzero_needs_review(self):
+        """price != 0: needs_review"""
+        perms = {k: "allowed" for k in ne.PERMISSION_CATEGORIES}
+        result = ne.classify(parse_ok=True, price=100, perms=perms)
         assert result == "needs_review"
 
     def test_classify_parse_fail_needs_review(self):
         """파싱 실패: needs_review"""
-        result = ne.classify(parse_ok=False, perms=None, license_type=None)
+        result = ne.classify(parse_ok=False, price=None, perms=None)
         assert result == "needs_review"
 
 
 class TestBuildProposal:
     """Task 7: 제안 조립"""
 
-    def test_build_proposal_success_auto_safe(self):
-        """파싱 성공 + auto_safe → classification=auto_safe"""
+    def test_build_proposal_auto_safe_from_auto_fixture(self):
+        """font_page/920(상업4 allowed): auto_safe"""
         html = _html("noonnu_auto")
         p = ne.build_proposal(
             "fid-1",
@@ -187,13 +207,36 @@ class TestBuildProposal:
         )
         assert p["font_id"] == "fid-1"
         assert p["slug"] == "goldo"
+        assert p["parse_status"] == "parsed"
         assert p["classification"] == "auto_safe"
-        assert p["parse_status"] == "ok"
         assert p["proposed_commercial_free"] is True
-        assert p["source_url"].startswith("https://noonnu.cc")
+        assert p["proposed_weights"] is not None
+        assert p["proposed_italic"] is not None
+        assert p["proposed_license_type"] is not None
+        assert p["review_status"] == "auto_published"
+        assert "_font_update" in p
+        fu = p["_font_update"]
+        assert fu["status"] == "published"
+        assert fu["license_verified"] is True
+        assert fu["auto_approved"] is True
+
+    def test_build_proposal_conditional_embedding_still_auto_safe(self):
+        """font_page/1(임베딩 conditional, 상업4 allowed): auto_safe"""
+        html = _html("noonnu_conditional")
+        p = ne.build_proposal(
+            "fid-cond",
+            "hodo",
+            "https://noonnu.cc/font_page/1",
+            "https://maker",
+            html,
+        )
+        assert p["parse_status"] == "parsed"
+        assert p["classification"] == "auto_safe"
+        assert p["review_status"] == "auto_published"
+        assert p["_font_update"] is not None
 
     def test_build_proposal_parse_fail_is_needs_review(self):
-        """파싱 실패: classification=needs_review"""
+        """파싱 실패: classification=needs_review, parse_status=failed"""
         p = ne.build_proposal(
             "fid-x",
             "broken",
@@ -204,43 +247,17 @@ class TestBuildProposal:
         assert p["parse_status"] == "failed"
         assert p["classification"] == "needs_review"
         assert p["proposed_commercial_free"] is None
-
-    def test_build_proposal_conditional_is_needs_review(self):
-        """조건부 임베딩: classification=needs_review"""
-        html = _html("noonnu_conditional")
-        p = ne.build_proposal(
-            "fid-cond",
-            "hodo",
-            "https://noonnu.cc/font_page/1",
-            "https://maker",
-            html,
-        )
-        assert p["classification"] == "needs_review"
-        assert p["parse_status"] == "ok"
-
-    def test_build_proposal_includes_font_update_when_auto(self):
-        """auto_safe: _font_update 포함"""
-        html = _html("noonnu_auto")
-        p = ne.build_proposal(
-            "fid-1",
-            "goldo",
-            "https://noonnu.cc/font_page/920",
-            "https://maker",
-            html,
-        )
-        assert "_font_update" in p
-        fu = p["_font_update"]
-        assert fu["allow_embedding"] == "allowed"
-        assert fu["license_verified"] is True
-
-    def test_build_proposal_no_font_update_when_needs_review(self):
-        """needs_review: _font_update=None"""
-        html = _html("noonnu_conditional")
-        p = ne.build_proposal(
-            "fid-cond",
-            "hodo",
-            "https://noonnu.cc/font_page/1",
-            "https://maker",
-            html,
-        )
+        assert p["review_status"] == "proposed"
         assert p["_font_update"] is None
+
+    def test_build_proposal_includes_all_fields(self):
+        """모든 필드 포함 확인"""
+        html = _html("noonnu_auto")
+        p = ne.build_proposal("fid", "slug", "https://noonnu.cc/1", "https://official", html)
+        required_keys = {
+            "font_id", "slug", "source_url", "raw_permissions",
+            "proposed_commercial_free", "proposed_embedding", "proposed_redistribute", "proposed_modify",
+            "proposed_license_type", "proposed_weights", "proposed_italic", "proposed_category_ko",
+            "parse_status", "classification", "review_status", "_font_update"
+        }
+        assert required_keys.issubset(set(p.keys()))

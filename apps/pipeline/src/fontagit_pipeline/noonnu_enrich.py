@@ -21,6 +21,7 @@ class EnrichParseError(Exception):
 PERMISSION_CATEGORIES: tuple[str, ...] = (
     "print", "website", "packaging", "video", "embedding", "branding"
 )
+_COMMERCIAL_KEYS = ("print", "website", "packaging", "video")
 
 
 def _extract_json_ld_blocks(html: str) -> list[dict]:
@@ -38,34 +39,23 @@ def _extract_json_ld_blocks(html: str) -> list[dict]:
 
 
 def extract_meta(html: str) -> tuple[Optional[str], Optional[int], Optional[str]]:
-    """JSON-LD에서 폰트명, 페이지ID, 설명 추출
-
-    Returns:
-        (name, font_page_id, description)
-        font_page_id는 source_url https://noonnu.cc/font_page/N 에서 추출
-
-    Raises:
-        EnrichParseError: JSON-LD 또는 필수 필드 없음
-    """
-    soup = BeautifulSoup(html, "html.parser")
-    blocks = _extract_json_ld_blocks(html)
-
-    if not blocks:
-        raise EnrichParseError("JSON-LD 블록 없음")
-
-    data = blocks[0]  # 첫 번째 SoftwareApplication
-
-    name = data.get("name")
-    description = data.get("description")
-
-    # 페이지 ID 추출 (URL에서)
-    font_page_id = None
-    if "url" in data:
-        match = re.search(r"/font_page/(\d+)", str(data["url"]))
-        if match:
-            font_page_id = int(match.group(1))
-
-    return name, font_page_id, description
+    """JSON-LD SoftwareApplication에서 (이름, 가격, 제작사) 추출. 파싱 불가 항목은 None."""
+    for data in _extract_json_ld_blocks(html):
+        if data.get("@type") != "SoftwareApplication":
+            continue
+        name = data.get("name")
+        creator = data.get("creator") or data.get("author")
+        if isinstance(creator, dict):
+            creator = creator.get("name")
+        price: Optional[int] = None
+        offers = data.get("offers")
+        if isinstance(offers, dict) and offers.get("price") is not None:
+            try:
+                price = int(float(offers["price"]))
+            except (ValueError, TypeError):
+                price = None
+        return name, price, creator
+    return None, None, None
 
 
 # Task 3: 라이선스 허용표 파싱
@@ -136,54 +126,18 @@ def parse_permissions(html: str) -> dict[str, str]:
 
 # Task 4: @font-face 스타일 추출
 def extract_styles(html: str) -> tuple[list[int], bool]:
-    """@font-face에서 font-weight와 italic 여부 추출
-
-    Returns:
-        (weights=[400, 700, ...], has_italic=True/False)
-
-    Raises:
-        EnrichParseError: @font-face 없음
-    """
-    soup = BeautifulSoup(html, "html.parser")
-    styles = soup.find_all("style")
-
-    font_face_text = ""
-    for style in styles:
-        if "@font-face" in (style.string or ""):
-            font_face_text = style.string
-            break
-
-    if not font_face_text:
-        raise EnrichParseError("@font-face 없음")
-
-    # font-weight 추출
-    weights_raw = re.findall(r"font-weight\s*:\s*(\d+)", font_face_text)
-    weights = sorted(set(int(w) for w in weights_raw))
-    if not weights:
-        weights = [400]  # 기본값
-
-    # italic 여부
-    has_italic = "italic" in font_face_text.lower()
-
-    return weights, has_italic
+    """@font-face에서 굵기/이태릭 추출(best-effort). 없으면 ([], False)."""
+    weights = sorted({int(m) for m in re.findall(r"font-weight\s*:\s*(\d{3})", html)})
+    italic = bool(re.search(r"font-style\s*:\s*italic", html))
+    return weights, italic
 
 
 # Task 5a: 라이선스 타입 추정
 def guess_license_type(html: str) -> str:
-    """페이지 텍스트에서 라이선스 타입 추정
-
-    반환: "OFL", "CC0", "custom-free", "commercial" (기본값)
-    """
-    text = BeautifulSoup(html, "html.parser").get_text().lower()
-
-    if "ofl" in text or "open font license" in text:
+    """라이선스 본문에 OFL/SIL 표기가 있으면 'OFL', 아니면 'custom-free'."""
+    if re.search(r"\bOFL\b|SIL\s*Open\s*Font", html, re.IGNORECASE):
         return "OFL"
-    if "cc0" in text or "크리에이티브 커먼즈" in text:
-        return "CC0"
-    if "무료" in text and "상업" in text:
-        return "custom-free"
-
-    return "commercial"
+    return "custom-free"
 
 
 # Task 5b: 라이선스 4행 매핑
@@ -206,144 +160,104 @@ def map_license_rows(
             "license_note": str or None,
         }
     """
-    result: dict[str, Optional[str | bool]] = {}
-
-    # 상업 사용 가능 여부 (print, website, packaging, video 중 하나라도 denied면 False)
-    commercial_categories = {"print", "website", "packaging", "video"}
-    is_commercial = all(
-        permissions.get(cat) != "denied"
-        for cat in commercial_categories
-    )
-    result["is_commercial_free"] = is_commercial
-
-    # 임베딩
-    result["allow_embedding"] = permissions.get("embedding")
-
-    # OFL: redistribute=conditional, modify=allowed
+    is_commercial_free = all(permissions[k] == "allowed" for k in _COMMERCIAL_KEYS)
+    allow_embedding = permissions.get("embedding")
     if license_type == "OFL":
-        result["allow_redistribute"] = "conditional"
-        result["allow_modify"] = "allowed"
+        allow_redistribute, allow_modify = "conditional", "allowed"
     else:
-        result["allow_redistribute"] = None
-        result["allow_modify"] = None
+        allow_redistribute, allow_modify = None, None
 
-    # license_note: 조건부/거부 카테고리 기재
-    notes = []
-    for cat_key, cat_kr in [
-        ("embedding", "임베딩"),
-        ("print", "인쇄"),
-        ("website", "웹사이트"),
-        ("packaging", "포장지"),
-        ("video", "영상"),
-        ("branding", "BI/CI"),
-    ]:
-        status = permissions.get(cat_key)
-        if status == "conditional":
-            notes.append(f"{cat_kr}은 조건부 허용")
-        elif status == "denied":
-            notes.append(f"{cat_kr}은 사용 불가")
+    notes: list[str] = []
+    if allow_embedding == "conditional":
+        notes.append("임베딩 조건부 - 제작사 약관 확인")
+    if allow_embedding == "denied":
+        notes.append("임베딩 불가 - 제작사 약관 확인")
+    for k in _COMMERCIAL_KEYS:
+        if permissions[k] == "conditional":
+            notes.append(f"{k} 조건부 - 제작사 약관 확인")
+    license_note = "; ".join(notes) or None
 
-    if notes:
-        result["license_note"] = "; ".join(notes)
-    else:
-        result["license_note"] = None
-
-    return result
+    return {
+        "is_commercial_free": is_commercial_free,
+        "allow_embedding": allow_embedding,
+        "allow_redistribute": allow_redistribute,
+        "allow_modify": allow_modify,
+        "license_note": license_note,
+    }
 
 
 # Task 6: 분류 게이트
-def classify(
-    parse_ok: bool,
-    perms: Optional[dict[str, str]] = None,
-    license_type: Optional[str] = None,
-) -> str:
-    """파싱 성공 여부 + 권한 구조로 분류
-
-    Returns:
-        "auto_safe": 모든 상업 4카테고리 + 임베딩이 allowed
-        "needs_review": 조건부/거부 있음 또는 파싱 실패
-    """
+def classify(parse_ok: bool, price: Optional[int], perms: Optional[dict[str, str]]) -> str:
+    """자동 발행 게이트(D6). 상업 4카테고리 전부 allowed + price 0 + 파싱성공만 auto_safe."""
     if not parse_ok or perms is None:
         return "needs_review"
-
-    # 상업 4 카테고리 + 임베딩이 모두 allowed 여야 auto_safe
-    critical = ["print", "website", "packaging", "video", "embedding"]
-    if all(perms.get(cat) == "allowed" for cat in critical):
+    if price != 0:
+        return "needs_review"
+    if all(perms[k] == "allowed" for k in _COMMERCIAL_KEYS):
         return "auto_safe"
-
     return "needs_review"
 
 
 # Task 7: 제안 조립
-def build_proposal(
-    font_id: str,
-    slug: str,
-    source_url: str,
-    official_url: str,
-    html: str,
-) -> dict:
-    """완전한 제안 객체 조립
+def build_proposal(font_id: str, slug: str, source_url: str, official_url: str, html: str) -> dict:
+    """눈누 HTML에서 license_proposals insert용 dict를 조립한다.
 
-    Returns:
-        {
-            "font_id": str,
-            "slug": str,
-            "classification": "auto_safe" | "needs_review",
-            "parse_status": "ok" | "failed",
-            "proposed_commercial_free": bool | None,
-            "proposed_embedding": "allowed" | "conditional" | "denied" | None,
-            "proposed_redistribute": ... | None,
-            "proposed_modify": ... | None,
-            "source_url": str,
-            "raw_permissions": dict | None,
-            "_font_update": dict | None,  # auto_safe일 때만 채워짐
-        }
+    파싱 실패 시 예외를 던지지 않고 parse_status='failed' + needs_review로 담아,
+    호출측 배치가 안전하게 계속되도록 한다.
     """
-    parse_ok = False
-    perms = None
-    license_type = None
-
-    # 파싱 시도
+    name, price, creator = extract_meta(html)
+    weights, italic = extract_styles(html)
+    license_type = guess_license_type(html)
     try:
         perms = parse_permissions(html)
-        license_type = guess_license_type(html)
-        parse_ok = True
-    except EnrichParseError as e:
-        logger.warning(f"파싱 실패 {slug}: {e}")
+        parse_status = "parsed"
+    except EnrichParseError as exc:
+        logger.warning("허용표 파싱 실패(slug=%s): %s", slug, exc)
+        perms, parse_status = None, "failed"
 
-    # 분류
-    classification = classify(parse_ok, perms, license_type)
+    classification = classify(parse_status == "parsed", price, perms)
+    rows = (map_license_rows(perms, license_type) if perms is not None
+            else {"is_commercial_free": None, "allow_embedding": None,
+                  "allow_redistribute": None, "allow_modify": None, "license_note": None})
 
-    # 행 매핑
-    rows = {}
-    if parse_ok and perms:
-        rows = map_license_rows(perms, license_type)
-
-    # 기본 제안
     proposal = {
         "font_id": font_id,
         "slug": slug,
-        "classification": classification,
-        "parse_status": "ok" if parse_ok else "failed",
-        "proposed_commercial_free": rows.get("is_commercial_free"),
-        "proposed_embedding": rows.get("allow_embedding"),
-        "proposed_redistribute": rows.get("allow_redistribute"),
-        "proposed_modify": rows.get("allow_modify"),
         "source_url": source_url,
-        "raw_permissions": perms,
+        "raw_permissions": perms or {},
+        "proposed_commercial_free": rows["is_commercial_free"],
+        "proposed_embedding": rows["allow_embedding"],
+        "proposed_redistribute": rows["allow_redistribute"],
+        "proposed_modify": rows["allow_modify"],
+        "proposed_license_type": license_type,
+        "proposed_weights": weights,
+        "proposed_italic": italic,
+        "proposed_category_ko": None,
+        "parse_status": parse_status,
+        "classification": classification,
+        "review_status": "auto_published" if classification == "auto_safe" else "proposed",
     }
-
-    # auto_safe일 때만 _font_update 포함
-    if classification == "auto_safe" and rows:
-        proposal["_font_update"] = {
-            "allow_embedding": rows["allow_embedding"],
-            "allow_redistribute": rows["allow_redistribute"],
-            "allow_modify": rows["allow_modify"],
-            "license_note": rows["license_note"],
-            "license_verified": True,
-            "license_source_url": official_url,
-        }
-    else:
-        proposal["_font_update"] = None
-
+    proposal["_font_update"] = (
+        _font_update_for(rows, license_type, weights, italic, official_url)
+        if classification == "auto_safe" else None
+    )
     return proposal
+
+
+def _font_update_for(rows: dict, license_type: str, weights: list[int],
+                     italic: bool, official_url: str) -> dict:
+    """auto_safe 제안을 fonts 발행 업데이트로 변환."""
+    return {
+        "is_commercial_free": bool(rows["is_commercial_free"]),
+        "allow_embedding": rows["allow_embedding"],
+        "allow_redistribute": rows["allow_redistribute"],
+        "allow_modify": rows["allow_modify"],
+        "license_type": license_type,
+        "license_note": rows["license_note"],
+        "weights": weights,
+        "variants": ["italic"] if italic else [],
+        "license_verified": True,
+        "auto_approved": True,
+        "license_source_url": official_url,
+        "status": "published",
+    }
