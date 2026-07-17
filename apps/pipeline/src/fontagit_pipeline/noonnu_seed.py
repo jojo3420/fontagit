@@ -7,6 +7,8 @@ import json
 import logging
 import re
 import time
+from urllib.robotparser import RobotFileParser
+from xml.etree import ElementTree
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -19,11 +21,13 @@ from fontagit_pipeline.models import NoonnuSeedRecord, NoonnuSeedOutput
 logger = logging.getLogger(__name__)
 
 _NOONNU_BASE = "https://noonnu.cc"
+_ROBOTS_URL = f"{_NOONNU_BASE}/robots.txt"
 _SITEMAP_URL = f"{_NOONNU_BASE}/sitemap.xml"
 _FONT_PAGE_PATTERN = re.compile(r"/font_page/(\d+)")
 _REQUEST_DELAY = 1.5
 _USER_AGENT = "FontAgitSeedBot/0.1 (+https://fontag.it)"
 _NOONNU_SUFFIX_PATTERN = re.compile(r"\s*\|\s*눈누\s*$")
+_ROBOT_USER_AGENT = "FontAgitSeedBot"
 
 
 class NoonnuSeedError(Exception):
@@ -45,6 +49,14 @@ def clean_font_name(name: Optional[str]) -> Optional[str]:
         return name
     # "| 눈누" 또는 " | 눈누" 등의 패턴 제거
     return _NOONNU_SUFFIX_PATTERN.sub("", name).strip() or None
+
+
+def _parse_robots_policy(robots_text: str) -> RobotFileParser:
+    """robots.txt 문자열을 URL 접근 정책으로 변환한다."""
+    policy = RobotFileParser()
+    policy.set_url(_ROBOTS_URL)
+    policy.parse(robots_text.splitlines())
+    return policy
 
 
 def _fetch_url(client: httpx.Client, url: str, timeout: float = 10.0) -> str:
@@ -83,16 +95,22 @@ def _parse_sitemap_urls(sitemap_xml: str) -> list[str]:
     Returns:
         /font_page/{id} URL 목록.
     """
-    soup = BeautifulSoup(sitemap_xml, "html.parser")
-    urls = []
+    root = ElementTree.fromstring(sitemap_xml)
+    urls: list[str] = []
 
-    # 단일 sitemap인 경우
-    for loc in soup.find_all("loc"):
-        url_text = loc.get_text(strip=True)
+    for loc in root.iter():
+        if not loc.tag.endswith("loc"):
+            continue
+        url_text = (loc.text or "").strip()
         if "/font_page/" in url_text:
             urls.append(url_text)
 
     return urls
+
+
+def _clean_font_name(value: str) -> str:
+    """눈누 사이트 제목의 서비스명과 설명 접미사를 제거한다."""
+    return re.split(r"\s*(?:\|\s*눈누|\s+-\s+)", value, maxsplit=1)[0].strip()
 
 
 def _extract_font_data(
@@ -111,50 +129,80 @@ def _extract_font_data(
     """
     soup = BeautifulSoup(html, "html.parser")
 
-    # 폰트명 추출 (h1 또는 og:title 메타 태그)
+    # JSON-LD의 폰트명과 제작사를 최우선 사실값으로 사용한다.
     name_ko: Optional[str] = None
     name_en: Optional[str] = None
-
-    # og:title에서 폰트명 추출
-    og_title = soup.find("meta", property="og:title")
-    if og_title and og_title.get("content"):
-        title_text = og_title.get("content", "").strip()
-        # "FontName - 설명" 형식으로 되어 있을 수 있음
-        if title_text and " - " in title_text:
-            name_ko = title_text.split(" - ")[0].strip()
-        elif title_text:
-            name_ko = title_text.strip()
-
-    # 페이지 h1 태그 확인
-    h1 = soup.find("h1")
-    if h1:
-        h1_text = h1.get_text(strip=True)
-        if h1_text:
-            name_ko = h1_text
-
-    # 제작사(Foundry) 추출
     maker: Optional[str] = None
 
-    # "Foundry" 문자열을 포함한 텍스트 노드 찾기
-    for element in soup.find_all(string=re.compile(r"Foundry", re.IGNORECASE)):
-        # 텍스트가 속한 부모 요소를 찾고 전체 텍스트 가져오기
-        parent = element.find_parent()
-        if parent:
-            parent_text = parent.get_text(strip=True)
-            # "Foundry:" 또는 "Foundry :" 이후의 텍스트 추출
-            match = re.search(r"Foundry\s*:\s*(.+?)(?:\n|$)", parent_text, re.IGNORECASE)
-            if match:
-                maker_candidate = match.group(1).strip()
-                if maker_candidate and len(maker_candidate) < 100:
-                    maker = maker_candidate
-                    break
+    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        try:
+            document = json.loads(script.get_text(strip=True))
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+        candidates = document if isinstance(document, list) else [document]
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            if candidate.get("@type") != "SoftwareApplication":
+                continue
+
+            raw_name = candidate.get("name")
+            creator = candidate.get("creator")
+            if isinstance(raw_name, str):
+                name_ko = _clean_font_name(raw_name)
+            if isinstance(creator, dict) and isinstance(creator.get("name"), str):
+                maker = creator["name"].strip()
+            break
+
+        if name_ko and maker:
+            break
+
+    if not name_ko:
+        og_title = soup.find("meta", property="og:title")
+        if og_title and og_title.get("content"):
+            name_ko = _clean_font_name(str(og_title.get("content", "")))
+
+    if not name_ko:
+        heading = soup.find(["h1", "h2"])
+        if heading:
+            heading_text = heading.get_text(strip=True)
+            if heading_text:
+                name_ko = _clean_font_name(heading_text)
+
+    # 현재 눈누 화면의 "제작" 라벨 다음 값을 대체 경로로 사용한다.
+    if not maker:
+        maker_label = soup.find(string=re.compile(r"^\s*제작\s*$"))
+        if maker_label and maker_label.parent:
+            maker_value = maker_label.parent.find_next_sibling()
+            if maker_value:
+                maker = maker_value.get_text(strip=True) or None
+
+    if not maker:
+        for element in soup.find_all(string=re.compile(r"Foundry", re.IGNORECASE)):
+            parent = element.find_parent()
+            if parent:
+                parent_text = parent.get_text(strip=True)
+                match = re.search(
+                    r"Foundry\s*:\s*(.+?)(?:\n|$)",
+                    parent_text,
+                    re.IGNORECASE,
+                )
+                if match:
+                    maker_candidate = match.group(1).strip()
+                    if maker_candidate and len(maker_candidate) < 100:
+                        maker = maker_candidate
+                        break
 
     # 공식 URL 추출 (제작사 외부 링크)
     official_url: Optional[str] = None
 
     # 모든 링크를 검사
     for link in soup.find_all("a", href=True):
-        href = link.get("href", "").strip()
+        href_value = link.get("href")
+        if not isinstance(href_value, str):
+            continue
+        href = href_value.strip()
         if not href or href.startswith("#"):
             continue
 
@@ -182,7 +230,10 @@ def _extract_font_data(
                 official_url = href
                 break
 
-    return (name_ko, name_en, maker or "Unknown", official_url)
+    if not name_ko or not maker:
+        return None
+
+    return (name_ko, name_en, maker, official_url)
 
 
 def collect_noonnu_seeds(
@@ -209,15 +260,19 @@ def collect_noonnu_seeds(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     owns_client = client is None
-    if owns_client:
-        client = httpx.Client()
+    active_client = client or httpx.Client()
 
     try:
         logger.info("눈누 시드 수집 시작 (배치 크기: %d)", batch_size)
 
+        logger.info("robots.txt 확인: %s", _ROBOTS_URL)
+        robots_policy = _parse_robots_policy(_fetch_url(active_client, _ROBOTS_URL))
+        if not robots_policy.can_fetch(_ROBOT_USER_AGENT, _SITEMAP_URL):
+            raise NoonnuSeedError("robots.txt가 sitemap 수집을 허용하지 않음")
+
         # Sitemap 다운로드
         logger.info("Sitemap 다운로드: %s", _SITEMAP_URL)
-        sitemap_xml = _fetch_url(client, _SITEMAP_URL)
+        sitemap_xml = _fetch_url(active_client, _SITEMAP_URL)
 
         # 폰트 URL 파싱
         font_urls = _parse_sitemap_urls(sitemap_xml)
@@ -235,6 +290,13 @@ def collect_noonnu_seeds(
         collected_at = datetime.now(timezone.utc).isoformat()
 
         for idx, url in enumerate(font_urls, 1):
+            if not robots_policy.can_fetch(_ROBOT_USER_AGENT, url):
+                skip_reasons["robots_disallowed"] = (
+                    skip_reasons.get("robots_disallowed", 0) + 1
+                )
+                logger.warning("robots.txt 수집 제외: %s", url)
+                continue
+
             try:
                 logger.info(
                     "페이지 크롤링 (%d/%d): %s",
@@ -244,7 +306,7 @@ def collect_noonnu_seeds(
                 )
 
                 # HTML 가져오기
-                html = _fetch_url(client, url)
+                html = _fetch_url(active_client, url)
 
                 # 데이터 추출
                 result = _extract_font_data(html, url)
@@ -329,7 +391,7 @@ def collect_noonnu_seeds(
 
     finally:
         if owns_client:
-            client.close()
+            active_client.close()
 
 
 if __name__ == "__main__":

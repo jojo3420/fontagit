@@ -1,6 +1,6 @@
 # Progress
 
-> 작성 규칙: 각 진행 기록은 1~2줄로만 쓴다(사람이 빠르게 읽는 용도). 세부 내용은 `docs/progress-[코드번호].md`(예: `progress-001.md`)에 기록하고, 여기서는 결과 한 줄 + 커밋/PR + 상세 파일 링크만 남긴다.
+> 작성 규칙: 각 진행 기록은 1~2줄로만 쓴다(사람이 빠르게 읽는 용도). 세부 내용은 `docs/progress/progress-[코드번호].md`(예: `docs/progress/progress-001.md`)에 기록하고, 여기서는 결과 한 줄 + 커밋/PR + 상세 파일 링크만 남긴다.
 
 ## 프로젝트 소개
 
@@ -33,7 +33,7 @@ prod(ollidam) 정적 export 빌드를 막던 3함정 해결(URL /rest/v1 중복=
 공식 링크 '이동' 클릭을 익명 집계해 홈/트렌드 TOP 10을 실측 인기순 표시(데이터 0건이면 '최신 등록' 폴백). PR #17 MERGED(`bfe2632`). 남은: 일별 롤업 cron, prod 0007 적용. 상세: 없음(`plans/2026-07-16-slice3-click-tracking.md`)
 
 ## 2026-07-16 - 알리아스 검색 기능 완성 (슬라이스2, F-04)
-한/영/띄어쓰기/오타 흡수 폰트 검색(/search)을 DB `search_fonts` RPC부터 화면까지 완성 + 오류 UI-URL 동기화 이연분(PR #16). PR #15/#16 MERGED(`0eeae9b`). 상세: progress-003.md
+한/영/띄어쓰기/오타 흡수 폰트 검색(/search)을 DB `search_fonts` RPC부터 화면까지 완성 + 오류 UI-URL 동기화 이연분(PR #16). PR #15/#16 MERGED(`0eeae9b`). 상세: `docs/progress/progress-003.md`
 
 ## 2026-07-16 - 마스터플랜 적대적 리뷰 + 정공법 전환
 마스터플랜 v3.0을 적대적 리뷰로 재편(포지셔닝 '정공법 품질 우위' 전환, 킬링 포인트 7) + 30일 그로스 플랜 신설. 커밋 `e864f87`. 상세: 없음(`fontagit-master-plan-v3.0.md` 3장, `fontagit-growth-plan-30d.md`)
@@ -57,7 +57,7 @@ prod(ollidam) 정적 export 빌드를 막던 3함정 해결(URL /rest/v1 중복=
 타입 캔버스-비교 화면으로 가는 nav 진입점을 추가해 '진입점 고립' 해소. PR #6 main 머지(후속 `ec59e72`). 상세: 없음
 
 ## 2026-07-13 - 웹 Phase 3-4 확장 화면 + 마감
-확장 화면 5개(캔버스/비교/컬렉션/등록/빈상태) + 마감 3개(모바일 탭바/다크모드/OG) 구현. PR #5 main 머지(`529a1ec`). 상세: progress-002.md
+확장 화면 5개(캔버스/비교/컬렉션/등록/빈상태) + 마감 3개(모바일 탭바/다크모드/OG) 구현. PR #5 main 머지(`529a1ec`). 상세: `docs/progress/progress-002.md`
 
 ## 2026-07-13 - 웹 프론트엔드 토대 + 핵심 화면 구축 (Phase 1-2)
-웹사이트 화면(apps/web) 신규 구축 — 홈/목록/상세/트렌드/404를 디자인 95% 재현(목업 데이터). PR #4 MERGED(`4fe1da5`). 상세: progress-001.md
+웹사이트 화면(apps/web) 신규 구축 — 홈/목록/상세/트렌드/404를 디자인 95% 재현(목업 데이터). PR #4 MERGED(`4fe1da5`). 상세: `docs/progress/progress-001.md`

@@ -26,6 +26,7 @@ export function SubmitForm() {
     try {
       const success = await submitFontSubmission({
         fontName,
+        category,
         maker,
         officialUrl,
         licenseNote,
@@ -68,6 +69,7 @@ export function SubmitForm() {
             value={fontName}
             onChange={(e) => setFontName(e.target.value)}
             maxLength={100}
+            required
             disabled={formState === "loading"}
           />
         </label>
@@ -108,6 +110,7 @@ export function SubmitForm() {
             value={officialUrl}
             onChange={(e) => setOfficialUrl(e.target.value)}
             maxLength={500}
+            required
             disabled={formState === "loading"}
           />
         </label>

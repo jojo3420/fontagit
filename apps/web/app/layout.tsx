@@ -12,6 +12,7 @@ import {
   GOOGLE_SITE_VERIFICATION,
   NAVER_SITE_VERIFICATION,
   ADSENSE_CLIENT,
+  isAdSenseEnabled,
 } from "@/lib/analytics/constants";
 
 export const metadata: Metadata = {
@@ -37,14 +38,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="ko" className={fontClassNames} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-        {ADSENSE_CLIENT && (
+        {isAdSenseEnabled && (
           <Script
             async
             src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`}
             strategy="lazyOnload"
-            onError={() => {
-              // AdSense 로드 실패 무음 처리
-            }}
+            crossOrigin="anonymous"
           />
         )}
       </head>
@@ -52,7 +51,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <GoogleAnalytics />
         <Header />
         {children}
-        <AdBlockBanner />
+        {isAdSenseEnabled && <AdBlockBanner />}
         <Footer />
         <MobileTabBar />
       </body>
