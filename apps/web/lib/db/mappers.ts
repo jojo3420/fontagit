@@ -20,6 +20,7 @@ export function rowToFont(row: FontRow, aliases: string[]): Font {
     nameKo: row.name_ko ?? row.name_en,
     nameEn: row.name_en,
     fontKey: SLUG_TO_FONTKEY[row.slug] ?? null,
+    sourceTier: row.source_tier,
     tier: row.is_commercial_free ? "free" : "paid",
     category: row.category_ko as Category,
     foundry: row.foundry ?? "",

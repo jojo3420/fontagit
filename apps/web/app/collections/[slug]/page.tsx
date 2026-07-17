@@ -1,6 +1,8 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCollectionBySlug, getAllCollectionSlugs } from "@/lib/data";
+import { getSiteUrl } from "@/lib/seo";
 import { familyOf } from "@/lib/fonts";
 import { TierChip } from "@/components/TierChip";
 import styles from "./page.module.css";
@@ -10,6 +12,28 @@ export const dynamicParams = false;
 export async function generateStaticParams() {
   const slugs = await getAllCollectionSlugs();
   return slugs.map((slug) => ({ slug }));
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const collection = await getCollectionBySlug(slug);
+
+  if (!collection) {
+    return {
+      title: "컬렉션을 찾을 수 없습니다",
+      robots: { index: false, follow: false },
+    };
+  }
+
+  return {
+    title: `${collection.title} - FontAgit`,
+    description: collection.intro,
+    alternates: { canonical: getSiteUrl(`/collections/${collection.slug}/`) },
+  };
 }
 
 export default async function CollectionDetail({ params }: { params: Promise<{ slug: string }> }) {

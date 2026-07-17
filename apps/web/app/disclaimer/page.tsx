@@ -98,6 +98,11 @@ export default async function DisclaimerPage() {
           본 면책 조항에 대한 문의는 <a href="/contact">문의 페이지</a>를 통해 주시기 바랍니다.
         </p>
       </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.h2}>시행일</h2>
+        <p className={styles.text}>본 면책 조항은 2026년 7월 18일부터 시행됩니다.</p>
+      </section>
     </main>
   );
 }

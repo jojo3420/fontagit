@@ -1,0 +1,13 @@
+.container {
+  /* CLS 방지를 위해 광고 로드 전부터 높이 예약 */
+  margin: 16px 0;
+}
+
+.label {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 12px;
+  color: var(--sub-2);
+  pointer-events: none;
+}

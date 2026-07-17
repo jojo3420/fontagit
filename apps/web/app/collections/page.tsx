@@ -1,9 +1,13 @@
+import type { Metadata } from "next";
 import { getAllCollections } from "@/lib/data";
 import { CollectionCard } from "@/components/CollectionCard";
 import { EmptyState } from "@/components/EmptyState";
 import styles from "./page.module.css";
 
-export const metadata = { title: "컬렉션 - FontAgit" };
+export const metadata: Metadata = {
+  title: "컬렉션 - FontAgit",
+  alternates: { canonical: "/collections/" },
+};
 
 export default async function CollectionsPage() {
   const collections = await getAllCollections();

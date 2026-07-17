@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { getTrends } from "@/lib/data";
 import { FilterChip } from "@/components/FilterChip";
 import { TrendRankRow } from "@/components/TrendRankRow";
 import styles from "./page.module.css";
+
+export const metadata: Metadata = {
+  title: "폰트 트렌드 - FontAgit",
+  alternates: { canonical: "/trends/" },
+};
 
 export default async function TrendsPage() {
   const { items, source } = await getTrends();

@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "verify:seo": "node scripts/verify-seo-output.mjs out",
     "e2e": "next build && playwright test"
   },
   "dependencies": {

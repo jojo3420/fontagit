@@ -4,6 +4,7 @@ export type FontKey =
 
 export type Category = "고딕" | "명조" | "손글씨" | "장식";
 export type Tier = "free" | "paid";
+export type SourceTier = "A" | "B" | "C";
 export type Commercial = "yes" | "conditional" | "no";
 export type LicenseWebfont = "included" | "separate" | "no";
 export type LicenseRedistribution = "yes" | "no";
@@ -23,6 +24,7 @@ export interface Font {
   nameKo: string;
   nameEn: string;
   fontKey: FontKey | null;
+  sourceTier?: SourceTier;
   tier: Tier;
   category: Category;
   foundry: string;

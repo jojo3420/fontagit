@@ -60,14 +60,14 @@ export default async function PrivacyPage() {
       </section>
 
       <section className={styles.section}>
-        <h2 className={styles.h2}>4. Google AdSense</h2>
+        <h2 className={styles.h2}>4. 광고</h2>
         <p className={styles.text}>
-          FontAgit는 Google AdSense를 통해 광고를 표시합니다.
+          FontAgit는 카카오 AdFit 및 Google AdSense를 통해 광고를 표시합니다. 광고 제공 과정에서 쿠키가 사용될 수 있습니다.
         </p>
         <ul className={styles.list}>
-          <li>Google AdSense는 타사 쿠키를 사용하여 광고를 표시합니다</li>
-          <li>사용자의 관심사에 맞춰 맞춤 광고를 제공할 수 있습니다</li>
-          <li>Google의 개인정보 보호정책을 따릅니다</li>
+          <li>카카오 AdFit: 맞춤형 광고를 제공하기 위해 쿠키를 사용할 수 있습니다</li>
+          <li>Google AdSense: 타사 쿠키를 사용하여 광고를 표시하며, 사용자의 관심사에 맞춰 맞춤 광고를 제공합니다</li>
+          <li>각 광고 플랫폼의 개인정보 보호정책을 따릅니다</li>
         </ul>
       </section>
 
@@ -80,25 +80,36 @@ export default async function PrivacyPage() {
       </section>
 
       <section className={styles.section}>
-        <h2 className={styles.h2}>6. 운영자 정보</h2>
+        <h2 className={styles.h2}>6. 정보주체의 권리</h2>
         <p className={styles.text}>
-          {/* TODO: 운영자명 */}
-          <br />
-          {/* TODO: 연락처 (이메일) */}
-          <br />
-          {/* TODO: 사업자등록번호 */}
+          이용자는 언제든지 본인의 개인정보에 대해 열람, 정정, 삭제, 처리정지를 요구할 수 있습니다.
         </p>
+        <ul className={styles.list}>
+          <li>요청은 아래 연락처(또는 <a href="/contact">문의 페이지</a>)를 통해 접수합니다</li>
+          <li>신고-폰트 등록 신청 시 선택 입력한 이메일 등은 요청에 따라 삭제할 수 있습니다</li>
+          <li>쿠키는 브라우저 설정을 통해 거부하거나 삭제할 수 있습니다</li>
+        </ul>
       </section>
 
       <section className={styles.section}>
-        <h2 className={styles.h2}>7. 개인정보처리방침 시행일</h2>
-        <p className={styles.text}>
-          {/* TODO: 시행일 */}
-        </p>
+        <h2 className={styles.h2}>7. 운영자 및 개인정보 보호책임자</h2>
+        <ul className={styles.list}>
+          <li>상호: 루트앤랩</li>
+          <li>사업자등록번호: 370-49-01173</li>
+          <li>개인정보 보호책임자: FontAgit 운영팀</li>
+          <li>
+            연락처: <a href="mailto:contact@fontagit.com">contact@fontagit.com</a>
+          </li>
+        </ul>
       </section>
 
       <section className={styles.section}>
-        <h2 className={styles.h2}>8. 문의</h2>
+        <h2 className={styles.h2}>8. 개인정보처리방침 시행일</h2>
+        <p className={styles.text}>본 개인정보처리방침은 2026년 7월 18일부터 시행됩니다.</p>
+      </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.h2}>9. 문의</h2>
         <p className={styles.text}>
           개인정보와 관련된 문의가 있으시면 <a href="/contact">문의 페이지</a>를 통해 연락주시기 바랍니다.
         </p>

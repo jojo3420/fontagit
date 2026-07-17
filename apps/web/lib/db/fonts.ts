@@ -64,14 +64,45 @@ export async function getFontBySlug(slug: string): Promise<Font | null> {
 }
 
 export async function getAllSlugs(): Promise<string[]> {
-  const { data, error } = await supabaseClient
-    .from("fonts")
-    .select("slug")
-    .in("status", ["published", "hold", "discontinued"]);
+  const slugs: string[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabaseClient
+      .from("fonts")
+      .select("slug")
+      .in("status", ["published", "hold", "discontinued"])
+      .order("slug")
+      .range(from, from + pageSize - 1);
 
-  if (error) throw error;
+    if (error) throw error;
 
-  return (data || []).map((row: { slug: string }) => row.slug);
+    const batch = (data || []).map((row: { slug: string }) => row.slug);
+    slugs.push(...batch);
+
+    if (batch.length < pageSize) break;
+  }
+  return slugs;
+}
+
+export async function getPublishedSlugs(): Promise<string[]> {
+  const slugs: string[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabaseClient
+      .from("fonts")
+      .select("slug")
+      .eq("status", "published")
+      .order("slug")
+      .range(from, from + pageSize - 1);
+
+    if (error) throw error;
+
+    const batch = (data || []).map((row: { slug: string }) => row.slug);
+    slugs.push(...batch);
+
+    if (batch.length < pageSize) break;
+  }
+  return slugs;
 }
 
 export function filterFreeAlternatives(

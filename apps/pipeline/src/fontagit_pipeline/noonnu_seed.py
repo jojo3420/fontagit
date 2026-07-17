@@ -17,6 +17,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from fontagit_pipeline.models import NoonnuSeedRecord, NoonnuSeedOutput
+from fontagit_pipeline.transform import build_slug
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,27 @@ def clean_font_name(name: Optional[str]) -> Optional[str]:
         return name
     # "| 눈누" 또는 " | 눈누" 등의 패턴 제거
     return _NOONNU_SUFFIX_PATTERN.sub("", name).strip() or None
+
+
+def derive_noonnu_slug(name_ko: str | None, name_en: str | None) -> str:
+    """눈누 폰트명에서 슬러그를 도출한다(import/enrich 공용).
+
+    영문명이 있으면 정리 후 build_slug, 없으면 한글명을 보존해 정규화한다.
+
+    Args:
+        name_ko: 한글 폰트명.
+        name_en: 영문 폰트명 (선택사항).
+
+    Returns:
+        URL 슬러그 (하이픈으로 구분된 소문자 문자열).
+    """
+    name_en_c = clean_font_name(name_en)
+    if name_en_c:
+        return build_slug(name_en_c)
+    name_ko_c: str = clean_font_name(name_ko) or ""
+    slug = name_ko_c.lower().replace(" ", "-").replace("_", "-")
+    slug = re.sub(r"-+", "-", slug).strip("-")
+    return slug
 
 
 def _parse_robots_policy(robots_text: str) -> RobotFileParser:

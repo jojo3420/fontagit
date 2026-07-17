@@ -1,8 +1,14 @@
+import type { Metadata } from "next";
 import { Hero } from "@/components/Hero";
 import { WeeklyRankPanel } from "@/components/WeeklyRankPanel";
-import { AdSlot } from "@/components/AdSlot";
+import { AdFitUnit } from "@/components/AdFitUnit";
+import { ADFIT_UNIT_HOME } from "@/lib/analytics/constants";
 import { getTrends } from "@/lib/data";
 import styles from "./page.module.css";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 export default async function Home() {
   const { items, source } = await getTrends();
@@ -14,7 +20,7 @@ export default async function Home() {
       </div>
       <section className={styles.adSection}>
         <div className={styles.container}>
-          <AdSlot />
+          <AdFitUnit unit={ADFIT_UNIT_HOME ?? ""} width={320} height={100} label />
         </div>
       </section>
     </main>
