@@ -1,5 +1,6 @@
 """CLI 진입점 및 파이프라인 오케스트레이션."""
 
+import argparse
 import logging
 import sys
 from datetime import datetime, timezone
@@ -13,6 +14,8 @@ from fontagit_pipeline.config import load_settings
 from fontagit_pipeline.korean_names import load_korean_names, KoreanNamesError
 from fontagit_pipeline.licenses import fetch_license_map, LicenseFetchError
 from fontagit_pipeline.models import GoogleFontRaw, KoreanNameEntry, OutputDocument
+from fontagit_pipeline.noonnu_import import import_noonnu_seeds, NoonnuImportError
+from fontagit_pipeline.noonnu_seed import collect_noonnu_seeds, NoonnuSeedError
 from fontagit_pipeline.transform import build_records
 from fontagit_pipeline.uploader import upload_tier_a_snapshot
 from fontagit_pipeline.writer import write_output
@@ -131,5 +134,91 @@ def main() -> int:
     return 0
 
 
+def main_noonnu_seed(args: argparse.Namespace) -> int:
+    """눈누 Tier B 시드 수집 진입점."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    try:
+        output = collect_noonnu_seeds(batch_size=30)
+        logger.info("수집 완료: %d개", output.record_count)
+        return 0
+    except NoonnuSeedError as exc:
+        logger.error("수집 실패: %s", exc)
+        return 3
+    except Exception as exc:
+        logger.error("예상치 못한 오류: %s", exc)
+        return 3
+
+
+def main_noonnu_import(args: argparse.Namespace) -> int:
+    """눈누 Tier B draft 임포트 진입점."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    try:
+        settings = load_settings()
+    except ValidationError:
+        logger.error(
+            "Supabase 설정이 없습니다. apps/pipeline/.env를 확인하세요."
+        )
+        return 2
+
+    try:
+        upserted, skipped = import_noonnu_seeds(
+            supabase_url=settings.supabase_url,
+            supabase_secret_key=settings.supabase_secret_key,
+        )
+        logger.info(
+            "임포트 완료: %d개 삽입/업데이트, %d개 스킵",
+            upserted,
+            skipped,
+        )
+        return 0
+    except NoonnuImportError as exc:
+        logger.error("임포트 실패: %s", exc)
+        return 3
+    except Exception as exc:
+        logger.error("예상치 못한 오류: %s", exc)
+        return 3
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    parser = argparse.ArgumentParser(
+        description="FontAgit 파이프라인",
+        prog="fontagit-pipeline",
+    )
+    subparsers = parser.add_subparsers(dest="command", help="명령어")
+
+    # tier-a 명령 (기본 명령)
+    tier_a_parser = subparsers.add_parser(
+        "tier-a",
+        help="Tier A (Google Fonts) 처리 및 업로드",
+    )
+
+    # noonnu-seed 명령
+    seed_parser = subparsers.add_parser(
+        "noonnu-seed",
+        help="눈누 Tier B 시드 수집",
+    )
+    seed_parser.set_defaults(func=main_noonnu_seed)
+
+    # noonnu-import 명령
+    import_parser = subparsers.add_parser(
+        "noonnu-import",
+        help="눈누 Tier B draft 임포트",
+    )
+    import_parser.set_defaults(func=main_noonnu_import)
+
+    args = parser.parse_args()
+
+    if hasattr(args, "func"):
+        sys.exit(args.func(args))
+    elif args.command == "tier-a" or not args.command:
+        # tier-a 또는 명령어 없음 = 기본 파이프라인
+        sys.exit(main())
+    else:
+        parser.print_help()
+        sys.exit(1)

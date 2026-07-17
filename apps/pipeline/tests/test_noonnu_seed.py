@@ -3,6 +3,7 @@
 from fontagit_pipeline.noonnu_seed import (
     _extract_font_data,
     _parse_sitemap_urls,
+    clean_font_name,
 )
 
 
@@ -118,3 +119,40 @@ class TestExtractFontData:
         # 외부 링크만 선택되어야 함
         if official_url and official_url != "https://noonnu.cc/font_page/111":
             assert "example.com" in official_url
+
+
+class TestCleanFontName:
+    """폰트 이름 정리 테스트."""
+
+    def test_remove_noonnu_suffix_with_pipe(self) -> None:
+        """'| 눈누' 접미사를 제거한다."""
+        assert clean_font_name("고도체 | 눈누") == "고도체"
+
+    def test_remove_noonnu_suffix_with_spaces(self) -> None:
+        """공백이 있는 '| 눈누' 접미사를 제거한다."""
+        assert clean_font_name("고도마음체  |  눈누") == "고도마음체"
+
+    def test_preserve_name_without_suffix(self) -> None:
+        """접미사가 없으면 원본을 유지한다."""
+        assert clean_font_name("산돌국대떡볶이체") == "산돌국대떡볶이체"
+
+    def test_handle_none_input(self) -> None:
+        """None 입력을 처리한다."""
+        assert clean_font_name(None) is None
+
+    def test_handle_empty_string(self) -> None:
+        """빈 문자열을 처리한다."""
+        assert clean_font_name("") == ""
+
+    def test_handle_only_suffix(self) -> None:
+        """접미사만 있는 경우 None을 반환한다."""
+        result = clean_font_name("| 눈누")
+        assert result is None
+
+    def test_english_name(self) -> None:
+        """영문 이름(접미사 없음)을 처리한다."""
+        assert clean_font_name("Noto Sans") == "Noto Sans"
+
+    def test_trailing_whitespace(self) -> None:
+        """정리 후 공백을 제거한다."""
+        assert clean_font_name("폰트명 | 눈누  ") == "폰트명"
