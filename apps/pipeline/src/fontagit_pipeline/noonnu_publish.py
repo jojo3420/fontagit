@@ -54,17 +54,29 @@ def publish_to_prod(
     Returns:
         tuple[총 행수, 쓰기 성공 수]. dry_run=True면 (total, 0).
     """
-    # Dev에서 발행된 Tier B 폰트 조회
+    # Dev에서 발행된 Tier B 폰트 조회 (페이지네이션)
     try:
         cols_str = ",".join(_COLS)
-        response = (
-            dev_schema.table("fonts")
-            .select(cols_str)
-            .eq("source_tier", "B")
-            .eq("status", "published")
-            .execute()
-        )
-        rows: list[dict[str, Any]] = response.data or []
+        rows: list[dict[str, Any]] = []
+        page_size = 1000
+        offset = 0
+
+        while True:
+            response = (
+                dev_schema.table("fonts")
+                .select(cols_str)
+                .eq("source_tier", "B")
+                .eq("status", "published")
+                .order("slug")
+                .range(offset, offset + page_size - 1)
+                .execute()
+            )
+            batch = response.data or []
+            rows.extend(batch)
+
+            if len(batch) < page_size:
+                break
+            offset += page_size
     except Exception as exc:
         logger.error("Dev에서 폰트 조회 실패: %s", exc)
         raise
