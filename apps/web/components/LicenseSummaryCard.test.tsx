@@ -1,7 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { LicenseSummaryCard } from "@/components/LicenseSummaryCard";
 import { fonts } from "@/data/fonts";
+
+vi.mock("@/lib/db/clicks", () => ({
+  recordClick: vi.fn(),
+}));
 
 describe("LicenseSummaryCard", () => {
   it("유료 폰트: 3개 라이선스 행 + 가격 CTA + 판매처", () => {

@@ -15,6 +15,10 @@ vi.mock("@/lib/db/collections", () => ({
   getAllCollectionSlugs: vi.fn(),
 }));
 
+vi.mock("@/lib/db/trends", () => ({
+  getTrends: vi.fn(),
+}));
+
 import FontsPage from "@/app/fonts/page";
 
 describe("폰트 목록 페이지", () => {

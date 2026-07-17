@@ -11,8 +11,13 @@ const LABEL: Record<TrendItem["change"], (n?: number) => string> = {
   new: () => "NEW",
 };
 
+interface TrendRankRowProps {
+  item: TrendItem;
+  showMoves?: boolean;
+}
+
 /** 트렌드 페이지 전용 카드형 순위 행(디자인 1h). 홈 사이드바 TrendRow와 별개 */
-export function TrendRankRow({ item }: { item: TrendItem }) {
+export function TrendRankRow({ item, showMoves = true }: TrendRankRowProps) {
   return (
     <Link href={`/fonts/${item.font.slug}`} className={styles.row}>
       <span className={styles.rank}>{item.rank}</span>
@@ -25,10 +30,12 @@ export function TrendRankRow({ item }: { item: TrendItem }) {
       >
         {item.font.nameKo}
       </span>
-      <span className={styles.clicks}>
-        <b className={styles.num}>{item.moves.toLocaleString()}</b>
-        <em className={styles.label}>이동</em>
-      </span>
+      {showMoves && (
+        <span className={styles.clicks}>
+          <b className={styles.num}>{item.moves.toLocaleString()}</b>
+          <em className={styles.label}>이동</em>
+        </span>
+      )}
       <TierChip tier={item.font.tier} />
     </Link>
   );

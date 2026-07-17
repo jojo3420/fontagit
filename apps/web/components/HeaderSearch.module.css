@@ -1,0 +1,97 @@
+.iconBtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--sub);
+}
+
+.panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  padding: 24px var(--pad-page);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.searchBar {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+.inputBox {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 18px;
+  height: 52px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+.inputBox:focus-within {
+  border-color: var(--point);
+  box-shadow: 0 0 0 3px var(--point-weak);
+}
+
+.searchIcon {
+  flex-shrink: 0;
+  color: var(--sub-2);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+  font-family: inherit;
+  padding: 0;
+}
+
+.input::placeholder {
+  color: var(--sub-2);
+}
+
+.input:focus {
+  outline: none;
+}
+
+.searchBtn {
+  flex-shrink: 0;
+  height: 52px;
+  padding: 0 26px;
+  background: var(--point);
+  color: var(--on-point);
+  border: none;
+  border-radius: var(--radius-card);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.searchBtn:hover {
+  opacity: 0.92;
+}
+
+@media (max-width: 620px) {
+  .searchBtn {
+    padding: 0 18px;
+  }
+}
