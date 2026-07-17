@@ -80,4 +80,25 @@ describe('useDebouncedSuggestions', () => {
     expect(result.current.items).toEqual([]);
   });
 
+  it('레이스: 빠른 연속 입력 후 이전 요청 취소 → 최신 요청만 실행', async () => {
+    const mockSearch = vi.spyOn(searchModule, 'searchSuggestions');
+    mockSearch.mockResolvedValue([
+      { slug: 'noto', nameKo: 'Noto Sans KR', nameEn: 'Noto Sans KR', tier: 'free' as const, category: '고딕', foundry: null },
+    ]);
+
+    const { rerender } = renderHook(
+      ({ q }: { q: string }) => useDebouncedSuggestions(q),
+      { initialProps: { q: '' } }
+    );
+
+    rerender({ q: '지마켓' });
+    vi.advanceTimersByTime(100);
+    rerender({ q: '노토' });
+    vi.advanceTimersByTime(200);
+    await vi.runAllTimersAsync();
+
+    expect(mockSearch).toHaveBeenCalledTimes(1);
+    expect(mockSearch).toHaveBeenCalledWith('노토', 8, expect.any(AbortSignal));
+  });
+
 });

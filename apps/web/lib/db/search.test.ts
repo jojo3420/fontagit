@@ -111,7 +111,6 @@ describe('searchFonts', () => {
     expect(result.length).toBe(1);
     expect(supabaseClient.rpc).toHaveBeenCalled();
   });
-
   it('0건 안전 검색어만 저장하고 반환 행을 요청하지 않는다', async () => {
     vi.mocked(supabaseClient.rpc)
       .mockResolvedValueOnce({ data: [], error: null } as unknown as RpcResponse)
@@ -131,6 +130,8 @@ describe('searchFonts', () => {
 describe('searchSuggestions - 요청 취소(abort) 처리', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockInsert.mockReturnValue({ select: mockSelect });
+    mockSelect.mockResolvedValue({ data: null, error: null });
   });
 
   function mockAbortSignalResponse(response: { data: unknown; error: unknown }) {
@@ -153,6 +154,7 @@ describe('searchSuggestions - 요청 취소(abort) 처리', () => {
       searchSuggestions('본고딕', 8, controller.signal)
     ).rejects.toThrow('SEARCH_RPC_FAILED');
     expect(errSpy).not.toHaveBeenCalled();
+    expect(mockInsert).not.toHaveBeenCalled();
 
     errSpy.mockRestore();
   });
@@ -168,5 +170,21 @@ describe('searchSuggestions - 요청 취소(abort) 처리', () => {
     expect(errSpy).toHaveBeenCalledWith('[search] RPC error:', realError);
 
     errSpy.mockRestore();
+  });
+
+  it('0건 안전 검색어를 로그에 저장한다', async () => {
+    vi.mocked(supabaseClient.rpc).mockResolvedValueOnce({
+      data: [],
+      error: null,
+    } as unknown as RpcResponse);
+
+    const result = await searchSuggestions('정말없는폰트명', 8);
+
+    expect(result).toEqual([]);
+
+    await vi.waitFor(() => {
+      expect(mockInsert).toHaveBeenCalledWith({ query: '정말없는폰트명' });
+    });
+    expect(mockSelect).not.toHaveBeenCalled();
   });
 });
