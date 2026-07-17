@@ -148,6 +148,55 @@ class TestBuildFontUpdateFromProposal:
         assert result["weights"] == []
 
 
+class TestApprove:
+    """approve 함수 테스트 (M5 상태 검증)"""
+
+    def test_approve_requires_proposed_status(self, mocker) -> None:
+        """review_status가 proposed가 아니면 거부 (M5 검증)"""
+        mock_schema = mocker.MagicMock()
+        # license_proposals 조회: review_status='approved' (이미 승인됨)
+        mock_schema.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [
+            {
+                "review_status": "approved",
+                "parse_status": "parsed",
+                "proposed_commercial_free": True,
+            }
+        ]
+
+        with pytest.raises(ValueError, match="proposed 상태가 아님"):
+            nr.approve(mock_schema, "test-slug")
+
+    def test_approve_requires_parsed_status(self, mocker) -> None:
+        """parse_status가 parsed가 아니면 거부 (M5 검증)"""
+        mock_schema = mocker.MagicMock()
+        # license_proposals 조회: parse_status='failed'
+        mock_schema.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [
+            {
+                "review_status": "proposed",
+                "parse_status": "failed",
+                "proposed_commercial_free": True,
+            }
+        ]
+
+        with pytest.raises(ValueError, match="parsed 상태가 아님"):
+            nr.approve(mock_schema, "test-slug")
+
+    def test_approve_requires_commercial_free_confirmed(self, mocker) -> None:
+        """proposed_commercial_free가 None이면 거부 (M5 검증)"""
+        mock_schema = mocker.MagicMock()
+        # license_proposals 조회: proposed_commercial_free=None
+        mock_schema.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [
+            {
+                "review_status": "proposed",
+                "parse_status": "parsed",
+                "proposed_commercial_free": None,
+            }
+        ]
+
+        with pytest.raises(ValueError, match="proposed_commercial_free가 None"):
+            nr.approve(mock_schema, "test-slug")
+
+
 class TestSampleSize:
     """sample_size 함수 테스트."""
 

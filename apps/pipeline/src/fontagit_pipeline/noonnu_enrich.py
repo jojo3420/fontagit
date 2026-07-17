@@ -58,8 +58,13 @@ def _extract_json_ld_blocks(html: str) -> list[dict]:  # type: ignore[type-arg]
     return blocks
 
 
-def extract_meta(html: str) -> tuple[Optional[str], Optional[int], Optional[str]]:
-    """JSON-LD SoftwareApplication에서 (이름, 가격, 제작사) 추출. 파싱 불가 항목은 None."""
+def extract_meta(html: str) -> tuple[Optional[str], Optional[float], Optional[str]]:
+    """JSON-LD SoftwareApplication에서 (이름, 가격, 제작사) 추출. 파싱 불가 항목은 None.
+
+    Returns:
+        (name, price, creator) 튜플. price는 float (예: 0.0, 0.5, 10.0).
+        정수와 소수를 구분하지 않음 (int는 자동으로 float로 변환).
+    """
     for data in _extract_json_ld_blocks(html):
         if data.get("@type") != "SoftwareApplication":
             continue
@@ -67,11 +72,11 @@ def extract_meta(html: str) -> tuple[Optional[str], Optional[int], Optional[str]
         creator = data.get("creator") or data.get("author")
         if isinstance(creator, dict):
             creator = creator.get("name")
-        price: Optional[int] = None
+        price: Optional[float] = None
         offers = data.get("offers")
         if isinstance(offers, dict) and offers.get("price") is not None:
             try:
-                price = int(float(offers["price"]))
+                price = float(offers["price"])
             except (ValueError, TypeError):
                 price = None
         return name, price, creator
@@ -104,7 +109,7 @@ def parse_permissions(html: str) -> dict[str, str]:
         {"print": "allowed", "website": "allowed", ...}
 
     Raises:
-        EnrichParseError: 정확히 6개 카테고리 추출 불가
+        EnrichParseError: 정확히 6개 카테고리 추출 불가, 중복 카테고리, 알 수 없는 상태값
     """
     soup = BeautifulSoup(html, "html.parser")
     table = soup.find("table")
@@ -113,7 +118,7 @@ def parse_permissions(html: str) -> dict[str, str]:
         raise EnrichParseError("라이선스 허용표(table) 없음")
 
     rows = table.find_all("tr")[1:]  # 헤더 제외
-    result = {}
+    result: dict[str, str] = {}
 
     for row in rows:
         cells = row.find_all(["td", "th"])
@@ -128,10 +133,18 @@ def parse_permissions(html: str) -> dict[str, str]:
         if not category_key:
             continue
 
-        # 상태 매핑
+        # 상태 매핑 - 알 수 없는 값이면 즉시 실패 (파싱 오류)
         status = _STATUS_MAP.get(status_text)
         if status is None:
-            continue
+            raise EnrichParseError(
+                f"알 수 없는 상태값: '{status_text}' (카테고리: {category_text})"
+            )
+
+        # 중복 카테고리 검증 - 덮어쓰기로 denied가 allowed로 가려지는 것 방지
+        if category_key in result:
+            raise EnrichParseError(
+                f"중복 카테고리: {category_key} ('{status_text}' vs '{result[category_key]}')"
+            )
 
         result[category_key] = status
 
@@ -146,17 +159,37 @@ def parse_permissions(html: str) -> dict[str, str]:
 
 # Task 4: @font-face 스타일 추출
 def extract_styles(html: str) -> tuple[list[int], bool]:
-    """@font-face에서 굵기/이태릭 추출(best-effort). 없으면 ([], False)."""
-    weights = sorted({int(m) for m in re.findall(r"font-weight\s*:\s*(\d{3})", html)})
-    italic = bool(re.search(r"font-style\s*:\s*italic", html))
+    """@font-face 블록에서만 굵기/이태릭 추출(best-effort). 없으면 ([], False).
+
+    reason: UI CSS의 font-weight/font-style과 혼동 방지. @font-face 선언만 추출.
+    """
+    # @font-face 블록 추출 (가장 간단한 정규식: @font-face { ... })
+    font_face_pattern = r"@font-face\s*\{[^}]*\}"
+    font_face_blocks = re.findall(font_face_pattern, html, re.DOTALL)
+
+    weights_set: set[int] = set()
+    italic = False
+
+    for block in font_face_blocks:
+        # 각 @font-face 블록에서 font-weight 추출
+        weight_matches = re.findall(r"font-weight\s*:\s*(\d{3})", block)
+        weights_set.update(int(m) for m in weight_matches)
+
+        # italic 여부 확인
+        if re.search(r"font-style\s*:\s*italic", block):
+            italic = True
+
+    weights = sorted(weights_set)
     return weights, italic
 
 
 # Task 5a: 라이선스 타입 추정
 def guess_license_type(html: str) -> str:
-    """라이선스 본문에 OFL/SIL 표기가 있으면 'OFL', 아니면 'custom-free'."""
-    if re.search(r"\bOFL\b|SIL\s*Open\s*Font", html, re.IGNORECASE):
-        return "OFL"
+    """눈누 HTML에서 라이선스 타입을 신뢰성 있게 판별할 수 없으므로 항상 'custom-free' 반환.
+
+    reason: 눈누 허용표에는 항상 "OFL" 행이 있어서 HTML에서 "OFL" 키워드를 찾으면
+    거의 모든 폰트가 OFL로 오판되고, 실제 라이선스 정보는 제작사 약관에서만 신뢰할 수 있음.
+    """
     return "custom-free"
 
 
@@ -169,23 +202,23 @@ def map_license_rows(
 
     Args:
         permissions: parse_permissions 결과
-        license_type: guess_license_type 결과
+        license_type: guess_license_type 결과 (현재 항상 'custom-free')
 
     Returns:
         {
             "is_commercial_free": bool,
             "allow_embedding": "allowed"/"conditional"/"denied",
-            "allow_redistribute": "allowed"/"conditional"/"denied" or None,
-            "allow_modify": "allowed"/"conditional"/"denied" or None,
+            "allow_redistribute": None (눈누 허용표에는 없는 정보),
+            "allow_modify": None (눈누 허용표에는 없는 정보),
             "license_note": str or None,
         }
+
+    reason: 재배포/수정 권한은 눈누 허용표에 없는 정보이므로 항상 None으로 반환.
+    사용자는 상세페이지의 제작사 약관을 확인하여 판단해야 함.
     """
     is_commercial_free = all(permissions[k] == "allowed" for k in _COMMERCIAL_KEYS)
     allow_embedding = permissions.get("embedding")
-    if license_type == "OFL":
-        allow_redistribute, allow_modify = "conditional", "allowed"
-    else:
-        allow_redistribute, allow_modify = None, None
+    allow_redistribute, allow_modify = None, None
 
     notes: list[str] = []
     if allow_embedding == "conditional":
@@ -209,17 +242,17 @@ def map_license_rows(
 # Task 6: 분류 게이트
 def classify(
     parse_ok: bool,
-    price: Optional[int],
+    price: Optional[float],
     perms: Optional[dict[str, str]],
     official_url: Optional[str] = None,
 ) -> str:
-    """자동 발행 게이트(D6). 상업 4카테고리 전부 allowed + price 0 + 파싱성공 + 공식URL 필수만 auto_safe."""
+    """자동 발행 게이트(D6). 상업 4카테고리 전부 allowed + price 정확히 0.0 + 파싱성공 + 공식URL 필수만 auto_safe."""
     if not official_url:
         return "needs_review"
     if not parse_ok or perms is None:
         return "needs_review"
-    if price != 0:
-        # None은 상업여부 미확인 → needs_review
+    # price가 None이거나 0이 아니면 needs_review (0.5, -0.1 등은 needs_review)
+    if price is None or price != 0.0:
         return "needs_review"
     if all(perms[k] == "allowed" for k in _COMMERCIAL_KEYS):
         return "auto_safe"
@@ -385,11 +418,17 @@ def enrich_fonts(
                 skipped += 1
                 continue
             
+            # SSRF 방어: 눈누 도메인만 허용
+            if not re.match(r"^https://noonnu\.cc/font_page/\d+$", rec.source_page):
+                logger.warning("SSRF 차단 - 허용되지 않은 URL(slug=%s): %s", slug, rec.source_page)
+                skipped += 1
+                continue
+
             if not robots_policy.can_fetch(_ROBOT_USER_AGENT, rec.source_page):
                 logger.info("robots.txt 차단(slug=%s)", slug)
                 skipped += 1
                 continue
-            
+
             time.sleep(_REQUEST_DELAY)
             try:
                 html_response = http.get(
@@ -418,28 +457,39 @@ def enrich_fonts(
                 continue
             
             fu = proposal.pop("_font_update")
-            
-            try:
-                schema.table("license_proposals").upsert(
-                    proposal, on_conflict="font_id"
-                ).execute()
-            except Exception as exc:
-                logger.warning("proposal 저장 실패(slug=%s): %s", slug, exc.__class__.__name__)
-                skipped += 1
-                continue
-            
+
+            # S4: auto 경로 순서 재배치 - 폰트 발행을 먼저, 제안 저장을 나중에
+            # 이렇게 하면 폰트 발행 실패 시 auto_published 제안이 남지 않음 (부분 원자성)
             if fu is not None:
                 fu["verified_at"] = datetime.now(timezone.utc).isoformat()
                 try:
                     schema.table("fonts").update(fu).eq("id", font["id"]).execute()
-                    auto += 1
-                    logger.info("자동발행 완료: %s", slug)
                 except Exception as exc:
                     logger.warning("폰트 발행 실패(slug=%s): %s", slug, exc.__class__.__name__)
                     skipped += 1
+                    continue
+
+                # 폰트 발행 성공 후 제안 저장
+                try:
+                    schema.table("license_proposals").upsert(
+                        proposal, on_conflict="font_id"
+                    ).execute()
+                    auto += 1
+                    logger.info("자동발행 완료: %s", slug)
+                except Exception as exc:
+                    logger.warning("proposal 저장 실패(slug=%s): %s", slug, exc.__class__.__name__)
+                    skipped += 1
             else:
-                proposed += 1
-                logger.info("검수 제안 추가: %s", slug)
+                # proposed 경로: 검수 필요
+                try:
+                    schema.table("license_proposals").upsert(
+                        proposal, on_conflict="font_id"
+                    ).execute()
+                    proposed += 1
+                    logger.info("검수 제안 추가: %s", slug)
+                except Exception as exc:
+                    logger.warning("proposal 저장 실패(slug=%s): %s", slug, exc.__class__.__name__)
+                    skipped += 1
     
     logger.info("enrich 완료: 자동발행 %d, 검수대기 %d, 스킵 %d", auto, proposed, skipped)
     return auto, proposed, skipped

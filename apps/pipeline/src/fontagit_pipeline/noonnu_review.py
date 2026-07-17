@@ -90,6 +90,9 @@ def approve(
         note: 검수자 코멘트(선택)
 
     제안을 조회하여 fonts에 적용하고, 제안 상태를 approved로 변경.
+
+    Raises:
+        ValueError: 제안이 proposed 상태가 아니거나 필수 필드가 없을 때
     """
     # license_proposals에서 해당 slug의 제안 조회
     proposal_response = schema.table("license_proposals").select("*").eq(
@@ -101,8 +104,24 @@ def approve(
 
     proposal = cast(dict[str, Any], proposal_response.data[0])
 
+    # 상태 검증: proposed 상태만 승인 가능 (이미 처리된 제안 재발행 방지)
+    if proposal.get("review_status") != "proposed":
+        logger.error("승인 불가능 - 잘못된 상태(review_status=%s): %s",
+                     proposal.get("review_status"), slug)
+        raise ValueError(f"제안이 proposed 상태가 아님: {slug}")
+
+    # 필수 필드 검증: 파싱 성공 및 필수 정보 존재 확인
+    if proposal.get("parse_status") != "parsed":
+        logger.error("승인 불가능 - 파싱 실패(parse_status=%s): %s",
+                     proposal.get("parse_status"), slug)
+        raise ValueError(f"제안이 parsed 상태가 아님: {slug}")
+
+    if proposal.get("proposed_commercial_free") is None:
+        logger.error("승인 불가능 - 상업 여부 미확인: %s", slug)
+        raise ValueError(f"제안의 proposed_commercial_free가 None: {slug}")
+
     # fonts에서 official_url 조회
-    font_response = schema.table("fonts").select("font_id,official_url").eq(
+    font_response = schema.table("fonts").select("id,official_url").eq(
         "slug", slug
     ).execute()
     if not font_response.data:
@@ -158,19 +177,19 @@ def sample_auto_published(
     schema: "SyncPostgrestClient",
     pct: int = 5,
 ) -> list[dict[str, Any]]:
-    """자동 발행 폰트 표본 조회.
+    """자동 발행 폰트 표본 조회 (Tier B만).
 
     Args:
         schema: Supabase SyncPostgrestClient
         pct: 표본 백분율 (기본값 5%)
 
     Returns:
-        auto_approved=True, status='published'인 폰트 중 표본
+        auto_approved=True, status='published', source_tier='B'인 폰트 중 표본
     """
-    # 조건에 맞는 모든 폰트 조회
+    # Tier B의 자동 발행 폰트만 표본 감사
     response = schema.table("fonts").select(
         "slug,name_ko,official_url,license_source_url"
-    ).eq("auto_approved", True).eq("status", "published").execute()
+    ).eq("auto_approved", True).eq("status", "published").eq("source_tier", "B").execute()
 
     if not response.data:
         return []

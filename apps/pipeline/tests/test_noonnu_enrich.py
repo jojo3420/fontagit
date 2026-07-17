@@ -66,6 +66,21 @@ class TestParsePermissions:
         perms = ne.parse_permissions(html)
         assert set(perms.keys()) == set(ne.PERMISSION_CATEGORIES)
 
+    def test_parse_permissions_unknown_status_raises(self):
+        """알 수 없는 상태값: EnrichParseError (M4 검증)"""
+        html = """<table><tr><td></td><td></td><td></td></tr>
+                  <tr><td>인쇄</td><td></td><td>미알려진상태</td></tr></table>"""
+        with pytest.raises(ne.EnrichParseError, match="알 수 없는 상태값"):
+            ne.parse_permissions(html)
+
+    def test_parse_permissions_duplicate_category_raises(self):
+        """중복 카테고리: EnrichParseError (M4 검증)"""
+        html = """<table><tr><td></td><td></td><td></td></tr>
+                  <tr><td>인쇄</td><td></td><td>사용 가능</td></tr>
+                  <tr><td>인쇄</td><td></td><td>사용 불가</td></tr></table>"""
+        with pytest.raises(ne.EnrichParseError, match="중복 카테고리"):
+            ne.parse_permissions(html)
+
 
 class TestExtractStyles:
     """Task 4: @font-face 스타일 추출"""
@@ -93,17 +108,17 @@ class TestExtractStyles:
 class TestGuessLicenseType:
     """Task 5a: 라이선스 타입 추정"""
 
-    def test_guess_license_type_ofl(self):
-        """OFL 라이선스 감지"""
-        html = "<p>본 폰트는 SIL OFL 1.1 라이선스</p>"
-        license_type = ne.guess_license_type(html)
-        assert license_type == "OFL"
+    def test_guess_license_type_always_custom_free(self):
+        """M2 수정: 눈누 HTML에서 라이선스를 신뢰성 있게 판별할 수 없으므로 항상 'custom-free' 반환"""
+        # OFL 키워드가 있어도
+        html1 = "<p>본 폰트는 SIL OFL 1.1 라이선스</p>"
+        license_type1 = ne.guess_license_type(html1)
+        assert license_type1 == "custom-free"
 
-    def test_guess_license_type_default_custom_free(self):
-        """감지 실패 시 custom-free 기본값"""
-        html = "<html><body></body></html>"
-        license_type = ne.guess_license_type(html)
-        assert license_type == "custom-free"
+        # 키워드가 없어도
+        html2 = "<html><body></body></html>"
+        license_type2 = ne.guess_license_type(html2)
+        assert license_type2 == "custom-free"
 
 
 class TestMapLicenseRows:
@@ -124,12 +139,13 @@ class TestMapLicenseRows:
         assert rows["allow_embedding"] == "conditional"
         assert "임베딩" in rows["license_note"]
 
-    def test_map_rows_ofl_sets_redistribute_modify(self):
-        """OFL: redistribute=conditional, modify=allowed"""
+    def test_map_rows_ofl_redistribute_modify_always_none(self):
+        """재배포/수정은 눈누 허용표에 없는 정보이므로 항상 None (license_type 무관)"""
         perms = {k: "allowed" for k in ne.PERMISSION_CATEGORIES}
         rows = ne.map_license_rows(perms, "OFL")
-        assert rows["allow_redistribute"] == "conditional"
-        assert rows["allow_modify"] == "allowed"
+        # M2 수정: redistribute/modify는 항상 None
+        assert rows["allow_redistribute"] is None
+        assert rows["allow_modify"] is None
 
     def test_map_rows_not_commercial_when_one_denied(self):
         """print=denied: is_commercial_free=False"""
