@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import type { FontKey } from "@/types/font";
-import { familyOf } from "@/lib/fonts";
+import { canvasFamilyOf } from "@/lib/fonts";
 import { detectGlyphSupport, aggregateResults } from "@/lib/glyphSupport";
 import type { GlyphSupportResult } from "@/lib/glyphSupport";
 import styles from "./GlyphChecker.module.css";
@@ -50,20 +50,20 @@ export function GlyphChecker({ fontKey, fontName, tier }: GlyphCheckerProps) {
     setError(null);
 
     try {
-      // 폰트 로드 대기
-      if (document.fonts) {
-        await document.fonts.ready;
+      const targetFamily = canvasFamilyOf(fontKey);
+      if (!targetFamily) {
+        throw new Error("검사할 폰트를 찾을 수 없습니다");
       }
 
-      const targetFamily = familyOf(fontKey);
-      const fallbackFamily = "system-ui, sans-serif";
+      // Canvas 검사 전에 실제 생성된 폰트 이름으로 다운로드를 요청한다.
+      if (document.fonts) {
+        const loadedFaces = await document.fonts.load(`48px ${targetFamily}`);
+        if (loadedFaces.length === 0) {
+          throw new Error("폰트를 불러오지 못했습니다");
+        }
+      }
 
-      // 글리프 감지 수행
-      const detectionResults = detectGlyphSupport(
-        inputText,
-        targetFamily,
-        fallbackFamily
-      );
+      const detectionResults = detectGlyphSupport(inputText, targetFamily);
 
       setResults(detectionResults);
     } catch (err) {
@@ -119,6 +119,7 @@ export function GlyphChecker({ fontKey, fontName, tier }: GlyphCheckerProps) {
               placeholder="검사할 글자를 입력하세요 (예: 한글, ABC, 漢字, ①②③)"
               value={inputText}
               onChange={handleInputChange}
+              maxLength={100}
               disabled={isChecking}
               aria-label="글자 검사 입력"
             />
