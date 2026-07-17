@@ -5,6 +5,7 @@ import { supabaseClient } from './client';
 vi.mock('./client', () => ({
   supabaseClient: {
     rpc: vi.fn(),
+    from: vi.fn(),
   },
 }));
 
@@ -101,6 +102,54 @@ describe('searchFonts', () => {
     expect(result.length).toBe(1);
     expect(supabaseClient.rpc).toHaveBeenCalled();
   });
+
+  it('0건 결과 → logSearchQuery 호출 (supabaseClient.from 검증)', async () => {
+    vi.mocked(supabaseClient.rpc).mockResolvedValueOnce({
+      data: [],
+      error: null,
+    } as unknown as RpcResponse);
+
+    const mockSelect = vi.fn().mockResolvedValueOnce({
+      data: null,
+      error: null,
+    });
+    const mockInsert = vi.fn().mockReturnValueOnce({ select: mockSelect });
+    vi.mocked(supabaseClient.from).mockReturnValueOnce({
+      insert: mockInsert,
+    } as unknown);
+
+    const result = await searchFonts('존재하지않는폰트');
+
+    expect(result).toEqual([]);
+
+    await new Promise(resolve => setTimeout(resolve, 10));
+
+    expect(supabaseClient.from).toHaveBeenCalledWith('search_logs');
+    expect(mockInsert).toHaveBeenCalledWith({ query: '존재하지않는폰트' });
+  });
+
+  it('결과 있음 → logSearchQuery 호출 안 함', async () => {
+    const mockData = [
+      {
+        slug: 'test-font',
+        name_ko: '테스트',
+        name_en: 'Test',
+        tier: 'free' as const,
+        category_ko: '고딕',
+        score: 100,
+      },
+    ];
+
+    vi.mocked(supabaseClient.rpc).mockResolvedValueOnce({
+      data: mockData,
+      error: null,
+    } as unknown as RpcResponse);
+
+    const result = await searchFonts('테스트');
+
+    expect(result.length).toBe(1);
+    expect(supabaseClient.from).not.toHaveBeenCalled();
+  });
 });
 
 describe('searchSuggestions - 요청 취소(abort) 처리', () => {
@@ -142,6 +191,55 @@ describe('searchSuggestions - 요청 취소(abort) 처리', () => {
     ).rejects.toThrow('SEARCH_RPC_FAILED');
     expect(errSpy).toHaveBeenCalledWith('[search] RPC error:', realError);
 
+    errSpy.mockRestore();
+  });
+
+  it('searchSuggestions: 0건 결과 → logSearchQuery 호출 (supabaseClient.from 검증)', async () => {
+    const mockSelect = vi.fn().mockResolvedValueOnce({
+      data: null,
+      error: null,
+    });
+    const mockInsert = vi.fn().mockReturnValueOnce({ select: mockSelect });
+    vi.mocked(supabaseClient.from).mockReturnValueOnce({
+      insert: mockInsert,
+    } as unknown);
+
+    vi.mocked(supabaseClient.rpc).mockResolvedValueOnce({
+      data: [],
+      error: null,
+    } as unknown as RpcResponse);
+
+    const result = await searchSuggestions('정말없는폰트명', 8);
+
+    expect(result).toEqual([]);
+
+    await new Promise(resolve => setTimeout(resolve, 10));
+
+    expect(supabaseClient.from).toHaveBeenCalledWith('search_logs');
+    expect(mockInsert).toHaveBeenCalledWith({ query: '정말없는폰트명' });
+  });
+
+  it('searchSuggestions: 취소된 요청이라도 0건 결과면 logSearchQuery 호출 안 함', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    mockAbortSignalResponse({
+      data: [],
+      error: { message: 'AbortError', code: '' },
+    });
+
+    const mockInsert = vi.fn();
+    vi.mocked(supabaseClient.from).mockReturnValueOnce({
+      insert: mockInsert,
+    } as unknown);
+
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      searchSuggestions('검색어', 8, controller.signal)
+    ).rejects.toThrow('SEARCH_RPC_FAILED');
+
+    expect(mockInsert).not.toHaveBeenCalled();
     errSpy.mockRestore();
   });
 });

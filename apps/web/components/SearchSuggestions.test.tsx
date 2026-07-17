@@ -119,4 +119,58 @@ describe('SearchSuggestions', () => {
     );
     expect(screen.getByRole('option')).toHaveAttribute('aria-selected', 'true');
   });
+
+  it('하이라이트: 부분 매칭 (query가 text의 일부)', () => {
+    render(
+      <SearchSuggestions
+        items={[item]}
+        activeIndex={-1}
+        query="마켓"
+        listboxId="lb"
+        onSelect={vi.fn()}
+        onHover={vi.fn()}
+      />
+    );
+    const mark = screen.getByRole('option').querySelector('mark');
+    expect(mark?.textContent).toBe('마켓');
+  });
+
+  it('하이라이트: 첫 번째 매칭만 (indexOf 특성)', () => {
+    const itemWithRepeated = {
+      ...item,
+      nameKo: '지마켓 마켓 마켓',
+    };
+    render(
+      <SearchSuggestions
+        items={[itemWithRepeated]}
+        activeIndex={-1}
+        query="마켓"
+        listboxId="lb"
+        onSelect={vi.fn()}
+        onHover={vi.fn()}
+      />
+    );
+    const marks = screen.getAllByRole('option')[0].querySelectorAll('mark');
+    expect(marks.length).toBe(1);
+    expect(marks[0].textContent).toBe('마켓');
+  });
+
+  it('하이라이트: 공백 포함 텍스트', () => {
+    const itemWithSpaces = {
+      ...item,
+      nameKo: '지 마 켓',
+    };
+    render(
+      <SearchSuggestions
+        items={[itemWithSpaces]}
+        activeIndex={-1}
+        query="마"
+        listboxId="lb"
+        onSelect={vi.fn()}
+        onHover={vi.fn()}
+      />
+    );
+    const mark = screen.getByRole('option').querySelector('mark');
+    expect(mark?.textContent).toBe('마');
+  });
 });
