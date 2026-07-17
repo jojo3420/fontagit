@@ -18,6 +18,16 @@ FontAgit(폰트 아지트)는 국내외 무료-유료 폰트를 검색-비교하
 
 ## 진행 기록
 
+## 2026-07-17 - feat/search-alias-f04 → develop 병합 (문서 충돌 해소)
+
+- 상태: 완료 (병합 커밋 `6837594`, origin/develop 반영됨)
+- 완료한 일: 슬라이스2 검색 브랜치(feat/search-alias-f04)를 develop에 병합. 문서 3건 충돌(마스터플랜, progress, 슬라이스2 계획)을 전부 develop(상위 집합) 쪽으로 해소. feat 브랜치의 문서(자동완성 F-19 계획 1080줄, 슬라이스2 재시작 핸드오프, 리뷰 리포트 3종)가 develop에 합류.
+- 커밋/PR: 병합 커밋 `6837594` (Merge feat/search-alias-f04 into develop). 신규 파일 5건(review 3, handoff 1, 자동완성 plan 1) 반영. PR 없음(브랜치 통합).
+- 결정사항: 세 파일 모두 develop이 feat의 상위 집합임을 검증 후 ours 채택 — feat(07-16)는 develop(07-17)의 옛 스냅샷. 슬라이스2 계획은 develop=v1.2(리비전 반영)가 feat=v1.0(구 SQL 버그 `similarity*0` 포함)을 대체.
+- 남은 일: 자동완성(F-19) 구현은 계획 문서만 존재 — 착수 시 `docs/superpowers/plans/2026-07-17-search-autocomplete.md` 기준.
+- 관련 문서: `docs/superpowers/plans/2026-07-16-slice2-alias-search.md`(v1.2), `docs/superpowers/plans/2026-07-17-search-autocomplete.md`, `docs/superpowers/handoff/2026-07-16-1836-slice2-search-restart.md`
+- 상세 히스토리: 없음
+
 ## 2026-07-17 - 클릭 rate limiting DB 최후방어 (슬라이스3 후속)
 
 - 상태: 완료 (PR #18 MERGED — squash `496361b`)
