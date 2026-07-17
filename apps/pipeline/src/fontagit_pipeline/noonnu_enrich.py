@@ -20,10 +20,9 @@ from fontagit_pipeline.noonnu_seed import (
     _REQUEST_DELAY,
     _ROBOTS_URL,
     _USER_AGENT,
-    clean_font_name,
+    derive_noonnu_slug,
     _parse_robots_policy,
 )
-from fontagit_pipeline.transform import build_slug
 
 logger = logging.getLogger(__name__)
 
@@ -208,11 +207,19 @@ def map_license_rows(
 
 
 # Task 6: 분류 게이트
-def classify(parse_ok: bool, price: Optional[int], perms: Optional[dict[str, str]]) -> str:
-    """자동 발행 게이트(D6). 상업 4카테고리 전부 allowed + price 0 + 파싱성공만 auto_safe."""
+def classify(
+    parse_ok: bool,
+    price: Optional[int],
+    perms: Optional[dict[str, str]],
+    official_url: Optional[str] = None,
+) -> str:
+    """자동 발행 게이트(D6). 상업 4카테고리 전부 allowed + price 0 + 파싱성공 + 공식URL 필수만 auto_safe."""
+    if not official_url:
+        return "needs_review"
     if not parse_ok or perms is None:
         return "needs_review"
     if price != 0:
+        # None은 상업여부 미확인 → needs_review
         return "needs_review"
     if all(perms[k] == "allowed" for k in _COMMERCIAL_KEYS):
         return "auto_safe"
@@ -232,11 +239,13 @@ def build_proposal(font_id: str, slug: str, source_url: str, official_url: str, 
     try:
         perms = parse_permissions(html)
         parse_status = "parsed"
+        raw_permissions_data: dict[str, str] = perms
     except EnrichParseError as exc:
         logger.warning("허용표 파싱 실패(slug=%s): %s", slug, exc)
         perms, parse_status = None, "failed"
+        raw_permissions_data = {"_parse_error": str(exc)}
 
-    classification = classify(parse_status == "parsed", price, perms)
+    classification = classify(parse_status == "parsed", price, perms, official_url)
     rows = (map_license_rows(perms, license_type) if perms is not None
             else {"is_commercial_free": None, "allow_embedding": None,
                   "allow_redistribute": None, "allow_modify": None, "license_note": None})
@@ -245,7 +254,7 @@ def build_proposal(font_id: str, slug: str, source_url: str, official_url: str, 
         "font_id": font_id,
         "slug": slug,
         "source_url": source_url,
-        "raw_permissions": perms or {},
+        "raw_permissions": raw_permissions_data,
         "proposed_commercial_free": rows["is_commercial_free"],
         "proposed_embedding": rows["allow_embedding"],
         "proposed_redistribute": rows["allow_redistribute"],
@@ -287,23 +296,18 @@ def _font_update_for(rows: dict, license_type: str, weights: list[int],  # type:
 
 def _derive_slug(name_ko: str, name_en: Optional[str]) -> str:
     """눈누 폰트명에서 슬러그를 도출한다.
-    
+
     규칙: name_en이 있으면 clean + build_slug, 없으면 name_ko를 소문자-하이픈정규화.
-    
+    공유 함수 derive_noonnu_slug에 위임(import/enrich 정합).
+
     Args:
         name_ko: 한글 폰트명.
         name_en: 영문 폰트명 (선택사항).
-    
+
     Returns:
         URL 슬러그.
     """
-    if name_en:
-        cleaned = clean_font_name(name_en)
-        if cleaned:
-            return build_slug(cleaned)
-    
-    slug = re.sub(r"[^a-z0-9]+", "-", name_ko.lower()).strip("-")
-    return slug
+    return derive_noonnu_slug(name_ko, name_en)
 
 
 def enrich_fonts(

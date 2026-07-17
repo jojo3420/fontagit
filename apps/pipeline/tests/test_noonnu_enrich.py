@@ -149,13 +149,13 @@ class TestClassify:
     """Task 6: 분류 게이트"""
 
     def test_classify_auto_safe_all_allowed(self):
-        """상업 4카테고리 모두 allowed + price 0: auto_safe"""
+        """상업 4카테고리 모두 allowed + price 0 + official_url: auto_safe"""
         perms = {k: "allowed" for k in ne.PERMISSION_CATEGORIES}
-        result = ne.classify(parse_ok=True, price=0, perms=perms)
+        result = ne.classify(parse_ok=True, price=0, perms=perms, official_url="https://example.com")
         assert result == "auto_safe"
 
     def test_classify_embedding_conditional_still_auto_safe(self):
-        """임베딩 conditional이어도 상업 4 allowed + price 0: auto_safe"""
+        """임베딩 conditional이어도 상업 4 allowed + price 0 + official_url: auto_safe"""
         perms = {
             "print": "allowed",
             "website": "allowed",
@@ -164,7 +164,7 @@ class TestClassify:
             "embedding": "conditional",
             "branding": "allowed",
         }
-        result = ne.classify(parse_ok=True, price=0, perms=perms)
+        result = ne.classify(parse_ok=True, price=0, perms=perms, official_url="https://example.com")
         assert result == "auto_safe"
 
     def test_classify_commercial_category_conditional_needs_review(self):
@@ -177,18 +177,24 @@ class TestClassify:
             "embedding": "allowed",
             "branding": "allowed",
         }
-        result = ne.classify(parse_ok=True, price=0, perms=perms)
+        result = ne.classify(parse_ok=True, price=0, perms=perms, official_url="https://example.com")
         assert result == "needs_review"
 
     def test_classify_price_nonzero_needs_review(self):
         """price != 0: needs_review"""
         perms = {k: "allowed" for k in ne.PERMISSION_CATEGORIES}
-        result = ne.classify(parse_ok=True, price=100, perms=perms)
+        result = ne.classify(parse_ok=True, price=100, perms=perms, official_url="https://example.com")
         assert result == "needs_review"
 
     def test_classify_parse_fail_needs_review(self):
         """파싱 실패: needs_review"""
-        result = ne.classify(parse_ok=False, price=None, perms=None)
+        result = ne.classify(parse_ok=False, price=None, perms=None, official_url="https://example.com")
+        assert result == "needs_review"
+
+    def test_classify_no_official_url_needs_review(self):
+        """official_url 없음: needs_review"""
+        perms = {k: "allowed" for k in ne.PERMISSION_CATEGORIES}
+        result = ne.classify(parse_ok=True, price=0, perms=perms, official_url=None)
         assert result == "needs_review"
 
 
@@ -273,11 +279,11 @@ class TestDeriveSlug:
         assert slug == "english-font"
 
     def test_derive_slug_without_name_en(self) -> None:
-        """name_en이 None이면 name_ko 소문자-하이픈정규화."""
+        """name_en이 None이면 name_ko 소문자-하이픈정규화(한글보존)."""
         from fontagit_pipeline.noonnu_enrich import _derive_slug
         slug = _derive_slug("한글 폰트 명", None)
-        # 한글은 [^a-z0-9]+ 매칭이므로 모두 하이픈으로 변환되고 정리됨
-        assert slug == ""
+        # 한글은 보존되고 공백은 하이픈으로 변환
+        assert slug == "한글-폰트-명"
 
     def test_derive_slug_with_empty_name_en_ascii_fallback(self) -> None:
         """name_en이 빈 문자열이지만 name_ko가 ASCII면 사용."""

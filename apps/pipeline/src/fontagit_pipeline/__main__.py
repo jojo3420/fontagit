@@ -346,6 +346,13 @@ def main_noonnu_publish(args: argparse.Namespace) -> int:
         dev_client = create_client(settings.supabase_url, settings.supabase_secret_key)
         dev_schema = dev_client.schema("fontagit")
 
+        # prod 환경 오염 방지: dev URL로 prod 쓰기 금지
+        if settings.supabase_prod_url == settings.supabase_url:
+            logger.error(
+                "prod URL이 dev URL과 동일합니다. 설정을 확인하세요."
+            )
+            return 2
+
         # dry_run 여부 결정
         dry_run = not getattr(args, "confirm", False)
 

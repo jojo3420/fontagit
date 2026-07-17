@@ -5,15 +5,13 @@
 
 import json
 import logging
-import re
 from pathlib import Path
 from typing import Any, Optional
 
 from supabase import create_client
 
 from fontagit_pipeline.models import NoonnuSeedOutput
-from fontagit_pipeline.noonnu_seed import clean_font_name
-from fontagit_pipeline.transform import build_slug
+from fontagit_pipeline.noonnu_seed import clean_font_name, derive_noonnu_slug
 
 logger = logging.getLogger(__name__)
 
@@ -137,24 +135,16 @@ def import_noonnu_seeds(
                 continue
 
             # slug 생성 (영문명이 있으면 사용, 아니면 한글명 정규화)
-            if name_en:
-                slug = build_slug(name_en)
-            else:
-                # 영문명 없음: 한글명을 정규화하여 slug로 사용
-                # 공백/하이픈을 정리하되, 한글은 유지
-                slug = name_ko.lower().replace(" ", "-").replace("_", "-")
-                # 연속 하이픈 정리 + 양끝 정리
-                slug = re.sub(r"-+", "-", slug).strip("-")
-                # 빈 슬러그 방지
-                if not slug:
-                    logger.warning(
-                        "[%d/%d] 스킵 - slug 생성 실패: name_ko=%s",
-                        idx,
-                        len(records),
-                        name_ko,
-                    )
-                    skipped_count += 1
-                    continue
+            slug = derive_noonnu_slug(name_ko, name_en)
+            if not slug:
+                logger.warning(
+                    "[%d/%d] 스킵 - slug 생성 실패: name_ko=%s",
+                    idx,
+                    len(records),
+                    name_ko,
+                )
+                skipped_count += 1
+                continue
 
             # 폰트 행 생성
             font_row = _build_draft_font_row(
