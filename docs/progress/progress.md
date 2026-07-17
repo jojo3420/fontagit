@@ -17,6 +17,9 @@ FontAgit(폰트 아지트)는 국내외 무료-유료 폰트를 검색-비교하
 
 ## 진행 기록
 
+## 2026-07-17 - prod SSG 빌드 안정화 + 검색 자동완성 신뢰성 수정
+prod(ollidam) 정적 export 빌드를 막던 3함정 해결(URL /rest/v1 중복=PGRST125, PostgREST fontagit 스키마 미노출→0010, getAllFonts aliases 거대 in-list→게이트웨이 502=청크 조회) → 빌드 그린(폰트130+컬렉션3 정적 생성). 이어 F-19 웹계층 Codex 리뷰로 실재 버그 3건(빈쿼리 stale 레이스/dev Strict Mode 멈춤/무음 실패) 수정. 커밋 `48dcf6d`, `02b541d`, `b90f115`, PR #19 MERGED. 주의: 공유 워킹트리 병렬 작업으로 브랜치가 develop으로 바뀐 채 b90f115가 develop 직접 커밋됨. 남은: prod 폰트 적재, Kong rate limit(공유 게이트웨이), F-19 Should-fix(테스트 보강). 상세: 메모리 `ref-ollidam-ssg-pitfalls`, `docs/review/pr-review-19-*`
+
 ## 2026-07-17 - 검색어 자동완성(F-19) + 초성 검색(F-16) 완성
 헤더 검색바 실시간 드롭다운 자동완성(키보드/IME/하이라이트) + 초성 검색을 DB 엔진(0009 초성함수/생성컬럼/RPC)부터 화면까지 완성(PR #19 `05f9142`, dev C1~C9 통과). spec/plan을 실제 구현(정적 export라 서버라우트 대신 훅에서 RPC 직접 호출)에 동기화(PR #20 `a855df3`). 주의: 이번 세션은 작업 전 `git fetch` 누락으로 이미 병합된 PR #19를 중복 재구현했다 폐기 — 착수 전 원격/PR 확인 필수(메모리 feedback-fetch-before-rework). 상세: 없음(`plans`/`specs` 2026-07-17-search-autocomplete)
 
