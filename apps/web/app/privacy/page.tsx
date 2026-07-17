@@ -23,6 +23,7 @@ export default async function PrivacyPage() {
           <li>익명화된 클릭 집계 데이터 (폰트 조회 통계)</li>
           <li>검색 로그 (검색어, 검색 시간)</li>
           <li>신고 데이터 (사유, 상세 설명, 선택 입력한 이메일)</li>
+          <li>폰트 등록 신청 데이터 (폰트명, 제작자, 공식 URL, 라이선스, 크레딧, 선택 입력한 이메일)</li>
           <li>사용자 기기 정보 (브라우저, OS, 화면 크기)</li>
         </ul>
         <p className={styles.text}>
@@ -74,7 +75,7 @@ export default async function PrivacyPage() {
         <h2 className={styles.h2}>5. 데이터 보관 및 삭제</h2>
         <p className={styles.text}>
           수집된 분석 데이터는 일반적으로 14개월 동안 보관됩니다. 쿠키는 브라우저 설정을 통해 언제든 삭제할 수 있습니다.
-          신고 데이터는 운영자 검토와 후속 대응에 필요한 기간 동안 보관합니다.
+          신고 및 폰트 등록 신청 데이터는 운영자 검토와 후속 대응에 필요한 기간 동안 보관합니다.
         </p>
       </section>
 

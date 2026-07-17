@@ -1,6 +1,10 @@
 import "@testing-library/jest-dom";
 import { vi } from "vitest";
 
+// 테스트용 환경 변수 설정
+process.env.NEXT_PUBLIC_SUPABASE_URL = "https://test.supabase.co";
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-key";
+
 const fontStub = () => ({
   className: "",
   variable: "",
