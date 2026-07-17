@@ -18,6 +18,16 @@ FontAgit(폰트 아지트)는 국내외 무료-유료 폰트를 검색-비교하
 
 ## 진행 기록
 
+## 2026-07-17 - 클릭 rate limiting DB 최후방어 (슬라이스3 후속)
+
+- 상태: 완료 (PR #18 MERGED — squash `496361b`)
+- 완료한 일: 클릭 기록(record_click)의 봇 어뷰징 방어를 DB 계층에 구현-머지. 폰트별 10초 20건 상한을 걸고, 동시 요청이 상한을 우회하는 경합(race)을 try advisory lock으로 차단. PR 듀얼리뷰 Should-fix로 blocking 락 대신 try 방식(획득 실패 시 무시)으로 바꿔 봇 폭주 시 연결 점유 리스크까지 제거. IP 기반 정밀 차단(Kong)은 설계 문서로 인계.
+- 커밋/PR: PR #18 MERGED (squash `496361b`). 주요 구현: 마이그레이션 0008 + SQL 테스트 + try_lock 리소스 보호(S2) + R4 테스트 강화(S1). dev psql 실측: RED→0008 적용→GREEN(click_rate_limit_test ALL PASS)→회귀(font_clicks_test ALL PASS). 최종 리뷰(Opus) YES, PR 듀얼리뷰(Codex, agy 무효 Degraded) Must-fix 0.
+- 결정사항: rate limit=0008, 등록폼=0009. B(DB)는 폰트별 상한 + `pg_try_advisory_xact_lock`(2-key namespace, 획득 실패 시 무시)로 리소스 보호. A(Kong)는 IP당 분당 30건 인계. **prod 배포는 배포 트랙으로 묶음**: prod 현재 빈 상태(폰트 0, 0007 미적용)라 0008 단독 적용은 실익 0 → 0007+0008 스키마 + 폰트 적재 + Kong을 한 배포로. dev MCP self-signed 블로커는 psql `sslmode=require`로 우회.
+- 남은 일: (1) prod 배포 트랙(0007+0008 스키마 적용 + 폰트 적재 + Kong rate limit, prod 쓰기 접속 설정 필요). (2) 배포 전 병렬 부하 테스트(R4 동시성 실증, wrk/ghz).
+- 관련 문서: `docs/superpowers/specs/2026-07-17-click-rate-limiting-design.md`, `docs/superpowers/plans/2026-07-17-click-rate-limiting.md`, `docs/review/review-result-dual-20260717-125336.md`
+- 상세 히스토리: 없음
+
 ## 2026-07-17 - Top10 이동 클릭 집계 완성 (슬라이스3, F-03)
 
 - 상태: 완료 (PR #17 MERGED)
