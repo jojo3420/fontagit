@@ -26,6 +26,7 @@ _SITEMAP_URL = f"{_NOONNU_BASE}/sitemap.xml"
 _FONT_PAGE_PATTERN = re.compile(r"/font_page/(\d+)")
 _REQUEST_DELAY = 1.5
 _USER_AGENT = "FontAgitSeedBot/0.1 (+https://fontag.it)"
+_NOONNU_SUFFIX_PATTERN = re.compile(r"\s*\|\s*눈누\s*$")
 _ROBOT_USER_AGENT = "FontAgitSeedBot"
 
 
@@ -33,6 +34,21 @@ class NoonnuSeedError(Exception):
     """눈누 시드 수집 오류."""
 
     pass
+
+
+def clean_font_name(name: Optional[str]) -> Optional[str]:
+    """폰트 이름에서 눈누 접미사('| 눈누' 등)를 제거한다.
+
+    Args:
+        name: 원본 폰트 이름 (한글/영문).
+
+    Returns:
+        접미사 제거된 이름 또는 None.
+    """
+    if not name:
+        return name
+    # "| 눈누" 또는 " | 눈누" 등의 패턴 제거
+    return _NOONNU_SUFFIX_PATTERN.sub("", name).strip() or None
 
 
 def _parse_robots_policy(robots_text: str) -> RobotFileParser:
@@ -303,6 +319,10 @@ def collect_noonnu_seeds(
                     continue
 
                 name_ko, name_en, maker, official_url = result
+
+                # 이름 정리 (눈누 접미사 제거)
+                name_ko = clean_font_name(name_ko)
+                name_en = clean_font_name(name_en)
 
                 # 필수 필드 검증
                 if not name_ko or not maker:

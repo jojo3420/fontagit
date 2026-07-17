@@ -4,6 +4,7 @@ from fontagit_pipeline.noonnu_seed import (
     _extract_font_data,
     _parse_robots_policy,
     _parse_sitemap_urls,
+    clean_font_name,
 )
 
 
@@ -101,6 +102,52 @@ class TestExtractFontData:
 """
         result = _extract_font_data(html, "https://noonnu.cc/font_page/789")
         assert result is None
+
+    def test_filter_internal_links(self) -> None:
+        """noonnu 내부 링크를 필터링한다."""
+        html = """
+<html>
+    <body>
+        <h1>테스트폰트</h1>
+        <div>Foundry: Test Maker</div>
+        <a href="https://noonnu.cc/other-font">Internal Link</a>
+        <a href="/font_page/999">Relative Link</a>
+        <a href="https://example.com">External Link</a>
+    </body>
+</html>
+"""
+        result = _extract_font_data(html, "https://noonnu.cc/font_page/111")
+        assert result is not None
+        name_ko, name_en, maker, official_url = result
+        # 외부 링크만 선택되어야 함
+        if official_url and official_url != "https://noonnu.cc/font_page/111":
+            assert "example.com" in official_url
+
+
+class TestCleanFontName:
+    """폰트 이름 정리 테스트."""
+
+    def test_remove_suffix_and_preserve_clean_names(self) -> None:
+        """눈누 접미사는 제거하고 정상 이름은 유지한다."""
+        cases = [
+            ("고도체 | 눈누", "고도체"),
+            ("고도마음체  |  눈누", "고도마음체"),
+            ("폰트명 | 눈누  ", "폰트명"),
+            ("산돌국대떡볶이체", "산돌국대떡볶이체"),
+            ("Noto Sans", "Noto Sans"),
+        ]
+
+        for source, expected in cases:
+            assert clean_font_name(source) == expected
+
+    def test_handle_empty_values(self) -> None:
+        """None과 빈 문자열을 그대로 처리한다."""
+        assert clean_font_name(None) is None
+        assert clean_font_name("") == ""
+
+    def test_handle_only_suffix(self) -> None:
+        """접미사만 있는 경우 None을 반환한다."""
+        assert clean_font_name("| 눈누") is None
 
 
 def test_robots_policy_blocks_disallowed_paths() -> None:
