@@ -1,14 +1,13 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+import type { Font } from "@/types/font";
 import {
-  filterFonts,
-  sortFonts,
-  parseFilterQuery,
   buildFilterQuery,
+  filterFonts,
+  parseFilterQuery,
+  sortFonts,
 } from "./filters";
-import { Font } from "@/types/font";
 
 const mockFont = (overrides: Partial<Font> = {}): Font => ({
-  id: "font-1",
   slug: "test-font",
   nameKo: "테스트",
   nameEn: "Test",
@@ -27,154 +26,86 @@ const mockFont = (overrides: Partial<Font> = {}): Font => ({
   },
   officialUrl: "https://example.com",
   aliases: [],
-  freeAlternatives: undefined,
   status: "published",
   ...overrides,
 });
 
 describe("filterFonts", () => {
-  it("should filter by category", () => {
+  it("선택한 분류와 가격을 모두 만족하는 폰트만 반환한다", () => {
     const fonts = [
-      mockFont({ category: "고딕" }),
-      mockFont({ category: "명조" }),
-      mockFont({ category: "손글씨" }),
-    ];
-
-    const result = filterFonts(fonts, new Set(["고딕"]), new Set(), new Set());
-    expect(result).toHaveLength(1);
-    expect(result[0].category).toBe("고딕");
-  });
-
-  it("should filter by tier", () => {
-    const fonts = [
-      mockFont({ tier: "free" }),
-      mockFont({ tier: "paid" }),
-      mockFont({ tier: "free" }),
-    ];
-
-    const result = filterFonts(fonts, new Set(), new Set(["paid"]), new Set());
-    expect(result).toHaveLength(1);
-    expect(result[0].tier).toBe("paid");
-  });
-
-  it("should apply multiple filters (AND)", () => {
-    const fonts = [
+      mockFont({ category: "장식", tier: "free" }),
+      mockFont({ category: "장식", tier: "paid" }),
       mockFont({ category: "고딕", tier: "free" }),
-      mockFont({ category: "명조", tier: "free" }),
-      mockFont({ category: "고딕", tier: "paid" }),
     ];
 
-    const result = filterFonts(
-      fonts,
-      new Set(["고딕"]),
-      new Set(["free"]),
-      new Set()
-    );
-    expect(result).toHaveLength(1);
-    expect(result[0].category).toBe("고딕");
-    expect(result[0].tier).toBe("free");
+    const result = filterFonts(fonts, new Set(["장식"]), new Set(["free"]));
+
+    expect(result).toEqual([fonts[0]]);
   });
 
-  it("should return all fonts when filters are empty", () => {
-    const fonts = [
-      mockFont({ category: "고딕" }),
-      mockFont({ category: "명조" }),
-    ];
+  it("같은 종류의 여러 선택은 OR 조건으로 처리한다", () => {
+    const fonts = [mockFont({ category: "고딕" }), mockFont({ category: "명조" })];
 
-    const result = filterFonts(fonts, new Set(), new Set(), new Set());
-    expect(result).toHaveLength(2);
+    expect(filterFonts(fonts, new Set(["고딕", "명조"]), new Set())).toEqual(fonts);
+  });
+
+  it("선택이 없으면 전체 폰트를 반환한다", () => {
+    const fonts = [mockFont(), mockFont({ category: "명조" })];
+
+    expect(filterFonts(fonts, new Set(), new Set())).toEqual(fonts);
   });
 });
 
 describe("sortFonts", () => {
-  it("should sort by popularity (descending moves)", () => {
-    const fonts = [
-      mockFont({ moves: 50 }),
-      mockFont({ moves: 200 }),
-      mockFont({ moves: 100 }),
-    ];
+  it("실제 이동 수가 있으면 인기순으로 정렬한다", () => {
+    const fonts = [mockFont({ moves: 50 }), mockFont({ moves: 200 })];
 
-    const result = sortFonts(fonts, "popular");
-    expect(result[0].moves).toBe(200);
-    expect(result[1].moves).toBe(100);
-    expect(result[2].moves).toBe(50);
+    expect(sortFonts(fonts, "popular").map((font) => font.moves)).toEqual([200, 50]);
   });
 
-  it("should sort by recent (descending verifiedAt)", () => {
+  it("최신순은 DB가 내려준 등록일 순서를 유지한다", () => {
     const fonts = [
-      mockFont({
-        license: { ...mockFont().license, verifiedAt: "2026-01-01" },
-      }),
-      mockFont({
-        license: { ...mockFont().license, verifiedAt: "2026-03-01" },
-      }),
-      mockFont({
-        license: { ...mockFont().license, verifiedAt: "2026-02-01" },
-      }),
+      mockFont({ slug: "new", license: { ...mockFont().license, verifiedAt: "2020-01-01" } }),
+      mockFont({ slug: "old", license: { ...mockFont().license, verifiedAt: "2030-01-01" } }),
     ];
 
-    const result = sortFonts(fonts, "recent");
-    expect(result[0].license.verifiedAt).toBe("2026-03-01");
-    expect(result[1].license.verifiedAt).toBe("2026-02-01");
-    expect(result[2].license.verifiedAt).toBe("2026-01-01");
+    expect(sortFonts(fonts, "recent").map((font) => font.slug)).toEqual(["new", "old"]);
   });
 });
 
 describe("parseFilterQuery", () => {
-  it("should parse category filter", () => {
-    const params = new URLSearchParams("category=고딕,명조");
-    const result = parseFilterQuery(params);
+  it("분류, 가격, 정렬 조건을 함께 읽는다", () => {
+    const result = parseFilterQuery(
+      new URLSearchParams("category=장식,명조&tier=free&sort=recent"),
+    );
 
-    expect(result.categories.has("고딕")).toBe(true);
-    expect(result.categories.has("명조")).toBe(true);
-    expect(result.categories.size).toBe(2);
-  });
-
-  it("should parse tier filter", () => {
-    const params = new URLSearchParams("tier=free,paid");
-    const result = parseFilterQuery(params);
-
-    expect(result.tiers.has("free")).toBe(true);
-    expect(result.tiers.has("paid")).toBe(true);
-  });
-
-  it("should parse sort parameter", () => {
-    const params = new URLSearchParams("sort=recent");
-    const result = parseFilterQuery(params);
-
+    expect(result.categories).toEqual(new Set(["장식", "명조"]));
+    expect(result.tiers).toEqual(new Set(["free"]));
     expect(result.sort).toBe("recent");
   });
 
-  it("should default to popular sort", () => {
-    const params = new URLSearchParams("");
-    const result = parseFilterQuery(params);
+  it("알 수 없는 정렬값은 최신순으로 되돌린다", () => {
+    expect(parseFilterQuery(new URLSearchParams("sort=broken")).sort).toBe("recent");
+  });
 
-    expect(result.sort).toBe("popular");
+  it("정렬값이 없으면 최신순을 사용한다", () => {
+    expect(parseFilterQuery(new URLSearchParams()).sort).toBe("recent");
   });
 });
 
 describe("buildFilterQuery", () => {
-  it("should build query string from filters", () => {
-    const query = buildFilterQuery(
-      new Set(["고딕", "명조"]),
-      new Set(["free"]),
-      new Set(),
-      "popular"
-    );
-
-    expect(query).toContain("category=");
-    expect(query).toContain("tier=free");
-    expect(query).toContain("sort=popular");
-
+  it("선택된 조건만 URL 쿼리로 만든다", () => {
+    const query = buildFilterQuery(new Set(["장식"]), new Set(["free"]), "recent");
     const params = new URLSearchParams(query);
-    expect(params.get("category")).toBe("고딕,명조");
+
+    expect(params.get("category")).toBe("장식");
+    expect(params.get("tier")).toBe("free");
+    expect(params.get("sort")).toBe("recent");
   });
 
-  it("should omit empty filters", () => {
-    const query = buildFilterQuery(new Set(), new Set(), new Set(), "recent");
+  it("빈 필터는 URL에 넣지 않는다", () => {
+    const query = buildFilterQuery(new Set(), new Set(), "recent");
 
-    expect(query).not.toContain("category");
-    expect(query).not.toContain("tier");
-    expect(query).toContain("sort=recent");
+    expect(query).toBe("sort=recent");
   });
 });

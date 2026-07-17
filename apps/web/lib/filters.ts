@@ -1,35 +1,17 @@
 import { Font } from "@/types/font";
 
 export type SortType = "popular" | "recent";
-export type FilterKey = "category" | "tier" | "use";
 
 export interface FilterState {
   categories: Set<string>;
   tiers: Set<"free" | "paid">;
-  uses: Set<string>;
   sort: SortType;
 }
-
-export const SORT_OPTIONS = {
-  popular: "인기순",
-  recent: "최신순",
-} as const;
-
-export const TIER_MAP: Record<string, "free" | "paid"> = {
-  무료: "free",
-  유료: "paid",
-} as const;
-
-export const TIER_LABEL: Record<"free" | "paid", string> = {
-  free: "무료",
-  paid: "유료",
-} as const;
 
 export function filterFonts(
   fonts: Font[],
   categories: Set<string>,
   tiers: Set<"free" | "paid">,
-  uses: Set<string>
 ): Font[] {
   return fonts.filter((font) => {
     // 분류 필터
@@ -42,9 +24,6 @@ export function filterFonts(
       return false;
     }
 
-    // 용도 필터 (현재 데이터에는 용도 필드가 없으므로 생략)
-    // 향후 font에 use 필드 추가 후 구현 가능
-
     return true;
   });
 }
@@ -54,13 +33,9 @@ export function sortFonts(fonts: Font[], sortType: SortType): Font[] {
 
   if (sortType === "popular") {
     sorted.sort((a, b) => b.moves - a.moves);
-  } else if (sortType === "recent") {
-    sorted.sort((a, b) => {
-      const timeA = new Date(a.license.verifiedAt || 0).getTime();
-      const timeB = new Date(b.license.verifiedAt || 0).getTime();
-      return timeB - timeA;
-    });
   }
+
+  // getAllFonts가 created_at 내림차순으로 조회하므로 최신순은 입력 순서를 유지한다.
 
   return sorted;
 }
@@ -68,7 +43,6 @@ export function sortFonts(fonts: Font[], sortType: SortType): Font[] {
 export function parseFilterQuery(params: URLSearchParams): FilterState {
   const categories = new Set<string>();
   const tiers = new Set<"free" | "paid">();
-  const uses = new Set<string>();
 
   const categoryParam = params.get("category");
   if (categoryParam) {
@@ -87,23 +61,16 @@ export function parseFilterQuery(params: URLSearchParams): FilterState {
     });
   }
 
-  const useParam = params.get("use");
-  if (useParam) {
-    useParam.split(",").forEach((u) => {
-      if (u.trim()) uses.add(u.trim());
-    });
-  }
+  const sortParam = params.get("sort");
+  const sort: SortType = sortParam === "popular" ? "popular" : "recent";
 
-  const sort = (params.get("sort") as SortType) || "popular";
-
-  return { categories, tiers, uses, sort };
+  return { categories, tiers, sort };
 }
 
 export function buildFilterQuery(
   categories: Set<string>,
   tiers: Set<"free" | "paid">,
-  uses: Set<string>,
-  sort: SortType
+  sort: SortType,
 ): string {
   const params = new URLSearchParams();
 
@@ -113,10 +80,6 @@ export function buildFilterQuery(
 
   if (tiers.size > 0) {
     params.set("tier", Array.from(tiers).join(","));
-  }
-
-  if (uses.size > 0) {
-    params.set("use", Array.from(uses).join(","));
   }
 
   params.set("sort", sort);

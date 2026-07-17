@@ -8,7 +8,6 @@ import {
   sortFonts,
   parseFilterQuery,
   buildFilterQuery,
-  SORT_OPTIONS,
 } from "@/lib/filters";
 import styles from "./ClientFontsList.module.css";
 
@@ -19,16 +18,18 @@ interface Props {
 export function ClientFontsList({ fonts }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { categories, tiers, uses, sort } = parseFilterQuery(searchParams);
+  const { categories, tiers, sort } = parseFilterQuery(searchParams);
+  const hasPopularityData = fonts.some((font) => font.moves > 0);
+  const effectiveSort = sort === "popular" && !hasPopularityData ? "recent" : sort;
 
-  const filtered = filterFonts(fonts, categories, tiers, uses);
-  const sorted = sortFonts(filtered, sort);
+  const filtered = filterFonts(fonts, categories, tiers);
+  const sorted = sortFonts(filtered, effectiveSort);
 
   const handleSortChange = (newSort: "popular" | "recent") => {
-    if (newSort === sort) return;
+    if (newSort === effectiveSort) return;
 
-    const query = buildFilterQuery(categories, tiers, uses, newSort);
-    router.push(query ? `?${query}` : `?sort=${newSort}`);
+    const query = buildFilterQuery(categories, tiers, newSort);
+    router.push(`?${query}`);
   };
 
   return (
@@ -36,16 +37,18 @@ export function ClientFontsList({ fonts }: Props) {
       <div className={styles.toolbar}>
         <span className={styles.count}>폰트 {sorted.length}종</span>
         <div className={styles.sorts}>
+          {hasPopularityData && (
+            <button
+              type="button"
+              className={`${styles.sort} ${effectiveSort === "popular" ? styles.active : ""}`}
+              onClick={() => handleSortChange("popular")}
+            >
+              인기순
+            </button>
+          )}
           <button
             type="button"
-            className={`${styles.sort} ${sort === "popular" ? styles.active : ""}`}
-            onClick={() => handleSortChange("popular")}
-          >
-            인기순
-          </button>
-          <button
-            type="button"
-            className={`${styles.sort} ${sort === "recent" ? styles.active : ""}`}
+            className={`${styles.sort} ${effectiveSort === "recent" ? styles.active : ""}`}
             onClick={() => handleSortChange("recent")}
           >
             최신순
