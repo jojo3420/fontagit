@@ -1,5 +1,17 @@
-import { Font, Collection, Category, CollectionFontItem } from "@/types/font";
+import { Font, Collection, Category, CollectionFontItem, FontKey } from "@/types/font";
 import { FontRow, CollectionRow } from "./types";
+
+const SLUG_TO_FONTKEY: Record<string, FontKey | null> = {
+  pretendard: "pretendard",
+  "black-han-sans": "blackHanSans",
+  jua: "jua",
+  "do-hyeon": "doHyeon",
+  "gowun-batang": "gowunBatang",
+  "nanum-myeongjo": "nanumMyeongjo",
+  "kirang-haerang": "kirangHaerang",
+  gaegu: "gaegu",
+  "song-myung": "songMyung",
+};
 
 export function rowToFont(row: FontRow, aliases: string[]): Font {
   return {
@@ -7,7 +19,7 @@ export function rowToFont(row: FontRow, aliases: string[]): Font {
     slug: row.slug,
     nameKo: row.name_ko ?? row.name_en,
     nameEn: row.name_en,
-    fontKey: null,
+    fontKey: SLUG_TO_FONTKEY[row.slug] ?? null,
     tier: row.is_commercial_free ? "free" : "paid",
     category: row.category_ko as Category,
     foundry: row.foundry ?? "",

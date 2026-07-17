@@ -5,7 +5,6 @@ import {
 import type { FontKey } from "@/types/font";
 
 const blackHanSans = Black_Han_Sans({
-  subsets: ["latin"],
   weight: "400",
   display: "swap",
   preload: false,
@@ -13,7 +12,6 @@ const blackHanSans = Black_Han_Sans({
 });
 
 const jua = Jua({
-  subsets: ["latin"],
   weight: "400",
   display: "swap",
   preload: false,
@@ -21,7 +19,6 @@ const jua = Jua({
 });
 
 const doHyeon = Do_Hyeon({
-  subsets: ["latin"],
   weight: "400",
   display: "swap",
   preload: false,
@@ -29,7 +26,6 @@ const doHyeon = Do_Hyeon({
 });
 
 const gowunBatang = Gowun_Batang({
-  subsets: ["latin"],
   weight: ["400", "700"],
   display: "swap",
   preload: false,
@@ -37,7 +33,6 @@ const gowunBatang = Gowun_Batang({
 });
 
 const nanumMyeongjo = Nanum_Myeongjo({
-  subsets: ["latin"],
   weight: ["400", "700", "800"],
   display: "swap",
   preload: false,
@@ -45,7 +40,6 @@ const nanumMyeongjo = Nanum_Myeongjo({
 });
 
 const kirangHaerang = Kirang_Haerang({
-  subsets: ["latin"],
   weight: "400",
   display: "swap",
   preload: false,
@@ -53,14 +47,12 @@ const kirangHaerang = Kirang_Haerang({
 });
 
 const gaegu = Gaegu({
-  subsets: ["latin"],
   weight: ["300", "400", "700"],
   display: "swap",
   preload: false,
   variable: "--font-gaegu",
 });
 
-// Song_Myung: next/font/google 타입이 subsets, preload 미지원 — 생략
 const songMyung = Song_Myung({
   weight: "400",
   display: "swap",

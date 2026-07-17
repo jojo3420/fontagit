@@ -229,3 +229,6 @@ out/
 .env.sandbox
 apps/pipeline/output/
 .idea
+
+# Local Git worktrees
+.worktrees/

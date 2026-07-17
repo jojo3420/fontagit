@@ -80,7 +80,7 @@ describe("rowToFont", () => {
     expect(result.availableWeights).toEqual([400]);
   });
 
-  it("should set fontKey to null", () => {
+  it("should map known slug to fontKey (pretendard)", () => {
     const row: FontRow = {
       id: "5",
       slug: "pretendard",
@@ -92,6 +92,44 @@ describe("rowToFont", () => {
       is_commercial_free: true,
       license_type: "SIL OFL",
       official_url: "https://github.com/orioncactus/pretendard",
+      last_modified: "2026-07-12T00:00:00Z",
+    };
+
+    const result = rowToFont(row, []);
+    expect(result.fontKey).toBe("pretendard");
+  });
+
+  it("should map known slug to fontKey (black-han-sans)", () => {
+    const row: FontRow = {
+      id: "5a",
+      slug: "black-han-sans",
+      name_en: "Black Han Sans",
+      name_ko: "검은고딕",
+      foundry: "Zess",
+      category_ko: "고딕",
+      weights: [400],
+      is_commercial_free: true,
+      license_type: "SIL OFL",
+      official_url: "https://fonts.google.com/specimen/Black+Han+Sans",
+      last_modified: "2026-07-12T00:00:00Z",
+    };
+
+    const result = rowToFont(row, []);
+    expect(result.fontKey).toBe("blackHanSans");
+  });
+
+  it("should set fontKey to null for unknown slug", () => {
+    const row: FontRow = {
+      id: "5b",
+      slug: "unknown-font",
+      name_en: "Unknown Font",
+      name_ko: "미지정 폰트",
+      foundry: "Unknown",
+      category_ko: "고딕",
+      weights: [400],
+      is_commercial_free: true,
+      license_type: "SIL OFL",
+      official_url: "https://example.com",
       last_modified: "2026-07-12T00:00:00Z",
     };
 
