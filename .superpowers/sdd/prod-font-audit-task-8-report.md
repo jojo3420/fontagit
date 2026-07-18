@@ -33,5 +33,13 @@
 ## writer 전수 확인과 남은 위험
 
 - Task 8 대상 `noonnu_enrich.py`, `noonnu_review.py`, `noonnu_publish.py`에는 `fonts.update/upsert/insert/delete` 경로가 0개다.
-- 범위 밖 `noonnu_import.py`에는 draft 전용 `upsert_noonnu_draft` RPC와 RPC 실패 시 `fonts.update/insert` fallback이 남아 있다. published 행은 명시적으로 skip하므로 기존 prod 보정값을 재오염시키지는 않지만, 새 draft의 legacy `official_url` 후보는 쓴다. 이 파일은 Task 8 exact 범위 밖이므로 수정하지 않았다.
 - 외부 네트워크, 실제 Supabase, prod/dev DB 쓰기, migration, deploy는 실행하지 않았다.
+
+## 재리뷰 보완: import race 제거
+
+- RED: `upsert_noonnu_draft` RPC 실패 후에도 예외 없이 slug 조회와 `fonts.update/insert` fallback이 실행됐다.
+- GREEN: direct fallback을 전부 제거했다. 안전 RPC가 실패하면 쓰기 0건 상태로 `NoonnuImportError`를 반환한다.
+- 이제 Noonnu import의 writer는 published 경계를 DB 안에서 원자적으로 검사하는 `upsert_noonnu_draft` RPC 하나다. 조회 후 published 전환 race로 slug-only update가 덮어쓰는 경로가 없다.
+- 전체 writer rg: Noonnu 모듈의 `fonts` 접근은 enrich/review/publish 조회만 남았고, import 쓰기는 안전 RPC만 남았다.
+- 최종 관련 테스트: `35 passed`; 전체 pipeline: `171 passed`; 전체 Ruff: pass.
+- 수정 파일 scoped mypy: pass. 전체 mypy는 기존 `noonnu_seed.py` 1건만 남았다.
