@@ -922,7 +922,7 @@ git commit -m "feat: run deterministic font audit pilot"
 - DB RPC: fontagit.apply_font_source_bootstrap(p_manifest_text text, p_expected_sha256 text, p_schema_version integer) -> integer
 - DB RPC: fontagit.apply_font_audit_manifest(p_manifest_text text, p_expected_sha256 text, p_schema_version integer) -> integer
 
-- [ ] **Step 1: manifest 생성 테스트 작성**
+- [x] **Step 1: manifest 생성 테스트 작성**
 
 ~~~python
 def test_manifest_contains_stable_key_before_values_and_reverse():
@@ -943,7 +943,7 @@ def test_manifest_rejects_unapproved_or_unknown_field():
         build_manifest(run(), [finding(status="proposed", field_name="status")], current_rows())
 ~~~
 
-- [ ] **Step 2: Python RED 확인**
+- [x] **Step 2: Python RED 확인**
 
 ~~~bash
 cd apps/pipeline
@@ -952,13 +952,13 @@ uv run pytest tests/test_audit_manifest.py -q
 
 Expected: audit_manifest 모듈이 없어 실패.
 
-- [ ] **Step 3: manifest builder 구현**
+- [x] **Step 3: manifest builder 구현**
 
 1단계 허용 필드는 foundry, foundry_url, download_url, license_source_url, license_summary, source kind 2개, evidence ID 2개, status 2개, checked_at 2개, 라이선스 6개, legacy is_commercial_free, license_verified다. 2단계 허용 필드는 name_en, name_ko, category_ko, tags, weights, variants, subsets, script_status, script_checked_at, script_evidence_id다. official_url, slug, fonts.status는 변경 허용 목록에서 제외한다.
 
 각 entry에는 source_key, current slug/name/foundry, before, after, evidence_ids, expected_updated_at이 있다. license_status가 needs_review면 license_verified를 false로 dual-write하고, verified일 때만 true로 쓴다. manifest의 evidence_bundle에는 참조하는 audit run, 승인된 snapshot, finding을 원래 UUID와 함께 넣되 dev font_id 대신 안정 source_key를 넣는다. RPC가 source_key를 prod font_id로 다시 해석해 FK를 만든다. raw 보관이 허용되지 않은 snapshot은 raw_text가 null이고 structured data·근거 위치·hash만 포함한다. JSON은 key 정렬·UTF-8·개행 LF로 직렬화해 SHA-256을 만든다.
 
-- [ ] **Step 4: SQL RPC와 핵심 3개 DB 테스트 작성**
+- [x] **Step 4: SQL RPC와 핵심 3개 DB 테스트 작성**
 
 apply_font_audit_manifest RPC는 다음 순서로 동작한다.
 
@@ -1019,7 +1019,13 @@ uv run pytest tests/test_audit_manifest.py -q
 
 Expected: SQL ALL PASS, Python 테스트 2개 PASS.
 
-- [ ] **Step 6: CLI 연결**
+실행 결과: 로컬 PostgreSQL 17에서 migration 0001~0018과 SQL 원자성 테스트가
+통과했고 Python 전체 185건, 범위 내 ruff/mypy도 통과했다. 승인 finding 결속,
+전체 allowlist stale 검사, evidence UUID 충돌, reverse, bootstrap 중복, 승인 메타
+우회 및 부분 반영 0건을 독립 재검토했다. 원격 dev migration/RPC 적용은 자격증명과
+별도 적용 승인 대기라 이 단계는 완료 처리하지 않는다. prod 적용은 실행하지 않았다.
+
+- [x] **Step 6: CLI 연결**
 
 ~~~text
 fontagit-pipeline font-audit-manifest build \
@@ -1035,7 +1041,7 @@ fontagit-pipeline font-audit-manifest apply \
 
 prod target은 --target prod, --confirm-hash, 대화형 yes를 모두 요구한다. 명시적 사용자 승인 전 실행하지 않는다.
 
-- [ ] **Step 7: 커밋**
+- [x] **Step 7: 커밋**
 
 ~~~bash
 git add apps/pipeline/src/fontagit_pipeline/audit_manifest.py \
