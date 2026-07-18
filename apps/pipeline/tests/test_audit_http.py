@@ -123,13 +123,13 @@ def test_private_or_metadata_dns_result_is_blocked_before_curl(
     def fake_getaddrinfo(host: str, port: int, **_: object) -> list[tuple[object, ...]]:
         return [item for address in addresses for item in _dns_result(address)]
 
-    def fake_run(*_: object, **__: object) -> _CompletedCurl:
+    def fake_popen(*_: object, **__: object) -> _StreamingCurl:
         nonlocal called
         called = True
-        return _CompletedCurl()
+        return _StreamingCurl([])
 
     monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
 
     with pytest.raises(UnsafeAddressError):
         fetch_public_url("https://metadata.example/latest")
