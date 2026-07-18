@@ -91,8 +91,22 @@ def test_zero_or_multiple_candidates_are_review_only() -> None:
                 **prod_font("제작사-있음", "제작사 있음", INSTAGRAM_URL),
                 "foundry": "기존 제작사",
             },
+            prod_font(
+                "wrong-tier",
+                "잘못된 Tier A",
+                INSTAGRAM_URL,
+                source_tier="A",
+                name_en="Wrong Tier",
+            ),
         ],
-        tier_a=[],
+        tier_a=[
+            {
+                "source_tier": "B",
+                "slug": "wrong-tier",
+                "name_en": "Wrong Tier",
+                "official_url": INSTAGRAM_URL,
+            }
+        ],
         tier_b=[
             tier_b_seed("1", "동일", INSTAGRAM_URL),
             tier_b_seed("2", "동일", INSTAGRAM_URL),
@@ -100,13 +114,16 @@ def test_zero_or_multiple_candidates_are_review_only() -> None:
         ],
     )
 
-    assert (result.matched, result.unmatched, result.conflicts) == (0, 2, 1)
+    assert (result.matched, result.unmatched, result.conflicts) == (0, 3, 1)
     assert result.entries == []
     assert {row["reason"] for row in result.review_rows} == {
         "no_exact_candidate",
         "multiple_candidates",
         "foundry_precondition_not_null",
     }
+    assert next(row for row in result.review_rows if row["slug"] == "wrong-tier")[
+        "reason"
+    ] == "no_exact_candidate"
 
 
 def test_invalid_tier_b_source_page_is_never_used_as_provider_id() -> None:
@@ -129,7 +146,12 @@ def test_invalid_tier_b_source_page_is_never_used_as_provider_id() -> None:
 def test_prod_baseline_sorts_slug_before_hashing(tmp_path: Path) -> None:
     """기준선은 DB 정렬 환경과 무관하게 slug 순서를 고정한다."""
     rows = [
-        prod_font(f"font-{index:04d}", f"폰트 {index}", INSTAGRAM_URL)
+        prod_font(
+            f"font-{index:04d}",
+            f"폰트 {index}",
+            INSTAGRAM_URL,
+            source_tier="A" if index < 130 else "B",
+        )
         for index in reversed(range(1240))
     ]
     out = tmp_path / "prod-baseline.json"
@@ -148,12 +170,21 @@ def test_prod_baseline_requires_complete_sorted_hashed_snapshot(tmp_path: Path) 
         prod_font("b", "나", INSTAGRAM_URL),
     ]
     baseline = tmp_path / "prod-baseline.json"
-    file_sha256 = write_prod_baseline(rows, baseline, expected_record_count=2)
+    file_sha256 = write_prod_baseline(
+        rows,
+        baseline,
+        expected_record_count=2,
+        expected_tier_counts=None,
+    )
     payload = json.loads(baseline.read_text(encoding="utf-8"))
 
     assert payload["baseline_content_sha256"]
     assert baseline.with_suffix(".json.sha256").read_text(encoding="utf-8") == f"{file_sha256}\n"
-    assert load_prod_baseline(baseline, expected_record_count=2) == rows
+    assert load_prod_baseline(
+        baseline,
+        expected_record_count=2,
+        expected_tier_counts=None,
+    ) == rows
 
     payload["baseline_content_sha256"] = "0" * 64
     changed_content = (json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
@@ -162,34 +193,59 @@ def test_prod_baseline_requires_complete_sorted_hashed_snapshot(tmp_path: Path) 
         f"{hashlib.sha256(changed_content).hexdigest()}\n", encoding="ascii"
     )
     with pytest.raises(BootstrapError, match="baseline content SHA-256"):
-        load_prod_baseline(baseline, expected_record_count=2)
+        load_prod_baseline(
+            baseline,
+            expected_record_count=2,
+            expected_tier_counts=None,
+        )
 
-    write_prod_baseline(rows, baseline, expected_record_count=2)
+    write_prod_baseline(
+        rows,
+        baseline,
+        expected_record_count=2,
+        expected_tier_counts=None,
+    )
     payload = json.loads(baseline.read_text(encoding="utf-8"))
     payload["rows"] = list(reversed(rows))
     baseline.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(BootstrapError, match="file SHA-256"):
-        load_prod_baseline(baseline, expected_record_count=2)
-
+        load_prod_baseline(
+            baseline,
+            expected_record_count=2,
+            expected_tier_counts=None,
+        )
 
 def test_prod_baseline_rejects_partial_default_cli_contract(tmp_path: Path) -> None:
-    """기본 계약은 1,240건이므로 임의 1건 JSON을 허용하지 않는다."""
+    """기본 계약은 1,240건과 A 130/B 1,110 분포를 모두 강제한다."""
     baseline = tmp_path / "partial.json"
     write_prod_baseline(
         [prod_font("only", "하나", INSTAGRAM_URL)],
         baseline,
         expected_record_count=1,
+        expected_tier_counts=None,
     )
 
     with pytest.raises(BootstrapError, match="expected=1240"):
         load_prod_baseline(baseline)
+
+    wrong_distribution = [
+        prod_font(f"wrong-{index:04d}", f"잘못된 분포 {index}", INSTAGRAM_URL)
+        for index in range(1240)
+    ]
+    with pytest.raises(BootstrapError, match="source_tier 분포"):
+        write_prod_baseline(wrong_distribution, tmp_path / "wrong-distribution.json")
 
 
 def test_prod_baseline_rejects_unknown_schema(tmp_path: Path) -> None:
     """기준선 스키마 버전이 바뀌면 자동 bootstrap을 막는다."""
     rows = [prod_font("only", "하나", INSTAGRAM_URL)]
     baseline = tmp_path / "unknown-schema.json"
-    write_prod_baseline(rows, baseline, expected_record_count=1)
+    write_prod_baseline(
+        rows,
+        baseline,
+        expected_record_count=1,
+        expected_tier_counts=None,
+    )
     payload = json.loads(baseline.read_text(encoding="utf-8"))
     payload["schema_version"] = 2
     content = (
@@ -202,4 +258,8 @@ def test_prod_baseline_rejects_unknown_schema(tmp_path: Path) -> None:
     )
 
     with pytest.raises(BootstrapError, match="schema_version"):
-        load_prod_baseline(baseline, expected_record_count=1)
+        load_prod_baseline(
+            baseline,
+            expected_record_count=1,
+            expected_tier_counts=None,
+        )

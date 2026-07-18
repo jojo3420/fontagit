@@ -17,6 +17,7 @@ from fontagit_pipeline.noonnu_seed import derive_noonnu_slug
 _NOONNU_PAGE_ID = re.compile(r"^https://noonnu\.cc/font_page/([1-9][0-9]*)$")
 _CONTENT_RANGE = re.compile(r"^(?:[0-9]+-[0-9]+|\*)/([0-9]+)$")
 _EXPECTED_PROD_PUBLISHED_COUNT = 1240
+_EXPECTED_PROD_TIER_COUNTS: Mapping[str, int] = {"A": 130, "B": 1110}
 _PUBLIC_FONT_COLUMNS = (
     "id,slug,name_ko,name_en,foundry,source_tier,official_url,updated_at"
 )
@@ -169,7 +170,8 @@ def build_bootstrap_manifest(
             tier_a_candidates = [
                 seed
                 for seed in tier_a
-                if _required_text(seed, "name_en") == name_en
+                if _text(seed, "source_tier") == "A"
+                and _required_text(seed, "name_en") == name_en
                 and _required_text(seed, "slug") == slug
                 and _required_text(seed, "official_url") == official_url
             ]
@@ -346,6 +348,7 @@ def _validate_prod_rows(
     rows: Sequence[Mapping[str, object]],
     *,
     expected_record_count: int = _EXPECTED_PROD_PUBLISHED_COUNT,
+    expected_tier_counts: Mapping[str, int] | None = _EXPECTED_PROD_TIER_COUNTS,
     require_sorted: bool = False,
 ) -> None:
     slugs = [_required_text(row, "slug") for row in rows]
@@ -355,6 +358,16 @@ def _validate_prod_rows(
         )
     if any(slug is None for slug in slugs) or len(set(slugs)) != len(slugs):
         raise BootstrapError("prod 기준선 slug가 비어 있거나 중복됩니다")
+    if expected_tier_counts is not None:
+        actual_tier_counts: dict[str, int] = {}
+        for row in rows:
+            tier = _required_text(row, "source_tier") or "<missing>"
+            actual_tier_counts[tier] = actual_tier_counts.get(tier, 0) + 1
+        if actual_tier_counts != dict(expected_tier_counts):
+            raise BootstrapError(
+                "prod 기준선 source_tier 분포가 다릅니다: "
+                f"expected={dict(expected_tier_counts)}, actual={actual_tier_counts}"
+            )
     clean_slugs = [slug for slug in slugs if slug is not None]
     if require_sorted and clean_slugs != sorted(clean_slugs):
         raise BootstrapError("prod 기준선이 slug 오름차순이 아닙니다")
@@ -364,9 +377,14 @@ def _validated_sorted_prod_rows(
     rows: Sequence[Mapping[str, object]],
     *,
     expected_record_count: int = _EXPECTED_PROD_PUBLISHED_COUNT,
+    expected_tier_counts: Mapping[str, int] | None = _EXPECTED_PROD_TIER_COUNTS,
 ) -> list[dict[str, object]]:
     """개수와 중복을 검증한 뒤 환경 독립적인 slug 순서로 고정한다."""
-    _validate_prod_rows(rows, expected_record_count=expected_record_count)
+    _validate_prod_rows(
+        rows,
+        expected_record_count=expected_record_count,
+        expected_tier_counts=expected_tier_counts,
+    )
     return sorted((dict(row) for row in rows), key=lambda row: str(row["slug"]))
 
 
@@ -386,10 +404,13 @@ def calculate_baseline_content_sha256(
     rows: Sequence[Mapping[str, object]],
     *,
     expected_record_count: int = _EXPECTED_PROD_PUBLISHED_COUNT,
+    expected_tier_counts: Mapping[str, int] | None = _EXPECTED_PROD_TIER_COUNTS,
 ) -> str:
     """정렬·검증된 기준선 본문 해시를 계산한다."""
     sorted_rows = _validated_sorted_prod_rows(
-        rows, expected_record_count=expected_record_count
+        rows,
+        expected_record_count=expected_record_count,
+        expected_tier_counts=expected_tier_counts,
     )
     return _sha256(_canonical_json(_baseline_content_payload(sorted_rows)))
 
@@ -399,6 +420,7 @@ def write_prod_baseline(
     out: Path,
     *,
     expected_record_count: int = _EXPECTED_PROD_PUBLISHED_COUNT,
+    expected_tier_counts: Mapping[str, int] | None = _EXPECTED_PROD_TIER_COUNTS,
 ) -> str:
     """검증된 공개 prod 기준선을 저장하고 파일 전체 SHA-256을 반환한다.
 
@@ -406,7 +428,9 @@ def write_prod_baseline(
     반환값과 동반 ``.sha256``은 최종 JSON 파일 전체의 해시다.
     """
     sorted_rows = _validated_sorted_prod_rows(
-        rows, expected_record_count=expected_record_count
+        rows,
+        expected_record_count=expected_record_count,
+        expected_tier_counts=expected_tier_counts,
     )
     content_payload = _baseline_content_payload(sorted_rows)
     payload = {
@@ -424,6 +448,7 @@ def load_prod_baseline(
     path: Path,
     *,
     expected_record_count: int = _EXPECTED_PROD_PUBLISHED_COUNT,
+    expected_tier_counts: Mapping[str, int] | None = _EXPECTED_PROD_TIER_COUNTS,
 ) -> list[dict[str, object]]:
     """완전성·본문 해시·파일 해시가 검증된 prod 기준선만 읽는다."""
     try:
@@ -459,6 +484,7 @@ def load_prod_baseline(
     _validate_prod_rows(
         rows,
         expected_record_count=expected_record_count,
+        expected_tier_counts=expected_tier_counts,
         require_sorted=True,
     )
     return rows

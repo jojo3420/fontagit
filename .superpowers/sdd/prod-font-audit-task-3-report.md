@@ -45,3 +45,23 @@
 - `cdaa713 feat: bootstrap font audit baseline`
 - `edecfbc fix: validate font audit baseline integrity`
 - `619abd7 test: consolidate bootstrap review coverage`
+- 이번 변경: `fix: enforce prod font tier distribution`
+
+## 리뷰 보강 2: prod Tier 분포·Tier A 시드 검증
+
+- RED: `cd apps/pipeline && uv run pytest tests/test_audit_bootstrap.py -q` → `4 failed, 3 passed`
+  - `source_tier=B`인 Tier A 시드가 자동 연결되는 실패를 확인했다.
+  - 작은 테스트 기준선이 분포 검증을 명시적으로 override할 API가 없음을 확인했다.
+- GREEN: `cd apps/pipeline && uv run pytest tests/test_audit_bootstrap.py -q` → `7 passed`
+- `uv run ruff check src/fontagit_pipeline/audit_bootstrap.py src/fontagit_pipeline/__main__.py tests/test_audit_bootstrap.py` → 통과
+- `uv run mypy src/fontagit_pipeline/audit_bootstrap.py src/fontagit_pipeline/__main__.py` → 통과
+- `uv run pytest -q` → `169 passed`
+- anon-only export 명령:
+  - `uv run python -m fontagit_pipeline font-audit-export-baseline --source prod-public --out output/audit/prod-fonts-baseline.json`
+  - 결과: exact `1,240`, Tier A `130`, Tier B `1,110`, 기타 Tier `0`
+- 전수 bootstrap 명령:
+  - `uv run python -m fontagit_pipeline font-audit-bootstrap --prod-snapshot output/audit/prod-fonts-baseline.json --out output/audit/bootstrap-manifest.json`
+  - 결과: `matched=1,240`, `unmatched=0`, `conflicts=0`, `public_updates` 전부 `{}`
+  - manifest SHA-256: `d538a3e493eb0b193fe25c6783508a8c06b09878d474e80ee137456b5359b38c`
+- 기본 export/load 경로는 전체 1,240건과 A 130/B 1,110 분포를 동시에 강제한다. 테스트 fixture만 `expected_tier_counts=None` 또는 대체 분포를 명시해 우회할 수 있다.
+- service/secret key, prod 쓰기, migration, 배포는 사용·수행하지 않았다.
