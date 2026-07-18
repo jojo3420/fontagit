@@ -332,7 +332,7 @@ git commit -m "feat: add font audit schema"
 - Produces: load_audit_settings() -> AuditSettings
 - CLI: font-audit-policy-check --out PATH
 
-- [ ] **Step 1: 정책 검증 핵심 테스트 작성**
+- [x] **Step 1: 정책 검증 핵심 테스트 작성**
 
 먼저 문서 디렉터리를 만든다.
 
@@ -362,7 +362,7 @@ def test_audit_settings_do_not_require_google_key(monkeypatch):
     assert load_audit_settings().supabase_url is None
 ~~~
 
-- [ ] **Step 2: RED 확인**
+- [x] **Step 2: RED 확인**
 
 Run:
 
@@ -373,7 +373,7 @@ uv run pytest tests/test_audit_policy.py tests/test_config.py -q
 
 Expected: audit_policy 모듈이 없어 실패.
 
-- [ ] **Step 3: 타입과 정책 구현**
+- [x] **Step 3: 타입과 정책 구현**
 
 audit_models.py의 공개 타입은 아래 시그니처로 고정한다.
 
@@ -469,13 +469,13 @@ def load_audit_settings() -> AuditSettings:
     return AuditSettings()
 ~~~
 
-- [ ] **Step 4: 수집 정책 실행 게이트 작성**
+- [x] **Step 4: 수집 정책 실행 게이트 작성**
 
 runbook에 robots URL, 확인 시각, 수집 허용 여부, 원문 장기 저장 허용 여부, 증거 해시를 기록하는 표를 만든다. assert_collection_allowed()는 승인된 정책 JSON 없이는 raw_text 저장을 거부하고 structured-only 모드만 허용한다.
 
 font-audit-policy-check 명령은 robots와 이용 조건의 증거 URL·해시를 출력하되 사람이 crawl_allowed와 raw_retention_allowed를 승인하기 전에는 둘 다 unknown으로 기록한다. unknown은 structured-only다.
 
-- [ ] **Step 5: GREEN과 정적 검사**
+- [x] **Step 5: GREEN과 정적 검사**
 
 ~~~bash
 cd apps/pipeline
@@ -488,7 +488,10 @@ uv run mypy src
 
 Expected: 신규 정책 2개와 설정 1개 테스트 PASS, ruff/mypy 오류 0.
 
-- [ ] **Step 6: 커밋**
+실행 결과: 범위 내 테스트 17건과 ruff/mypy는 통과했다. 전체 `mypy src`의
+Noonnu 관련 7건은 이번 변경 전부터 있던 기준선 오류로 별도 추적한다.
+
+- [x] **Step 6: 커밋**
 
 ~~~bash
 git add apps/pipeline/src/fontagit_pipeline/audit_models.py \
