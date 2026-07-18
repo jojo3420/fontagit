@@ -69,7 +69,7 @@ def classify_license(
         )
 
     fingerprint = _fingerprint(snapshot.license_text)
-    standard = _matching_standard(snapshot, payload, fingerprint)
+    standard = _matching_standard(snapshot, source_registry, payload, fingerprint)
     if standard is not None:
         return _verified(
             snapshot,
@@ -118,10 +118,13 @@ def _fingerprint(text: str | None) -> str | None:
 
 def _matching_standard(
     snapshot: NoonnuFontSnapshot,
+    registry: SourceRegistry,
     rules: Mapping[str, object],
     fingerprint: str | None,
 ) -> Mapping[str, object] | None:
     if fingerprint is None or not snapshot.license_id or not snapshot.license_version:
+        return None
+    if not _is_approved_license_source(snapshot.source_url, registry):
         return None
     entries = rules.get("standard_licenses")
     if not isinstance(entries, list):
@@ -146,7 +149,7 @@ def _matching_template(
 ) -> Mapping[str, object] | None:
     if fingerprint is None or not snapshot.template_selector or not snapshot.template_version:
         return None
-    if not _is_approved_source(snapshot.source_url, registry):
+    if not _is_approved_license_source(snapshot.source_url, registry):
         return None
     hostname = (urlparse(snapshot.source_url).hostname or "").lower().rstrip(".")
     entries = rules.get("maker_templates")
@@ -170,8 +173,18 @@ def _matching_template(
     return None
 
 
-def _is_approved_source(source_url: str, registry: SourceRegistry) -> bool:
-    return registry.classify(source_url) in {"official", "public"}
+def _is_approved_license_source(source_url: str, registry: SourceRegistry) -> bool:
+    """도메인·출처 등급·license 역할이 모두 승인된 항목만 허용한다."""
+    hostname = (urlparse(source_url).hostname or "").lower().rstrip(".")
+    for entry in registry.entries:
+        domain = (entry.domain or "").lower().rstrip(".")
+        domain_matches = bool(
+            domain and (hostname == domain or hostname.endswith(f".{domain}"))
+        )
+        roles = {role.strip().casefold() for role in entry.roles or []}
+        if domain_matches and entry.source_kind in {"official", "public"}:
+            return "license" in roles
+    return False
 
 
 def _reviewed_permissions(
@@ -182,15 +195,12 @@ def _reviewed_permissions(
         snapshot.finding_status != "approved"
         or not _nonempty_text(snapshot.reviewed_by)
         or not _reviewed_at(snapshot.reviewed_at)
+        or not _nonempty_text(snapshot.review_evidence_id)
     ):
         return None
     permissions = _permission_values(snapshot.reviewed_permissions)
     has_permissions = any(value is not None for value in permissions.values())
-    if has_permissions:
-        return permissions, True
-    if _nonempty_text(snapshot.review_evidence_id):
-        return permissions, False
-    return None
+    return (permissions, True) if has_permissions else None
 
 
 def _nonempty_text(value: str | None) -> str | None:
@@ -238,8 +248,8 @@ def _verified(
 ) -> LicenseDecision:
     location = snapshot.evidence_locations.get(evidence_key, evidence_key)
     evidence = {field: location for field in _PERMISSION_FIELDS if permissions.get(field) is not None}
-    if not evidence and evidence_key == "human_review":
-        evidence[evidence_key] = snapshot.review_evidence_id or location
+    if evidence_key == "human_review" and snapshot.review_evidence_id:
+        evidence[evidence_key] = snapshot.review_evidence_id
     return LicenseDecision(
         status="verified",
         auto_applicable=auto_applicable,

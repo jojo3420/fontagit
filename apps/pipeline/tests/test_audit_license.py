@@ -20,6 +20,23 @@ def _snapshot(*, extractor: str = "deterministic") -> NoonnuFontSnapshot:
     )
 
 
+def _official_registry(*, roles: list[str] | None = None) -> dict[str, object]:
+    return {
+        "version": 1,
+        "entries": [
+            {
+                "maker": "공식 제작사",
+                "domain": "fonts.example.org",
+                "roles": roles or ["license"],
+                "source_kind": "official",
+                "approved_by": "reviewer",
+                "approved_at": "2026-07-18T00:00:00+09:00",
+                "evidence_snapshot_id": "source-evidence-1",
+            }
+        ],
+    }
+
+
 def test_exact_approved_fingerprint_maps_only_declared_six_permissions() -> None:
     snapshot = _snapshot()
     fingerprint = hashlib.sha256(snapshot.license_text.encode("utf-8")).hexdigest()
@@ -44,7 +61,7 @@ def test_exact_approved_fingerprint_maps_only_declared_six_permissions() -> None
         "maker_templates": [],
     }
 
-    decision = classify_license(snapshot, registry={"version": 1, "entries": []}, rules=rules)
+    decision = classify_license(snapshot, registry=_official_registry(), rules=rules)
 
     assert decision.status == "verified"
     assert decision.allow_commercial == "allowed"
@@ -68,8 +85,8 @@ def test_llm_or_unapproved_custom_text_never_verifies_or_infers_permissions() ->
     assert "라이선스 재확인 필요" in decision.summary
 
 
-def test_template_match_rejects_unapproved_or_discovery_registry_mapping() -> None:
-    """제작사 템플릿은 검증된 공식·공공 출처에만 쓸 수 있다."""
+def test_registry_and_human_review_require_complete_authority_evidence() -> None:
+    """출처 역할과 사람 검수 근거가 빠지면 verified로 승격하지 않는다."""
     snapshot = _snapshot().model_copy(
         update={
             "license_id": None,
@@ -93,6 +110,22 @@ def test_template_match_rejects_unapproved_or_discovery_registry_mapping() -> No
         ],
     }
 
+    for registry in (
+        _official_registry(roles=["download"]),
+        {
+            "version": 1,
+            "entries": [
+                {
+                    "maker": "제작사",
+                    "domain": "fonts.example.org",
+                    "roles": ["license"],
+                    "source_kind": "discovery",
+                }
+            ],
+        },
+    ):
+        assert classify_license(snapshot, registry=registry, rules=rules).status == "needs_review"
+
     with pytest.raises(ValueError, match="approval evidence"):
         classify_license(
             snapshot,
@@ -110,43 +143,36 @@ def test_template_match_rejects_unapproved_or_discovery_registry_mapping() -> No
             rules=rules,
         )
 
-    decision = classify_license(
-        snapshot,
-        registry={
-            "version": 1,
-            "entries": [
-                {
-                    "maker": "제작사",
-                    "domain": "fonts.example.org",
-                    "roles": ["license"],
-                    "source_kind": "discovery",
-                }
-            ],
-        },
-        rules=rules,
+    invalid_human_updates = (
+        {"reviewed_by": "   ", "reviewed_at": "2026-07-18T00:00:00Z", "review_evidence_id": "e1", "reviewed_permissions": {"allow_commercial": "allowed"}},
+        {"reviewed_by": "reviewer", "reviewed_at": "not-a-date", "review_evidence_id": "e1", "reviewed_permissions": {"allow_commercial": "allowed"}},
+        {"reviewed_by": "reviewer", "reviewed_at": "2026-07-18T00:00:00Z", "review_evidence_id": "e1", "reviewed_permissions": {}},
     )
-    assert decision.status == "needs_review"
+    empty_rules = {"version": 1, "standard_licenses": [], "maker_templates": []}
+    for update in invalid_human_updates:
+        human_snapshot = _snapshot().model_copy(
+            update={"finding_status": "approved", **update}
+        )
+        decision = classify_license(
+            human_snapshot,
+            registry={"version": 1, "entries": []},
+            rules=empty_rules,
+        )
+        assert decision.status == "needs_review"
 
-
-@pytest.mark.parametrize(
-    "update",
-    [
-        {"reviewed_by": "   ", "reviewed_at": "2026-07-18T00:00:00Z", "reviewed_permissions": {"allow_commercial": "allowed"}},
-        {"reviewed_by": "reviewer", "reviewed_at": "not-a-date", "reviewed_permissions": {"allow_commercial": "allowed"}},
-        {"reviewed_by": "reviewer", "reviewed_at": "2026-07-18T00:00:00Z", "reviewed_permissions": {}},
-    ],
-)
-def test_human_review_requires_identity_time_and_a_permission(
-    update: dict[str, object],
-) -> None:
-    """형식만 갖춘 사람 검수는 verified 판정을 만들 수 없다."""
-    snapshot = _snapshot().model_copy(update={"finding_status": "approved", **update})
-
-    decision = classify_license(
-        snapshot,
+    approved_human = _snapshot().model_copy(
+        update={
+            "finding_status": "approved",
+            "reviewed_by": " reviewer ",
+            "reviewed_at": "2026-07-18T00:00:00+09:00",
+            "review_evidence_id": "review-1",
+            "reviewed_permissions": {"allow_commercial": "allowed"},
+        }
+    )
+    approved = classify_license(
+        approved_human,
         registry={"version": 1, "entries": []},
-        rules={"version": 1, "standard_licenses": [], "maker_templates": []},
+        rules=empty_rules,
     )
-
-    assert decision.status == "needs_review"
-    assert decision.auto_applicable is False
+    assert approved.status == "verified"
+    assert approved.evidence_locations["human_review"] == "review-1"
