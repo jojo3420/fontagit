@@ -28,6 +28,18 @@ class Settings(BaseSettings):
         return v
 
 
+class AuditSettings(BaseSettings):
+    """Google Fonts API 키와 분리된 감사 전용 설정."""
+
+    supabase_url: str | None = None
+    supabase_anon_key: str | None = None
+    supabase_secret_key: str | None = None
+    supabase_prod_url: str | None = None
+    supabase_prod_secret_key: str | None = None
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+
 def load_settings() -> Settings:
     """환경변수와 .env 파일로부터 설정을 로드한다.
 
@@ -38,3 +50,8 @@ def load_settings() -> Settings:
         ValidationError: google_fonts_api_key가 없을 경우.
     """
     return Settings()  # type: ignore[call-arg]
+
+
+def load_audit_settings() -> AuditSettings:
+    """감사 명령용 선택 설정을 로드한다."""
+    return AuditSettings()

@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from fontagit_pipeline.config import Settings
+from fontagit_pipeline.config import Settings, load_audit_settings
 
 
 def test_settings_rejects_blank_api_key(monkeypatch):
@@ -53,3 +53,12 @@ def test_settings_supabase_absent_ok(monkeypatch):
     assert settings.supabase_url is None
     assert settings.supabase_secret_key is None
     assert settings.github_token is None
+
+
+def test_audit_settings_do_not_require_google_key(monkeypatch, tmp_path):
+    """감사 전용 설정은 Google Fonts API 키가 없어도 로드한다."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("GOOGLE_FONTS_API_KEY", raising=False)
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+
+    assert load_audit_settings().supabase_url is None

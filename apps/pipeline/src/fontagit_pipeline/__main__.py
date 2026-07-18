@@ -386,6 +386,28 @@ def main_noonnu_publish(args: argparse.Namespace) -> int:
         return 3
 
 
+def main_audit_policy_check(args: argparse.Namespace) -> int:
+    """사람 승인 전 수집 정책 점검 문서를 만든다."""
+    from fontagit_pipeline.audit_policy import write_policy_check
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    try:
+        policy = write_policy_check(args.out)
+    except (OSError, ValueError) as exc:
+        logger.error("감사 정책 파일 생성 실패: %s", exc)
+        return 3
+
+    logger.info(
+        "정책 점검 파일 생성: %s (robots=%s, terms=%s, crawl=%s, raw=%s)",
+        args.out,
+        policy.robots_sha256,
+        policy.terms_sha256,
+        policy.crawl_allowed,
+        policy.raw_retention_allowed,
+    )
+    return 0
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="FontAgit 파이프라인",
@@ -461,6 +483,19 @@ if __name__ == "__main__":
         help="실제 prod 쓰기 활성화 (이중 확인 필수)",
     )
     publish_parser.set_defaults(func=main_noonnu_publish)
+
+    # 감사 수집 정책 확인 명령
+    policy_parser = subparsers.add_parser(
+        "font-audit-policy-check",
+        help="robots와 이용 조건 승인 전 정책 파일 생성",
+    )
+    policy_parser.add_argument(
+        "--out",
+        type=Path,
+        required=True,
+        help="정책 점검 JSON 출력 경로",
+    )
+    policy_parser.set_defaults(func=main_audit_policy_check)
 
     args = parser.parse_args()
 
