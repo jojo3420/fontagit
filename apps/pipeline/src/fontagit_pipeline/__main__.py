@@ -389,9 +389,11 @@ def main_noonnu_publish(args: argparse.Namespace) -> int:
 def main_audit_policy_check(args: argparse.Namespace) -> int:
     """사람 승인 전 수집 정책 점검 문서를 만든다."""
     from fontagit_pipeline.audit_policy import write_policy_check
+    from fontagit_pipeline.config import load_audit_settings
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     try:
+        load_audit_settings()
         policy = write_policy_check(args.out)
     except (OSError, ValueError) as exc:
         logger.error("감사 정책 파일 생성 실패: %s", exc)

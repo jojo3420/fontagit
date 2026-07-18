@@ -28,6 +28,36 @@ class RegistryEntry(BaseModel):
     approved_at: datetime | None = None
     evidence_snapshot_id: str | None = None
 
+    @field_validator(
+        "maker",
+        "domain",
+        "approved_by",
+        "evidence_snapshot_id",
+        mode="before",
+    )
+    @classmethod
+    def strip_optional_approval_text(cls, value: object) -> object:
+        """승인 문자열을 정규화하고 공백뿐인 값은 미입력으로 바꾼다."""
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
+
+    @field_validator("roles", mode="before")
+    @classmethod
+    def strip_and_validate_roles(cls, value: object) -> object:
+        """역할 이름을 정규화하고 빈 역할 항목을 거부한다."""
+        if not isinstance(value, list):
+            return value
+
+        normalized: list[object] = []
+        for role in value:
+            if isinstance(role, str):
+                role = role.strip()
+                if not role:
+                    raise ValueError("registry role requires approval evidence")
+            normalized.append(role)
+        return normalized
+
     @field_validator("approved_at", mode="before")
     @classmethod
     def blank_approval_time_is_missing(cls, value: object) -> object:
@@ -87,10 +117,27 @@ class CollectionPolicy(BaseModel):
     approved_by: str | None
     approved_at: datetime | None
 
+    @field_validator("source")
+    @classmethod
+    def normalize_source(cls, value: str) -> str:
+        """정책 대상을 비교 가능한 값으로 정규화한다."""
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("collection policy source is required")
+        return normalized
+
+    @field_validator("approved_by", mode="before")
+    @classmethod
+    def normalize_approver(cls, value: object) -> object:
+        """공백뿐인 승인자는 미승인 상태로 바꾼다."""
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
+
     @property
     def has_human_approval(self) -> bool:
         """승인자와 승인 시각이 모두 있는지 반환한다."""
-        return bool(self.approved_by and self.approved_at)
+        return bool(self.approved_by and self.approved_by.strip() and self.approved_at)
 
     @property
     def has_complete_evidence(self) -> bool:
@@ -134,10 +181,19 @@ def load_collection_policy(path: str | Path) -> CollectionPolicy:
 def assert_collection_allowed(
     policy_path: str | Path | None = None,
     *,
+    expected_source: str,
     retain_raw_text: bool = False,
 ) -> CollectionMode:
     """수집·원문 보관 정책을 확인하고 허용된 저장 모드를 반환한다."""
+    normalized_source = expected_source.strip()
+    if not normalized_source:
+        raise ValueError("expected collection source is required")
+
     policy = load_collection_policy(policy_path) if policy_path is not None else None
+    if policy is not None and policy.source.casefold() != normalized_source.casefold():
+        raise ValueError(
+            f"collection policy source mismatch: {policy.source} != {normalized_source}"
+        )
     if policy is not None and policy.crawl_allowed == "denied":
         raise ValueError("collection is denied by approved policy")
 
