@@ -488,7 +488,7 @@ uv run mypy src
 
 Expected: 신규 정책 2개와 설정 1개 테스트 PASS, ruff/mypy 오류 0.
 
-실행 결과: 범위 내 테스트 17건과 ruff/mypy는 통과했다. 전체 `mypy src`의
+실행 결과: 최종 범위 내 테스트 11건과 ruff/mypy는 통과했다. 전체 `mypy src`의
 Noonnu 관련 7건은 이번 변경 전부터 있던 기준선 오류로 별도 추적한다.
 
 - [x] **Step 6: 커밋**
