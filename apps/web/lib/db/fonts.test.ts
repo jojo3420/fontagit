@@ -1,5 +1,5 @@
 import { beforeEach, describe, it, expect, vi } from "vitest";
-import { filterFreeAlternatives, getPublishedSlugs } from "@/lib/db/fonts";
+import { filterFreeAlternatives, getPublishedSlugs, getAllFonts } from "@/lib/db/fonts";
 import { fonts } from "@/data/fonts";
 import { supabaseClient } from "./client";
 
@@ -52,6 +52,88 @@ describe("filterFreeAlternatives", () => {
   it("비교할 무료 폰트가 없으면 빈 배열을 반환한다", () => {
     const paid = { ...fonts[0], tier: "paid" as const };
     const result = filterFreeAlternatives(paid, []);
+
+    expect(result).toEqual([]);
+  });
+});
+
+describe("getAllFonts", () => {
+  it("1,000종을 넘는 폰트를 페이지네이션으로 전량 조회한다", async () => {
+    // 첫 번째 배치: 1,000개
+    const firstBatch = Array.from({ length: 1000 }, (_, i) => ({
+      id: `id-${i}`,
+      slug: `font-${i}`,
+      name: `Font ${i}`,
+      category: "serif" as const,
+      tier: "free" as const,
+      status: "published" as const,
+      created_at: new Date().toISOString(),
+      moves: 0,
+    }));
+
+    // 두 번째 배치: 1개
+    const secondBatch = [
+      {
+        id: "id-1000",
+        slug: "font-1000",
+        name: "Font 1000",
+        category: "serif" as const,
+        tier: "free" as const,
+        status: "published" as const,
+        created_at: new Date().toISOString(),
+        moves: 0,
+      },
+    ];
+
+    let rangeCallCount = 0;
+    const range = vi.fn().mockImplementation(() => {
+      rangeCallCount++;
+      if (rangeCallCount === 1) {
+        return Promise.resolve({ data: firstBatch, error: null });
+      } else {
+        return Promise.resolve({ data: secondBatch, error: null });
+      }
+    });
+
+    const order2 = vi.fn().mockReturnValue({ range });
+    const order1 = vi.fn().mockReturnValue({ order: order2 });
+    const eq = vi.fn().mockReturnValue({ order: order1 });
+    const select = vi.fn().mockReturnValue({ eq });
+
+    const inChain = vi.fn().mockResolvedValue({
+      data: [],
+      error: null,
+    });
+    const aliasSelect = vi.fn().mockReturnValue({ in: inChain });
+
+    vi.mocked(supabaseClient.from).mockImplementation((table: string) => {
+      if (table === "fonts") {
+        return { select } as never;
+      } else if (table === "aliases") {
+        return { select: aliasSelect } as never;
+      }
+      return {} as never;
+    });
+
+    const result = await getAllFonts();
+
+    expect(result).toHaveLength(1001);
+  });
+
+  it("결과가 없으면 빈 배열을 반환한다", async () => {
+    const range = vi.fn().mockResolvedValue({
+      data: [],
+      error: null,
+    });
+
+    const order2 = vi.fn().mockReturnValue({ range });
+    const order1 = vi.fn().mockReturnValue({ order: order2 });
+    const eq = vi.fn().mockReturnValue({ order: order1 });
+    const select = vi.fn().mockReturnValue({ eq });
+
+    vi.mocked(supabaseClient.from).mockReturnValue({ select } as never);
+
+    const result = await getAllFonts();
 
     expect(result).toEqual([]);
   });

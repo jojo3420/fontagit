@@ -4,19 +4,34 @@ import { supabaseClient } from "./client";
 import { rowToFont } from "./mappers";
 
 export async function getAllFonts(): Promise<Font[]> {
-  const { data, error } = await supabaseClient
-    .from("fonts")
-    .select("*")
-    .eq("status", "published")
-    .order("created_at", { ascending: false });
+  const pageSize = 1000;
+  let allData: FontRow[] = [];
+  let from = 0;
 
-  if (error) throw error;
-  if (!data || data.length === 0) return [];
+  while (true) {
+    const { data, error } = await supabaseClient
+      .from("fonts")
+      .select("*")
+      .eq("status", "published")
+      .order("created_at", { ascending: false })
+      .order("slug")
+      .range(from, from + pageSize - 1);
+
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+
+    allData.push(...data);
+    if (data.length < pageSize) break;
+
+    from += pageSize;
+  }
+
+  if (allData.length === 0) return [];
 
   // aliases를 published 폰트 id 청크(50)로 조회: 거대 URL(수천자)과 PostgREST max-rows 무음 절단 동시 방지
   // (RLS anon_read_aliases가 published alias만 반환하지만, 절단은 role 무관하게 발생하므로 청크로 상한 보장)
   const CHUNK = 50;
-  const fontIds = data.map((row) => row.id);
+  const fontIds = allData.map((row) => row.id);
   const aliasRows: AliasRow[] = [];
   for (let i = 0; i < fontIds.length; i += CHUNK) {
     const { data: rows, error: aliasError } = await supabaseClient
@@ -36,7 +51,7 @@ export async function getAllFonts(): Promise<Font[]> {
     aliasMap.get(row.font_id)!.push(row.alias);
   });
 
-  return data.map((row: FontRow) =>
+  return allData.map((row: FontRow) =>
     rowToFont(row, aliasMap.get(row.id) ?? [])
   );
 }
