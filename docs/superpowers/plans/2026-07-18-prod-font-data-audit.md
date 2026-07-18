@@ -76,7 +76,7 @@
 - Consumes: 기존 fontagit.fonts, fontagit.license_proposals
 - Produces: fonts 신규 nullable 필드와 font_sources, font_audit_runs, font_source_snapshots, font_link_observations, font_audit_findings
 
-- [ ] **Step 1: 실패하는 스키마 검증 작성**
+- [x] **Step 1: 실패하는 스키마 검증 작성**
 
 font_audit_schema_test.sql은 기존 문자·라이선스 컬럼 전제, 신규 테이블, evidence FK의 3개 범주만 검증한다.
 
@@ -126,7 +126,7 @@ end $$;
 select 'ALL PASS' as result;
 ~~~
 
-- [ ] **Step 2: 마이그레이션 전 실패 확인**
+- [x] **Step 2: 마이그레이션 전 실패 확인**
 
 Run:
 
@@ -137,7 +137,7 @@ psql "$DEV_DATABASE_URL" -v ON_ERROR_STOP=1 \
 
 Expected: font_sources missing으로 종료 코드 1.
 
-- [ ] **Step 3: additive migration 작성**
+- [x] **Step 3: additive migration 작성**
 
 0017에는 다음 상태를 정확히 사용한다.
 
@@ -291,6 +291,8 @@ create index idx_font_findings_review on fontagit.font_audit_findings(status, ru
 
 - [ ] **Step 4: dev 적용과 스키마 검증**
 
+> 2026-07-18: 로컬 PostgreSQL 17에서는 ALL PASS. 원격 dev DB 인증 실패로 실제 dev 적용은 보류.
+
 Run:
 
 ~~~bash
@@ -302,7 +304,7 @@ psql "$DEV_DATABASE_URL" -v ON_ERROR_STOP=1 \
 
 Expected: ALL PASS. 기존 published count는 적용 전후 동일.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ~~~bash
 git add supabase/migrations/0017_font_audit_schema.sql \
