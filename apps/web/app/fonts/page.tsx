@@ -16,7 +16,7 @@ export default async function FontsPage() {
   return (
     <main className={styles.main}>
       <Suspense fallback={<div />}>
-        <ClientFontFilters />
+        <ClientFontFilters fonts={fonts} />
       </Suspense>
       <Suspense fallback={<div />}>
         <ClientFontsList fonts={fonts} />
