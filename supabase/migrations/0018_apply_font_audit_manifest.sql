@@ -332,11 +332,18 @@ begin
       if (v_key like 'download_%' and (v_snapshot->>'document_kind'<>'download' or v_snapshot->>'source_kind' not in ('official','public')))
          or ((v_key like 'license_%' or v_key in ('allow_commercial','allow_font_sale','allow_embedding','allow_redistribute','allow_modify','attribution_requirement','is_commercial_free'))
              and (v_snapshot->>'document_kind'<>'license' or v_snapshot->>'source_kind' not in ('official','public')))
-         or (v_key like 'script_%' and (v_snapshot->>'document_kind'<>'metadata' or v_snapshot->>'source_kind' not in ('official','public'))) then
+         or (v_key in ('subsets','script_status','script_checked_at','script_evidence_id') and not (
+               (v_snapshot->>'document_kind'='metadata' and v_snapshot->>'source_kind' in ('official','public')
+                and v_finding->>'confidence'=v_snapshot->>'source_kind')
+               or (v_snapshot->>'document_kind'='metadata' and v_snapshot->>'source_kind'='noonnu'
+                   and v_snapshot#>>'{extracted,evidence_role}'='font-file-script'
+                   and v_finding->>'confidence'='reference')
+             )) then
         raise exception 'evidence document/source kind mismatch';
       end if;
-      if v_finding->>'confidence' <> v_snapshot->>'source_kind'
-         or (v_key in ('foundry','foundry_url','name_en','name_ko','category_ko','tags','weights','variants','subsets')
+      if (v_key not in ('subsets','script_status','script_checked_at','script_evidence_id')
+          and v_finding->>'confidence' <> v_snapshot->>'source_kind')
+         or (v_key in ('foundry','foundry_url','name_en','name_ko','category_ko','tags','weights','variants')
              and (v_snapshot->>'document_kind'<>'metadata' or v_snapshot->>'source_kind' not in ('official','public'))) then
         raise exception 'metadata evidence is not official or public';
       end if;

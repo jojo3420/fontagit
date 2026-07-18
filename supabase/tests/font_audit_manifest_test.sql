@@ -25,10 +25,10 @@ returns jsonb language sql as $$
   s as (select jsonb_agg(jsonb_build_object(
     'id',case slug when 'audit-one' then '00000000-0000-0000-0000-000000001201' else '00000000-0000-0000-0000-000000001202' end,
     'run_id',p_run,'provider','noonnu','provider_record_id',case slug when 'audit-one' then '1001' else '1002' end,
-    'source_kind','official','document_kind',case slug when 'audit-one' then 'download' else 'metadata' end,'request_url',official_url,'final_url',official_url,
+    'source_kind',case slug when 'audit-one' then 'official' else 'noonnu' end,'document_kind',case slug when 'audit-one' then 'download' else 'metadata' end,'request_url',official_url,'final_url',official_url,
     'http_status',200,'raw_text',null,'raw_sha256',case slug when 'audit-one' then repeat('b',64) else repeat('c',64) end,
     'normalized_sha256',case slug when 'audit-one' then repeat('d',64) else repeat('e',64) end,
-    'extracted','{}'::jsonb,'evidence_locations','{}'::jsonb,'extraction_rule_id',null,'parser_version','test-v1',
+    'extracted',case slug when 'audit-one' then '{}'::jsonb else '{"evidence_role":"font-file-script"}'::jsonb end,'evidence_locations','{}'::jsonb,'extraction_rule_id',null,'parser_version','test-v1',
     'collected_at','2026-07-18T00:00:00+00:00','source_key',jsonb_build_object('provider','noonnu','provider_record_id',case slug when 'audit-one' then '1001' else '1002' end)) order by slug) snapshots from f),
   q as (select jsonb_agg(jsonb_build_object(
     'id',case slug when 'audit-one' then '00000000-0000-0000-0000-000000001301' else '00000000-0000-0000-0000-000000001302' end,
@@ -36,7 +36,7 @@ returns jsonb language sql as $$
     'before_value',case slug when 'audit-one' then 'null'::jsonb else '"pending"'::jsonb end,
     'proposed_value',case slug when 'audit-one' then '"https://downloads.example/audit-one.zip"'::jsonb else '"needs_review"'::jsonb end,
     'evidence_id',case slug when 'audit-one' then '00000000-0000-0000-0000-000000001201' else '00000000-0000-0000-0000-000000001202' end,
-    'confidence','official','auto_applicable',false,'review_reason','human approved','status','approved',
+    'confidence',case slug when 'audit-one' then 'official' else 'reference' end,'auto_applicable',false,'review_reason','human approved','status','approved',
     'reviewed_by','reviewer','reviewed_at','2026-07-18T00:02:00+00:00',
     'source_key',jsonb_build_object('provider','noonnu','provider_record_id',case slug when 'audit-one' then '1001' else '1002' end)) order by slug) findings from f),
   e as (select jsonb_agg(jsonb_build_object(
@@ -71,6 +71,34 @@ begin
   if fontagit.apply_font_audit_manifest(v_text,v_hash,1)<>2 then raise exception 'normal apply failed'; end if;
   if (select count(*) from fontagit.font_source_snapshots)<>2 or (select count(*) from fontagit.font_audit_findings where status='applied')<>2
      or not exists(select 1 from fontagit.fonts where slug='audit-two' and script_status='needs_review') then raise exception 'approved evidence did not apply'; end if;
+end;
+$$;
+
+-- Noonnu font-file 근거는 script 필드에만 허용하고 license에는 절대 재사용하지 않는다.
+do $$
+declare
+  v jsonb:=pg_temp.manifest('00000000-0000-0000-0000-000000001105');
+  v_text text; v_hash text; v_failed boolean:=false;
+begin
+  v:=jsonb_set(v,'{evidence_bundle,snapshots}',jsonb_build_array(v#>'{evidence_bundle,snapshots,1}'));
+  v:=jsonb_set(v,'{evidence_bundle,findings}',jsonb_build_array(v#>'{evidence_bundle,findings,1}'));
+  v:=jsonb_set(v,'{entries}',jsonb_build_array(v#>'{entries,1}'));
+  v:=jsonb_set(v,'{evidence_bundle,run,target_count}','1'::jsonb);
+  v:=jsonb_set(v,'{evidence_bundle,run,success_count}','1'::jsonb);
+  v:=jsonb_set(v,'{evidence_bundle,findings,0,field_name}','"license_status"'::jsonb);
+  v:=jsonb_set(v,'{evidence_bundle,findings,0,before_value}','"pending"'::jsonb);
+  v:=jsonb_set(v,'{evidence_bundle,findings,0,proposed_value}','"needs_review"'::jsonb);
+  v:=jsonb_set(v,'{entries,0,before}',jsonb_build_object('license_status','pending'));
+  v:=jsonb_set(v,'{entries,0,after}',jsonb_build_object('license_status','needs_review'));
+  v_text:=v::text;
+  v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex');
+  begin
+    perform fontagit.apply_font_audit_manifest(v_text,v_hash,1);
+  exception when others then
+    if sqlerrm not like '%evidence document/source kind mismatch%' then raise; end if;
+    v_failed:=true;
+  end;
+  if not v_failed then raise exception 'noonnu script evidence was accepted for license'; end if;
 end;
 $$;
 

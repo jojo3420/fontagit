@@ -14,6 +14,7 @@ from urllib.parse import SplitResult, urljoin, urlsplit, urlunsplit
 from fontagit_pipeline.audit_models import DownloadStatus
 
 _MAX_BYTES = 1_048_576
+_MAX_BODY_BYTES = 32 * 1024 * 1024
 _MAX_REDIRECTS = 5
 _READ_CHUNK_SIZE = 64 * 1024
 _REDIRECT_STATUSES = {301, 302, 303, 307, 308}
@@ -305,18 +306,28 @@ def _fetch_once(target: _PublicTarget, max_bytes: int) -> tuple[int, str | None,
 def fetch_public_url(
     url: str,
     *,
-    max_bytes: int = _MAX_BYTES,
+    max_bytes: int | None = None,
+    max_body_bytes: int | None = None,
     max_redirects: int = _MAX_REDIRECTS,
 ) -> FetchResult:
     """공개 DNS 결과만 고정해 GET하고 리다이렉트마다 다시 검사한다."""
-    if max_bytes < 1 or max_bytes > _MAX_BYTES or max_redirects < 0 or max_redirects > _MAX_REDIRECTS:
+    if max_bytes is not None and max_body_bytes is not None:
+        raise ValueError("link observation limits are outside the permitted range")
+    body_limit = max_body_bytes if max_body_bytes is not None else max_bytes
+    body_limit = _MAX_BYTES if body_limit is None else body_limit
+    if (
+        body_limit < 1
+        or body_limit > _MAX_BODY_BYTES
+        or max_redirects < 0
+        or max_redirects > _MAX_REDIRECTS
+    ):
         raise ValueError("link observation limits are outside the permitted range")
 
     current_url = url
     redirect_count = 0
     while True:
         target = _resolve_public_target(current_url)
-        status, location, content = _fetch_once(target, max_bytes)
+        status, location, content = _fetch_once(target, body_limit)
         if status not in _REDIRECT_STATUSES or location is None:
             return FetchResult(
                 status=status,

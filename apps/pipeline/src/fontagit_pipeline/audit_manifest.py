@@ -93,8 +93,10 @@ _METADATA_FIELDS = frozenset(
         "tags",
         "weights",
         "variants",
-        "subsets",
     }
+)
+_SCRIPT_FIELDS = frozenset(
+    {"subsets", "script_status", "script_checked_at", "script_evidence_id"}
 )
 _RUN_KEYS = frozenset(
     {
@@ -141,7 +143,18 @@ def _evidence_role_is_valid(
         "license_verified",
     }:
         required_document = "license"
-    elif field_name.startswith("script_") or field_name in _METADATA_FIELDS:
+    elif field_name in _SCRIPT_FIELDS:
+        source_kind = snapshot.get("source_kind")
+        extracted = snapshot.get("extracted")
+        if (
+            source_kind == "noonnu"
+            and snapshot.get("document_kind") == "metadata"
+            and isinstance(extracted, Mapping)
+            and extracted.get("evidence_role") == "font-file-script"
+        ):
+            return confidence == "reference"
+        required_document = "metadata"
+    elif field_name in _METADATA_FIELDS:
         required_document = "metadata"
     else:
         return False

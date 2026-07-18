@@ -221,6 +221,31 @@ def test_manifest_rejects_unapproved_forbidden_stale_or_unbound_evidence(
             _run(), [_finding("download_url", None, "https://clova.ai/font.zip")], [noonnu_row]
         )
 
+    noonnu_script_row = deepcopy(_row())
+    noonnu_script_row["script_status"] = "pending"
+    noonnu_script_row["weights"] = [400]
+    noonnu_script_row["evidence_snapshots"][0].update(
+        {
+            "source_kind": "noonnu",
+            "document_kind": "metadata",
+            "extracted": {"evidence_role": "font-file-script"},
+        }
+    )
+    script_finding = _finding("script_status", "pending", "needs_review")
+    script_finding["confidence"] = "reference"
+    assert build_manifest(_run(), [script_finding], [noonnu_script_row]).forward.entries
+
+    weight_finding = _finding("weights", [400], [700])
+    weight_finding["confidence"] = "reference"
+    with pytest.raises(ManifestError, match="document/source kind"):
+        build_manifest(_run(), [weight_finding], [noonnu_script_row])
+
+    license_finding = _finding("license_status", "pending", "needs_review")
+    license_finding["evidence_id"] = str(SNAPSHOT_ID)
+    license_finding["confidence"] = "reference"
+    with pytest.raises(ManifestError, match="document/source kind"):
+        build_manifest(_run(), [license_finding], [noonnu_script_row])
+
     bundle = build_manifest(
         _run(), [_finding("download_url", None, "https://clova.ai/font.zip")], [_row()]
     )

@@ -26,9 +26,11 @@ from fontagit_pipeline.audit_runner import (
     import_observations,
     read_regular_file_once,
     run_legal_audit,
+    run_metadata_audit,
     select_pilot,
     write_dry_run_artifacts,
 )
+from fontagit_pipeline.audit_metadata import BASIC_LATIN, FontFileMetadata
 from fontagit_pipeline.audit_http import FetchResult
 from fontagit_pipeline.audit_store import FindingDraft, InMemoryAuditStore
 from fontagit_pipeline.__main__ import main_audit_scan
@@ -428,6 +430,72 @@ def test_dry_run_writes_artifacts_without_calling_store(tmp_path: Path) -> None:
             snapshot_ids=[],
             finding_ids=[],
         ).assert_safe()
+
+
+def test_metadata_findings_keep_current_values_and_saved_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """metadata finding은 실제 before와 저장된 snapshot 하나에 모두 묶인다."""
+    target = replace(
+        _targets()[0],
+        name_ko="흰꼬리수리",
+        name_en="Example Sans",
+        foundry="네이버",
+        weights=(400,),
+        variants=("regular",),
+        subsets=("latin",),
+        script_status="pending",
+        candidates=(
+            CandidateUrl(
+                url="https://clova.ai/example.woff2",
+                document_role="download",
+                source="official",
+                name_ko="흰꼬리수리",
+                maker="네이버",
+            ),
+        ),
+    )
+    registry = {
+        "version": 1,
+        "entries": [
+            {
+                "maker": "네이버",
+                "domain": "clova.ai",
+                "roles": ["download"],
+                "source_kind": "official",
+                "approved_by": "reviewer",
+                "approved_at": "2026-07-18T00:00:00Z",
+                "evidence_snapshot_id": "evidence-1",
+            }
+        ],
+    }
+    monkeypatch.setattr(
+        "fontagit_pipeline.audit_metadata.inspect_font_metadata",
+        lambda _path: FontFileMetadata(
+            families=("Example Sans",),
+            weight=700,
+            italic=True,
+            codepoints=frozenset(BASIC_LATIN),
+            file_sha256="f" * 64,
+        ),
+    )
+    store = InMemoryAuditStore()
+    report = run_metadata_audit(
+        [target], store, registry, fetcher=_fetched, font_fetcher=_fetched
+    )
+
+    drafts = [store.finding_draft(item) for item in report.finding_ids]
+    assert report.snapshot_ids == [drafts[0].evidence_id]
+    assert all(item.evidence_id == report.snapshot_ids[0] for item in drafts)
+    before = {item.field_name: item.before_value for item in drafts}
+    assert before["subsets"] == ["latin"]
+    assert before["script_status"] == "pending"
+    assert before["weights"] == [400]
+    assert before["variants"] == ["regular"]
+    assert {item.field_name for item in drafts} >= {
+        "script_checked_at",
+        "script_evidence_id",
+    }
 
 
 def test_scheduled_download_import_requires_distinct_runs_24_hours_apart() -> None:

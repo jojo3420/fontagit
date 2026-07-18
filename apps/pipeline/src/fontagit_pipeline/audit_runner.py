@@ -155,8 +155,14 @@ class FontTarget:
     foundry_url: str | None = None
     download_url: str | None = None
     license_source_url: str | None = None
+    category_ko: str | None = None
+    tags: tuple[str, ...] = ()
     weights: tuple[int, ...] = ()
     variants: tuple[str, ...] = ()
+    subsets: tuple[str, ...] = ()
+    script_status: str = "pending"
+    script_checked_at: str | None = None
+    script_evidence_id: str | None = None
     candidates: tuple["CandidateUrl", ...] = ()
 
 
@@ -339,6 +345,7 @@ def run_metadata_audit(
     *,
     dry_run: bool = False,
     fetcher: AuditFetcher = fetch_public_url,
+    font_fetcher: AuditFetcher | None = None,
 ) -> AuditReport:
     """공식 파일 또는 같은 눈누 snapshot의 파일만 구조화해 감사한다."""
     from fontagit_pipeline.audit_metadata import compare_metadata
@@ -348,6 +355,13 @@ def run_metadata_audit(
     source_registry = (
         registry if isinstance(registry, SourceRegistry) else SourceRegistry.model_validate(registry)
     )
+    effective_font_fetcher = font_fetcher
+    if effective_font_fetcher is None:
+        effective_font_fetcher = (
+            (lambda url: fetch_public_url(url, max_body_bytes=32 * 1024 * 1024))
+            if fetcher is fetch_public_url
+            else fetcher
+        )
     baseline_sha256 = _baseline_sha256(targets)
     run_id = (
         uuid5(NAMESPACE_URL, f"fontagit:metadata:{baseline_sha256}")
@@ -369,7 +383,7 @@ def run_metadata_audit(
             finding = FindingDraft(
                 font_id=target.font_id,
                 field_name="script_status",
-                before_value=None,
+                before_value=target.script_status,
                 proposed_value="needs_review",
                 evidence_id=None,
                 confidence="unverified",
@@ -380,11 +394,52 @@ def run_metadata_audit(
             continue
         try:
             evidence, metadata = _collect_metadata_evidence(
-                target, source_registry, fetcher=fetcher
+                target,
+                source_registry,
+                fetcher=fetcher,
+                font_fetcher=effective_font_fetcher,
             )
             snapshot_id = _save_snapshot(store, run_id, evidence, dry_run=False)
             snapshot_ids.append(snapshot_id)
             findings = compare_metadata(target, evidence, metadata)
+            script_auto = next(
+                (
+                    item.auto_applicable
+                    for item in findings
+                    if item.field_name == "script_status"
+                ),
+                False,
+            )
+            checked_at = evidence.collected_at or datetime.now(UTC)
+            confidence = (
+                evidence.source_kind
+                if evidence.source_kind in {"official", "public"}
+                else "reference"
+            )
+            findings.extend(
+                (
+                    FindingDraft(
+                        font_id=target.font_id,
+                        field_name="script_checked_at",
+                        before_value=target.script_checked_at,
+                        proposed_value=checked_at.isoformat(),
+                        evidence_id=snapshot_id,
+                        confidence=confidence,
+                        review_reason="font file cmap checked",
+                        auto_applicable=script_auto,
+                    ),
+                    FindingDraft(
+                        font_id=target.font_id,
+                        field_name="script_evidence_id",
+                        before_value=target.script_evidence_id,
+                        proposed_value=str(snapshot_id),
+                        evidence_id=snapshot_id,
+                        confidence=confidence,
+                        review_reason="font file evidence bound",
+                        auto_applicable=script_auto,
+                    ),
+                )
+            )
             for finding in findings:
                 saved = replace(finding, evidence_id=snapshot_id)
                 finding_ids.append(_save_finding(store, run_id, saved, dry_run=False))
@@ -406,7 +461,7 @@ def run_metadata_audit(
             finding = FindingDraft(
                 font_id=target.font_id,
                 field_name="script_status",
-                before_value=None,
+                before_value=target.script_status,
                 proposed_value="needs_review",
                 evidence_id=None,
                 confidence="unverified",
@@ -434,6 +489,7 @@ def _collect_metadata_evidence(
     registry: SourceRegistry,
     *,
     fetcher: AuditFetcher,
+    font_fetcher: AuditFetcher,
 ) -> tuple[SnapshotDraft, FontFileMetadata]:
     """승인 파일 또는 동일 눈누 상세의 @font-face 파일만 읽는다."""
     from fontagit_pipeline.audit_metadata import (
@@ -495,7 +551,7 @@ def _collect_metadata_evidence(
     for file_url in file_urls:
         query = parse_qs(urlparse(file_url).query, keep_blank_values=True)
         partial_file = partial_file or "text" in {key.casefold() for key in query}
-        fetched = fetcher(file_url)
+        fetched = font_fetcher(file_url)
         if fetched.status < 200 or fetched.status >= 300:
             raise AuditInputError("font file response is not successful")
         if not fetched.content or len(fetched.content) > MAX_FONT_FILE_BYTES:
@@ -523,6 +579,7 @@ def _collect_metadata_evidence(
     coverage = classify_scripts(merged.codepoints)
     extracted = {
         **merged.extracted(),
+        "evidence_role": "font-file-script",
         "subsets": coverage.subsets,
         "script_status": coverage.status,
         "hangul_glyph_count": coverage.hangul_glyph_count,
@@ -556,6 +613,7 @@ def _collect_metadata_evidence(
         },
         extraction_rule_id="fonttools-cmap-v1",
         parser_version=merged.parser_version,
+        collected_at=datetime.now(UTC),
     )
     return snapshot, merged
 
@@ -609,8 +667,14 @@ def load_bootstrap_targets(path: Path) -> list[FontTarget]:
                     foundry_url=_optional(values, "foundry_url"),
                     download_url=_optional(values, "download_url"),
                     license_source_url=_optional(values, "license_source_url"),
+                    category_ko=_optional(values, "category_ko"),
+                    tags=_string_tuple(values.get("tags"), "tags"),
                     weights=_integer_tuple(values.get("weights"), "weights"),
                     variants=_string_tuple(values.get("variants"), "variants"),
+                    subsets=_string_tuple(values.get("subsets"), "subsets"),
+                    script_status=_optional(values, "script_status") or "pending",
+                    script_checked_at=_optional(values, "script_checked_at"),
+                    script_evidence_id=_optional(values, "script_evidence_id"),
                     candidates=legacy_candidates,
                 )
             )

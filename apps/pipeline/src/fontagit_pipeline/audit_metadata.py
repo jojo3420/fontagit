@@ -9,6 +9,7 @@ import os
 import stat
 import struct
 import sys
+import tempfile
 import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
@@ -95,6 +96,18 @@ class _MetadataTarget(Protocol):
     @property
     def variants(self) -> tuple[str, ...]: ...
 
+    @property
+    def subsets(self) -> tuple[str, ...]: ...
+
+    @property
+    def script_status(self) -> str: ...
+
+    @property
+    def category_ko(self) -> str | None: ...
+
+    @property
+    def tags(self) -> tuple[str, ...]: ...
+
 
 class _MetadataSnapshot(Protocol):
     @property
@@ -143,17 +156,22 @@ def inspect_font_metadata(
     """격리 프로세스에서 폰트를 읽고 timeout 시 강제로 종료한다."""
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0 or timeout_seconds > 30:
         raise ValueError("font parse timeout is outside the permitted range")
+    if os.name == "nt":
+        return _review_metadata("unsupported_platform")
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
-        info = path.lstat()
+        descriptor = os.open(path, flags)
     except OSError:
         return _review_metadata("unreadable")
-    if not stat.S_ISREG(info.st_mode) or info.st_size < 1:
-        return _review_metadata("unsafe_file")
-    if info.st_size > MAX_FONT_FILE_BYTES:
-        return _review_metadata("oversize")
+    private_path: Path | None = None
     try:
-        with path.open("rb") as handle:
-            header = handle.read(20)
+        with os.fdopen(descriptor, "rb") as source:
+            before = os.fstat(source.fileno())
+            if not stat.S_ISREG(before.st_mode) or before.st_size < 1:
+                return _review_metadata("unsafe_file")
+            if before.st_size > MAX_FONT_FILE_BYTES:
+                return _review_metadata("oversize")
+            header = source.read(20)
             signature = header[:4]
             font_format = _ALLOWED_SIGNATURES.get(signature)
             if font_format is None:
@@ -161,40 +179,70 @@ def inspect_font_metadata(
             if font_format in {"woff", "woff2"}:
                 if len(header) < 20 or struct.unpack(">I", header[16:20])[0] > MAX_SFNT_BYTES:
                     return _review_metadata("declared_size_oversize")
-            handle.seek(0)
-            digest = hashlib.file_digest(handle, "sha256").hexdigest()
+            source.seek(0)
+            digest_builder = hashlib.sha256()
+            copied = 0
+            with tempfile.NamedTemporaryFile(
+                mode="wb", prefix="fontagit-private-font-", suffix=f".{font_format}", delete=False
+            ) as private:
+                private_path = Path(private.name)
+                while True:
+                    chunk = source.read(64 * 1024)
+                    if not chunk:
+                        break
+                    copied += len(chunk)
+                    if copied > MAX_FONT_FILE_BYTES:
+                        private_path.unlink(missing_ok=True)
+                        private_path = None
+                        return _review_metadata("oversize")
+                    digest_builder.update(chunk)
+                    private.write(chunk)
+                private.flush()
+                os.fsync(private.fileno())
+            after = os.fstat(source.fileno())
+            if (
+                before.st_dev != after.st_dev
+                or before.st_ino != after.st_ino
+                or before.st_size != after.st_size
+                or copied != after.st_size
+            ):
+                private_path.unlink(missing_ok=True)
+                private_path = None
+                return _review_metadata("source_changed")
+            digest = digest_builder.hexdigest()
     except OSError:
+        if private_path is not None:
+            private_path.unlink(missing_ok=True)
         return _review_metadata("unreadable")
 
+    assert private_path is not None
     context = multiprocessing.get_context("spawn")
     parent, child = context.Pipe(duplex=False)
     process = context.Process(
         target=_inspect_worker,
-        args=(child, os.fspath(path), font_format, timeout_seconds),
+        args=(child, os.fspath(private_path), font_format, timeout_seconds),
         daemon=True,
     )
-    process.start()
-    child.close()
     try:
+        process.start()
+        child.close()
         if not parent.poll(timeout_seconds):
-            process.terminate()
-            process.join(1)
-            if process.is_alive() and hasattr(process, "kill"):
-                process.kill()
-                process.join(1)
             return _review_metadata("parse_timeout", digest=digest, font_format=font_format)
         result = parent.recv()
-    except (EOFError, OSError):
+    except (EOFError, OSError, RuntimeError):
         return _review_metadata("parse_failed", digest=digest, font_format=font_format)
     finally:
+        child.close()
         parent.close()
-        if process.is_alive():
-            process.join(1)
-            if process.is_alive():
-                process.terminate()
-                process.join(1)
+        _stop_worker(process)
+        private_path.unlink(missing_ok=True)
     if not isinstance(result, dict) or result.get("status") != "parsed":
-        return _review_metadata("parse_failed", digest=digest, font_format=font_format)
+        error_kind = (
+            result.get("error_kind")
+            if isinstance(result, dict) and result.get("error_kind") in {"resource_limit", "parse_failed"}
+            else "parse_failed"
+        )
+        return _review_metadata(str(error_kind), digest=digest, font_format=font_format)
     try:
         return FontFileMetadata(
             families=tuple(cast(list[str], result["families"])),
@@ -247,7 +295,7 @@ def compare_metadata(
         FindingDraft(
             font_id=target.font_id,
             field_name="subsets",
-            before_value=None,
+            before_value=list(target.subsets),
             proposed_value=coverage.subsets,
             evidence_id=None,
             confidence=(official_snapshot.source_kind if trusted_metadata else "reference"),
@@ -257,7 +305,7 @@ def compare_metadata(
         FindingDraft(
             font_id=target.font_id,
             field_name="script_status",
-            before_value=None,
+            before_value=target.script_status,
             proposed_value=("verified" if script_auto else "needs_review"),
             evidence_id=None,
             confidence=(official_snapshot.source_kind if trusted_metadata else "reference"),
@@ -294,11 +342,14 @@ def compare_metadata(
     for field_name in ("category", "tags"):
         value = official_snapshot.extracted.get(field_name)
         if value is not None:
+            public_field = "category_ko" if field_name == "category" else field_name
             findings.append(
                 FindingDraft(
                     font_id=target.font_id,
-                    field_name=field_name,
-                    before_value=None,
+                    field_name=public_field,
+                    before_value=(
+                        target.category_ko if public_field == "category_ko" else list(target.tags)
+                    ),
                     proposed_value=value,
                     evidence_id=None,
                     confidence=(official_snapshot.source_kind if trusted_metadata else "reference"),
@@ -370,28 +421,50 @@ def _inspect_worker(
     connection: Connection, path_text: str, font_format: str, timeout_seconds: float
 ) -> None:
     try:
-        _limit_worker_resources(timeout_seconds)
-        payload = _parse_font(path_text, font_format)
+        payload = (
+            _parse_font(path_text, font_format)
+            if _limit_worker_resources(timeout_seconds)
+            else {"status": "error", "error_kind": "resource_limit"}
+        )
     except BaseException:
-        payload = {"status": "error"}
+        payload = {"status": "error", "error_kind": "parse_failed"}
     try:
         connection.send(payload)
     finally:
         connection.close()
 
 
-def _limit_worker_resources(timeout_seconds: float) -> None:
-    if not sys.platform.startswith("linux"):
-        return
+def _limit_worker_resources(timeout_seconds: float) -> bool:
     try:
         import resource
 
-        memory_limit = 512 * 1024 * 1024
-        resource.setrlimit(resource.RLIMIT_AS, (memory_limit, memory_limit))
+        memory_limit = 2 * 1024 * 1024 * 1024
+        memory_resource = (
+            resource.RLIMIT_AS
+            if sys.platform.startswith("linux")
+            else resource.RLIMIT_RSS
+        )
+        resource.setrlimit(memory_resource, (memory_limit, memory_limit))
         cpu_limit = max(1, math.ceil(timeout_seconds))
         resource.setrlimit(resource.RLIMIT_CPU, (cpu_limit, cpu_limit + 1))
+        return True
     except (ImportError, OSError, ValueError):
+        # CPython/macOS can expose resource constants while rejecting any
+        # finite value from the inherited infinity limit. The hard parent
+        # timeout remains enforced; Linux must fail closed if limits fail.
+        return sys.platform == "darwin"
+
+
+def _stop_worker(process: Any) -> None:
+    """모든 parent 경로에서 worker를 회수한다."""
+    process.join(0.1)
+    if not process.is_alive():
         return
+    process.terminate()
+    process.join(1)
+    if process.is_alive() and hasattr(process, "kill"):
+        process.kill()
+        process.join(1)
 
 
 def _parse_font(path_text: str, font_format: str) -> dict[str, object]:
@@ -444,7 +517,7 @@ def _parse_font(path_text: str, font_format: str) -> dict[str, object]:
         "codepoints": sorted(codepoints),
         "units_per_em": first["units_per_em"],
         "italic_angle": first["italic_angle"],
-        "face_conflict": len(groups) != 1,
+        "face_conflict": font_format == "ttc" or len(groups) != 1,
     }
 
 
@@ -467,7 +540,12 @@ def _parse_face(font: Any) -> dict[str, object]:
     weight = getattr(os2, "usWeightClass", None)
     mac_style = getattr(head, "macStyle", 0)
     italic_angle = getattr(post, "italicAngle", None)
-    italic = bool(mac_style & 0x02) or bool(italic_angle and italic_angle != 0)
+    fs_selection = getattr(os2, "fsSelection", 0)
+    italic = (
+        bool(mac_style & 0x02)
+        or bool(fs_selection & 0x01)
+        or bool(italic_angle and italic_angle != 0)
+    )
     return {
         "families": sorted(families),
         "weight": weight if isinstance(weight, int) else None,

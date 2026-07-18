@@ -187,6 +187,22 @@ def test_chunked_body_is_terminated_as_soon_as_it_exceeds_limit(
 
     assert process.terminated is True
 
+    allowed = _StreamingCurl([b"font"])
+
+    def allowed_popen(argv: list[str], **_: object) -> _StreamingCurl:
+        header_path = Path(argv[argv.index("--dump-header") + 1])
+        header_path.write_bytes(b"HTTP/1.1 200 OK\r\n\r\n")
+        return allowed
+
+    monkeypatch.setattr(subprocess, "Popen", allowed_popen)
+    assert fetch_public_url(
+        "https://fonts.example/file.woff2", max_body_bytes=32 * 1024 * 1024
+    ).content == b"font"
+    with pytest.raises(ValueError, match="limits"):
+        fetch_public_url(
+            "https://fonts.example/file.woff2", max_body_bytes=32 * 1024 * 1024 + 1
+        )
+
 
 def test_broken_requires_two_independent_observations_24_hours_apart() -> None:
     """한 번의 404는 삭제 근거가 아니며, 서로 다른 실행 기록 두 개가 필요하다."""
