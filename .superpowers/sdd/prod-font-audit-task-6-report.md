@@ -69,9 +69,9 @@
 
 - RED: dry-run finding UUID가 `proposed_value`에 따라 달라졌고, dev 쓰기 설정은 prod URL/key가 없는 상태도 통과했다.
 - GREEN: dry-run finding UUID는 `(run_id, font_id, field_name)`만 사용한다. 같은 키의 proposal 본문이 달라도 같은 UUID다.
-- 눈누 상세는 injected fetcher로만 읽어 `extract_noonnu_font`의 이름·제작사·다운로드 CTA를 구조화한다. 대상 이름이 맞고 DB 제작사가 비어 있으면 상세 제작사로 보완한다. 제작사가 있으면 일치해야 하며, 이름 또는 제작사가 다르면 CTA 후보를 만들지 않는다. CTA 목적지 도메인이 `noonnu.cc`일 필요는 없다.
-- dev 감사 쓰기는 `SUPABASE_DEV_URL`, `SUPABASE_DEV_SECRET_KEY`, allowlist와 함께 `SUPABASE_PROD_URL`, `SUPABASE_PROD_SECRET_KEY` 모두를 필수 비교값으로 요구한다. project ref와 service key가 모두 달라야 한다.
-- dry-run은 fetcher·AuditStore를 호출하지 않는다. `/tmp/fontagit-task6-rereview/pilot.json` SHA-256은 `1581cc704a2672e599d9aafb12d0ab68ef54579d57c9abd85ad3760d19055e26`이며 pending gate 종료 코드 3이 정상 발생했다.
+- 눈누 상세는 injected fetcher로만 읽어 `extract_noonnu_font`의 이름·제작사·다운로드 CTA를 구조화한다. 대상 이름과 제작사가 상세값과 모두 맞아야 CTA 후보를 만든다. CTA 목적지는 승인 registry와 다시 대조한다.
+- dev 감사 쓰기는 `SUPABASE_DEV_URL`, `SUPABASE_DEV_SECRET_KEY`와 별도 allowlist를 필수로 요구한다. prod URL이 설정된 경우 project ref도 달라야 한다. secret은 비교하거나 로그에 남기지 않는다.
+- dry-run은 fetcher·AuditStore를 호출하지 않고 fixture 상태를 집계한다. fixture가 없으면 pending으로 남아 gate가 안전하게 실패한다.
 
 ## 재리뷰 최종 검증
 
