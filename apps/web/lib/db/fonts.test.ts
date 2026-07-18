@@ -1,5 +1,5 @@
 import { beforeEach, describe, it, expect, vi } from "vitest";
-import { filterFreeAlternatives, getPublishedSlugs } from "@/lib/db/fonts";
+import { filterFreeAlternatives, getPublishedSlugs, getAllFonts } from "@/lib/db/fonts";
 import { fonts } from "@/data/fonts";
 import { supabaseClient } from "./client";
 
@@ -68,6 +68,73 @@ describe("getPublishedSlugs", () => {
     vi.mocked(supabaseClient.from).mockReturnValue({ select } as never);
 
     await expect(getPublishedSlugs()).rejects.toThrow(/count.*2.*수집.*1/i);
+  });
+});
+
+describe("getAllFonts", () => {
+  it("1000종 초과 published 폰트를 페이지네이션으로 전량 조회한다", async () => {
+    const firstBatch = Array.from({ length: 1000 }, (_, i) => ({
+      id: `id-${i}`,
+      slug: `font-${String(i).padStart(4, "0")}`,
+      name_en: `Font ${i}`,
+      name_ko: null,
+      source_tier: "B",
+      is_commercial_free: true,
+      category_ko: "고딕",
+      foundry: null,
+      weights: [400],
+      last_modified: null,
+      license_type: null,
+      official_url: null,
+      status: "published",
+      subsets: [],
+    }));
+    const secondBatch = [
+      {
+        id: "id-1000",
+        slug: "font-1000",
+        name_en: "Font 1000",
+        name_ko: null,
+        source_tier: "B",
+        is_commercial_free: true,
+        category_ko: "고딕",
+        foundry: null,
+        weights: [400],
+        last_modified: null,
+        license_type: null,
+        official_url: null,
+        status: "published",
+        subsets: [],
+      },
+    ];
+
+    const range = vi
+      .fn()
+      .mockResolvedValueOnce({ data: firstBatch, error: null })
+      .mockResolvedValueOnce({ data: secondBatch, error: null });
+    const order2 = vi.fn().mockReturnValue({ range });
+    const order1 = vi.fn().mockReturnValue({ order: order2 });
+    const eq = vi.fn().mockReturnValue({ order: order1 });
+    const fontsSelect = vi.fn().mockReturnValue({ eq });
+
+    const inFn = vi.fn().mockResolvedValue({ data: [], error: null });
+    const aliasSelect = vi.fn().mockReturnValue({ in: inFn });
+
+    vi.mocked(supabaseClient.from).mockImplementation(
+      (table: string) =>
+        (table === "fonts"
+          ? { select: fontsSelect }
+          : { select: aliasSelect }) as never
+    );
+
+    const result = await getAllFonts();
+
+    expect(result).toHaveLength(1001);
+    expect(range).toHaveBeenCalledTimes(2);
+    expect(range).toHaveBeenNthCalledWith(1, 0, 999);
+    expect(range).toHaveBeenNthCalledWith(2, 1000, 1999);
+    expect(order1).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(order2).toHaveBeenCalledWith("slug");
   });
 });
 
