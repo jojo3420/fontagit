@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -82,8 +81,9 @@ class InMemoryAuditStore:
         self.fail_on_write = fail_on_write
         self.write_calls = 0
         self._snapshots: dict[tuple[str, ...], UUID] = {}
-        self._findings: dict[tuple[UUID, str], tuple[UUID, str]] = {}
+        self._findings: dict[tuple[UUID, UUID, str], UUID] = {}
         self._finding_ids: set[UUID] = set()
+        self._finding_drafts: dict[UUID, FindingDraft] = {}
         self._applied: set[UUID] = set()
         self._runs: dict[UUID, dict[str, object]] = {}
 
@@ -96,6 +96,10 @@ class InMemoryAuditStore:
         if finding_id not in self._finding_ids:
             raise ValueError("unknown finding")
         self._applied.add(finding_id)
+
+    def finding_draft(self, finding_id: UUID) -> FindingDraft:
+        """테스트용: 저장된 finding이 같은 run 안에서 바뀌지 않았는지 읽는다."""
+        return self._finding_drafts[finding_id]
 
     def _write(self) -> None:
         self.write_calls += 1
@@ -138,14 +142,16 @@ class InMemoryAuditStore:
 
     def save_finding(self, run_id: UUID, finding: FindingDraft) -> UUID:
         self._write()
-        key = (finding.font_id, finding.field_name)
-        serialized = _canonical_value(finding.proposed_value)
+        key = (run_id, finding.font_id, finding.field_name)
         existing = self._findings.get(key)
-        if existing is not None and existing[0] not in self._applied and existing[1] == serialized:
-            return existing[0]
+        if existing is not None:
+            # DB의 unique(run_id, font_id, field_name)와 같다. 같은 실행의
+            # applied finding은 물론 proposed finding도 변경하지 않는다.
+            return existing
         finding_id = uuid4()
-        self._findings[key] = (finding_id, serialized)
+        self._findings[key] = finding_id
         self._finding_ids.add(finding_id)
+        self._finding_drafts[finding_id] = finding
         return finding_id
 
     def complete_run(self, run_id: UUID, report: Mapping[str, object]) -> None:
@@ -178,6 +184,36 @@ class SupabaseAuditStore:
             raise RuntimeError("감사 저장 응답이 올바르지 않습니다")
         return data[0]
 
+    def _insert_once(
+        self,
+        table: str,
+        payload: Mapping[str, object],
+        *,
+        on_conflict: str,
+        lookup: Mapping[str, object],
+    ) -> Mapping[str, object]:
+        """unique 충돌은 무시하고, 승자 row를 읽어 동일 ID를 반환한다."""
+        response = (
+            self._schema.table(table)
+            .upsert(
+                dict(payload),
+                on_conflict=on_conflict,
+                ignore_duplicates=True,
+            )
+            .execute()
+        )
+        data = response.data
+        if isinstance(data, list) and data and isinstance(data[0], Mapping):
+            return data[0]
+
+        query = self._schema.table(table).select("id")
+        for key, value in lookup.items():
+            query = query.eq(key, value)
+        existing = query.limit(1).execute().data
+        if isinstance(existing, list) and existing and isinstance(existing[0], Mapping):
+            return existing[0]
+        raise RuntimeError("감사 원자 저장 결과를 확인할 수 없습니다")
+
     def start_run(
         self,
         *,
@@ -200,41 +236,35 @@ class SupabaseAuditStore:
         return _row_uuid(row)
 
     def save_snapshot(self, run_id: UUID, snapshot: SnapshotDraft) -> UUID:
-        existing = (
-            self._schema.table("font_source_snapshots")
-            .select("id")
-            .eq("font_id", str(snapshot.font_id))
-            .eq("provider", snapshot.provider)
-            .eq("provider_record_id", snapshot.provider_record_id)
-            .eq("document_kind", snapshot.document_kind)
-            .eq("normalized_sha256", snapshot.normalized_sha256)
-            .execute()
-        )
-        if isinstance(existing.data, list) and existing.data:
-            row = existing.data[0]
-            if isinstance(row, Mapping):
-                return _row_uuid(row)
-
-        row = self._one(
+        payload = {
+            "run_id": str(run_id),
+            "font_id": str(snapshot.font_id),
+            "provider": snapshot.provider,
+            "provider_record_id": snapshot.provider_record_id,
+            "source_kind": snapshot.source_kind,
+            "document_kind": snapshot.document_kind,
+            "request_url": snapshot.request_url,
+            "final_url": snapshot.final_url,
+            "http_status": snapshot.http_status,
+            "raw_text": snapshot.raw_text,
+            "raw_sha256": snapshot.raw_sha256,
+            "normalized_sha256": snapshot.normalized_sha256,
+            "extracted": dict(snapshot.extracted),
+            "evidence_locations": dict(snapshot.evidence_locations),
+            "extraction_rule_id": snapshot.extraction_rule_id,
+            "parser_version": snapshot.parser_version,
+            "collected_at": (snapshot.collected_at or datetime.now(UTC)).isoformat(),
+        }
+        row = self._insert_once(
             "font_source_snapshots",
-            {
-                "run_id": str(run_id),
+            payload,
+            on_conflict="font_id,provider,provider_record_id,document_kind,normalized_sha256",
+            lookup={
                 "font_id": str(snapshot.font_id),
                 "provider": snapshot.provider,
                 "provider_record_id": snapshot.provider_record_id,
-                "source_kind": snapshot.source_kind,
                 "document_kind": snapshot.document_kind,
-                "request_url": snapshot.request_url,
-                "final_url": snapshot.final_url,
-                "http_status": snapshot.http_status,
-                "raw_text": snapshot.raw_text,
-                "raw_sha256": snapshot.raw_sha256,
                 "normalized_sha256": snapshot.normalized_sha256,
-                "extracted": dict(snapshot.extracted),
-                "evidence_locations": dict(snapshot.evidence_locations),
-                "extraction_rule_id": snapshot.extraction_rule_id,
-                "parser_version": snapshot.parser_version,
-                "collected_at": (snapshot.collected_at or datetime.now(UTC)).isoformat(),
             },
         )
         return _row_uuid(row)
@@ -243,32 +273,25 @@ class SupabaseAuditStore:
         return _row_uuid(self._one("font_link_observations", {"run_id": str(run_id), **observation}))
 
     def save_finding(self, run_id: UUID, finding: FindingDraft) -> UUID:
-        existing = (
-            self._schema.table("font_audit_findings")
-            .select("id,status,proposed_value")
-            .eq("font_id", str(finding.font_id))
-            .eq("field_name", finding.field_name)
-            .order("reviewed_at", desc=True)
-            .limit(1)
-            .execute()
-        )
-        if isinstance(existing.data, list) and existing.data and isinstance(existing.data[0], Mapping):
-            row = existing.data[0]
-            if row.get("status") != "applied" and _canonical_value(row.get("proposed_value")) == _canonical_value(finding.proposed_value):
-                return _row_uuid(row)
-
-        row = self._one(
+        payload = {
+            "run_id": str(run_id),
+            "font_id": str(finding.font_id),
+            "field_name": finding.field_name,
+            "before_value": finding.before_value,
+            "proposed_value": finding.proposed_value,
+            "evidence_id": str(finding.evidence_id) if finding.evidence_id else None,
+            "confidence": finding.confidence,
+            "auto_applicable": finding.auto_applicable,
+            "review_reason": finding.review_reason,
+        }
+        row = self._insert_once(
             "font_audit_findings",
-            {
+            payload,
+            on_conflict="run_id,font_id,field_name",
+            lookup={
                 "run_id": str(run_id),
                 "font_id": str(finding.font_id),
                 "field_name": finding.field_name,
-                "before_value": finding.before_value,
-                "proposed_value": finding.proposed_value,
-                "evidence_id": str(finding.evidence_id) if finding.evidence_id else None,
-                "confidence": finding.confidence,
-                "auto_applicable": finding.auto_applicable,
-                "review_reason": finding.review_reason,
             },
         )
         return _row_uuid(row)
@@ -284,10 +307,6 @@ class SupabaseAuditStore:
                 "finished_at": datetime.now(UTC).isoformat(),
             }
         ).eq("id", str(run_id)).execute()
-
-
-def _canonical_value(value: object) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
 
 
 def _report_count(report: Mapping[str, object], key: str) -> int:

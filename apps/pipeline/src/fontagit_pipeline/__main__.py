@@ -507,12 +507,9 @@ def main_audit_run(args: argparse.Namespace) -> int:
             from fontagit_pipeline.config import load_audit_settings
 
             settings = load_audit_settings()
-            if not settings.supabase_url or not settings.supabase_secret_key:
-                raise ValueError("dev 감사 저장에는 URL과 service key가 필요합니다")
-            if settings.supabase_prod_url and settings.supabase_url == settings.supabase_prod_url:
-                raise ValueError("dev URL이 prod URL과 같아 감사 쓰기를 중단합니다")
+            dev_url, dev_secret_key = settings.dev_write_credentials()
             store = SupabaseAuditStore.from_dev_credentials(
-                settings.supabase_url, settings.supabase_secret_key
+                dev_url, dev_secret_key
             )
             report = run_legal_audit(selected, store, registry, rules)
         digest = write_audit_artifacts(report, args.out)

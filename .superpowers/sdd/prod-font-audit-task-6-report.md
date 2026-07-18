@@ -49,3 +49,18 @@
 - 이 단계는 안전한 검수 큐 생성만 한다. 실제 공식/공공 원문을 수집해 pending을 해소하는
   작업은 다음 수집 단계와 사람 검수가 필요하다.
 - dev DB 저장 경로는 구현했지만 이번 작업에서는 실행하지 않았다.
+
+## 리뷰 보완: 실행 경계와 후보 안전성
+
+- RED: 실행 ID를 finding 키에서 빼면 서로 다른 두 실행이 같은 finding을 재사용했고, 일반 `SUPABASE_*` 값만으로 감사 쓰기 경계를 통과할 수 있었다. 필수 신고 폰트도 표시명이 아닌 slug로 고정해야 한다는 회귀를 추가했다.
+- GREEN: finding 키를 `(run_id, font_id, field_name)`으로 고정했다. 같은 run은 applied 여부와 무관하게 기존 finding을 반환해 값을 바꾸지 않고, 새 run은 별도 finding을 만든다. dry-run ID도 finding ID에 포함한다.
+- dev 쓰기는 `SUPABASE_DEV_URL`, `SUPABASE_DEV_SECRET_KEY`, 명시 allowlist만 허용한다. prod와 URL/project ref 또는 service key가 같으면 중단하며 일반 `SUPABASE_URL`/`SUPABASE_SECRET_KEY`는 fallback으로 쓰지 않는다.
+- 파일럿 필수 대상은 흰꼬리수리·횡성한우체 slug가 각각 정확히 한 건인지 검사한다. slug와 provider 안정키 중복, 중복 `--require-slug`, 0건 gate를 모두 오류로 막는다.
+- 후보는 승인 제작사 → 승인 공공기관 → 의미 있는 눈누 CTA → 승인된 기존 주소 순으로 고른다. 이름·제작사·문서 역할이 맞지 않으면 discovery만 남기며 홈페이지·다운로드·라이선스는 각자 finding으로 저장한다. 다운로드 2xx만으로 verified가 되지 않는다.
+- dry-run은 fetcher와 AuditStore를 호출하지 않는다. `/tmp/fontagit-task6-fix/pilot.json` SHA-256은 `1581cc704a2672e599d9aafb12d0ab68ef54579d57c9abd85ad3760d19055e26`이며 pending gate로 종료 코드 3이 정상 발생했다.
+
+## 최종 검증
+
+- focused: `uv run pytest tests/test_audit_runner.py tests/test_config.py -q` → `8 passed`
+- full pipeline: `uv run pytest -q` → `182 passed`
+- scoped ruff/mypy → 통과

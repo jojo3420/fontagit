@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from fontagit_pipeline.config import Settings, load_audit_settings
+from fontagit_pipeline.config import AuditSettings, Settings, load_audit_settings
 
 
 def test_settings_rejects_blank_api_key(monkeypatch):
@@ -56,9 +56,32 @@ def test_settings_supabase_absent_ok(monkeypatch):
 
 
 def test_audit_settings_do_not_require_google_key(monkeypatch, tmp_path):
-    """감사 전용 설정은 Google Fonts API 키가 없어도 로드한다."""
+    """감사 쓰기는 전용 dev 설정만 받고 prod와 같으면 차단한다."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("GOOGLE_FONTS_API_KEY", raising=False)
-    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.setenv("SUPABASE_URL", "https://prod-ref.supabase.co")
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", "general-key-must-not-be-used")
 
-    assert load_audit_settings().supabase_url is None
+    # 공개 기준선 읽기에는 일반 URL이 남아도, dev 쓰기에는 쓰면 안 된다.
+    assert load_audit_settings().supabase_url == "https://prod-ref.supabase.co"
+    with pytest.raises(ValueError, match="SUPABASE_DEV"):
+        AuditSettings(_env_file=None).dev_write_credentials()
+
+    monkeypatch.setenv("SUPABASE_DEV_URL", "https://prod-ref.supabase.co")
+    monkeypatch.setenv("SUPABASE_DEV_SECRET_KEY", "dev-key")
+    monkeypatch.setenv("SUPABASE_PROD_URL", "https://prod-ref.supabase.co")
+    monkeypatch.setenv("SUPABASE_PROD_SECRET_KEY", "prod-key")
+    monkeypatch.setenv("SUPABASE_AUDIT_DEV_ALLOWLIST", "prod-ref,dev-ref")
+    with pytest.raises(ValueError, match="project"):
+        AuditSettings(_env_file=None).dev_write_credentials()
+
+    monkeypatch.setenv("SUPABASE_DEV_URL", "https://dev-ref.supabase.co")
+    monkeypatch.setenv("SUPABASE_DEV_SECRET_KEY", "prod-key")
+    with pytest.raises(ValueError, match="service keys"):
+        AuditSettings(_env_file=None).dev_write_credentials()
+
+    monkeypatch.setenv("SUPABASE_DEV_SECRET_KEY", "dev-key")
+    assert AuditSettings(_env_file=None).dev_write_credentials() == (
+        "https://dev-ref.supabase.co",
+        "dev-key",
+    )
