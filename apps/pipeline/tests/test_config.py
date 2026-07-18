@@ -79,7 +79,11 @@ def test_audit_settings_require_separate_managed_dev_origin_without_prod_secret(
     monkeypatch.setenv("SUPABASE_PROD_URL", "https://prod-ref.supabase.co")
     monkeypatch.delenv("SUPABASE_PROD_SECRET_KEY", raising=False)
     monkeypatch.setenv("SUPABASE_AUDIT_DEV_ALLOWLIST", "prod-ref,dev-ref")
-    with pytest.raises(ValueError, match="origin"):
+    with pytest.raises(ValueError, match="origins must differ"):
+        AuditSettings(_env_file=None).dev_write_credentials()
+
+    monkeypatch.setenv("SUPABASE_DEV_URL", "https://prod-ref.supabase.co.")
+    with pytest.raises(ValueError, match="origins must differ"):
         AuditSettings(_env_file=None).dev_write_credentials()
 
     monkeypatch.setenv("SUPABASE_DEV_URL", "https://dev-ref.supabase.co")

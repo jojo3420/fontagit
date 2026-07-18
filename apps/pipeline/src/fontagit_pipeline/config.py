@@ -108,7 +108,7 @@ def _allowlist_items(value: str | None) -> set[str]:
 def _https_origin(url: str, setting_name: str) -> str:
     """비밀키를 보낼 Supabase HTTPS origin을 정규화한다."""
     parsed = urlparse(url)
-    hostname = (parsed.hostname or "").lower()
+    hostname = (parsed.hostname or "").rstrip(".").lower()
     if (
         parsed.scheme.lower() != "https"
         or not hostname
@@ -129,7 +129,7 @@ def _https_origin(url: str, setting_name: str) -> str:
 
 
 def _supabase_project_ref(origin: str) -> str | None:
-    hostname = (urlparse(origin).hostname or "").lower()
+    hostname = (urlparse(origin).hostname or "").rstrip(".").lower()
     suffix = ".supabase.co"
     if not hostname.endswith(suffix):
         return None
