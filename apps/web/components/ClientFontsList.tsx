@@ -56,7 +56,8 @@ export function ClientFontsList({ fonts }: Props) {
 
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [sorted.length]);
+    // filterKey/displayCount 변화로 sentinel이 재생성되면 observer를 다시 연결한다
+  }, [sorted.length, filterKey, displayCount]);
 
   const handleSortChange = (newSort: "popular" | "recent") => {
     if (newSort === effectiveSort) return;
