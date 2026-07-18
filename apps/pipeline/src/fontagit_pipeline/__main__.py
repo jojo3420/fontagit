@@ -463,13 +463,14 @@ def main_audit_bootstrap(args: argparse.Namespace) -> int:
 
 
 def main_audit_run(args: argparse.Namespace) -> int:
-    """법적 감사 파일럿을 실행하고 JSON·Markdown 보고서를 남긴다."""
+    """법적·메타데이터 감사 파일럿과 보고서를 만든다."""
     from fontagit_pipeline.audit_license import _load_rules
     from fontagit_pipeline.audit_policy import load_source_registry
     from fontagit_pipeline.audit_runner import (
         AuditGateError,
         load_bootstrap_targets,
         run_legal_audit,
+        run_metadata_audit,
         select_pilot,
         write_audit_artifacts,
     )
@@ -480,20 +481,26 @@ def main_audit_run(args: argparse.Namespace) -> int:
         targets = load_bootstrap_targets(args.bootstrap)
         selected = select_pilot(targets, size=args.limit, require_slugs=args.require_slug)
         registry = load_source_registry()
-        rules = _load_rules(Path(__file__).with_name("data") / "license_rules.json")
         if args.dry_run:
-            report = run_legal_audit(
-                selected, InMemoryAuditStore(), registry, rules, dry_run=True
-            )
+            dry_store = InMemoryAuditStore()
+            if args.stage == "metadata":
+                report = run_metadata_audit(selected, dry_store, registry, dry_run=True)
+            else:
+                rules = _load_rules(Path(__file__).with_name("data") / "license_rules.json")
+                report = run_legal_audit(selected, dry_store, registry, rules, dry_run=True)
         else:
             from fontagit_pipeline.config import load_audit_settings
 
             settings = load_audit_settings()
             dev_url, dev_secret_key = settings.dev_write_credentials()
-            store = SupabaseAuditStore.from_dev_credentials(
+            dev_store = SupabaseAuditStore.from_dev_credentials(
                 dev_url, dev_secret_key
             )
-            report = run_legal_audit(selected, store, registry, rules)
+            if args.stage == "metadata":
+                report = run_metadata_audit(selected, dev_store, registry)
+            else:
+                rules = _load_rules(Path(__file__).with_name("data") / "license_rules.json")
+                report = run_legal_audit(selected, dev_store, registry, rules)
         digest = write_audit_artifacts(report, args.out)
         report.assert_safe()
     except (AuditGateError, OSError, ValueError) as exc:
@@ -756,9 +763,9 @@ if __name__ == "__main__":
 
     audit_run_parser = subparsers.add_parser(
         "font-audit-run",
-        help="50종 법적 감사 파일럿 실행 (기본 dev 저장, --dry-run은 파일만 생성)",
+        help="50종 법적·메타데이터 감사 실행 (기본 dev 저장, --dry-run은 파일만 생성)",
     )
-    audit_run_parser.add_argument("--stage", choices=["legal"], required=True)
+    audit_run_parser.add_argument("--stage", choices=["legal", "metadata"], required=True)
     audit_run_parser.add_argument("--limit", type=int, default=50)
     audit_run_parser.add_argument(
         "--require-slug", action="append", default=[], help="파일럿에 반드시 포함할 slug"

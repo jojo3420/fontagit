@@ -14,8 +14,8 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
-from urllib.parse import urlparse
+from typing import TYPE_CHECKING, Any
+from urllib.parse import parse_qs, urlparse
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from fontagit_pipeline.audit_http import FetchError, FetchResult, classify_download, fetch_public_url
@@ -23,6 +23,9 @@ from fontagit_pipeline.audit_license import classify_license
 from fontagit_pipeline.audit_noonnu import NoonnuFontSnapshot, extract_noonnu_font
 from fontagit_pipeline.audit_policy import RegistryEntry, SourceRegistry
 from fontagit_pipeline.audit_store import AuditStore, FindingDraft, SnapshotDraft
+
+if TYPE_CHECKING:
+    from fontagit_pipeline.audit_metadata import FontFileMetadata
 
 _REPORTED_SLUGS = ("흰꼬리수리", "횡성한우체")
 _DOCUMENT_FIELDS = {
@@ -152,6 +155,8 @@ class FontTarget:
     foundry_url: str | None = None
     download_url: str | None = None
     license_source_url: str | None = None
+    weights: tuple[int, ...] = ()
+    variants: tuple[str, ...] = ()
     candidates: tuple["CandidateUrl", ...] = ()
 
 
@@ -327,6 +332,234 @@ def run_legal_audit(
     return report
 
 
+def run_metadata_audit(
+    targets: Sequence[FontTarget],
+    store: AuditStore,
+    registry: SourceRegistry | Mapping[str, object],
+    *,
+    dry_run: bool = False,
+    fetcher: AuditFetcher = fetch_public_url,
+) -> AuditReport:
+    """공식 파일 또는 같은 눈누 snapshot의 파일만 구조화해 감사한다."""
+    from fontagit_pipeline.audit_metadata import compare_metadata
+
+    if not targets:
+        raise AuditInputError("metadata audit requires at least one target")
+    source_registry = (
+        registry if isinstance(registry, SourceRegistry) else SourceRegistry.model_validate(registry)
+    )
+    baseline_sha256 = _baseline_sha256(targets)
+    run_id = (
+        uuid5(NAMESPACE_URL, f"fontagit:metadata:{baseline_sha256}")
+        if dry_run
+        else store.start_run(
+            stage="metadata",
+            target_count=len(targets),
+            baseline_sha256=baseline_sha256,
+            dry_run=False,
+        )
+    )
+    snapshot_ids: list[UUID] = []
+    finding_ids: list[UUID] = []
+    verified = 0
+    needs_review = 0
+    errors: list[str] = []
+    for target in targets:
+        if dry_run:
+            finding = FindingDraft(
+                font_id=target.font_id,
+                field_name="script_status",
+                before_value=None,
+                proposed_value="needs_review",
+                evidence_id=None,
+                confidence="unverified",
+                review_reason="dry-run does not download font files",
+            )
+            finding_ids.append(_save_finding(store, run_id, finding, dry_run=True))
+            needs_review += 1
+            continue
+        try:
+            evidence, metadata = _collect_metadata_evidence(
+                target, source_registry, fetcher=fetcher
+            )
+            snapshot_id = _save_snapshot(store, run_id, evidence, dry_run=False)
+            snapshot_ids.append(snapshot_id)
+            findings = compare_metadata(target, evidence, metadata)
+            for finding in findings:
+                saved = replace(finding, evidence_id=snapshot_id)
+                finding_ids.append(_save_finding(store, run_id, saved, dry_run=False))
+            status = next(
+                (
+                    item.proposed_value
+                    for item in findings
+                    if item.field_name == "script_status"
+                ),
+                "needs_review",
+            )
+            if status == "verified":
+                verified += 1
+            else:
+                needs_review += 1
+        except (FetchError, OSError, UnicodeError, ValueError) as exc:
+            needs_review += 1
+            errors.append(f"{target.slug}: {type(exc).__name__}")
+            finding = FindingDraft(
+                font_id=target.font_id,
+                field_name="script_status",
+                before_value=None,
+                proposed_value="needs_review",
+                evidence_id=None,
+                confidence="unverified",
+                review_reason=f"font metadata unavailable: {type(exc).__name__}",
+            )
+            finding_ids.append(_save_finding(store, run_id, finding, dry_run=False))
+    report = AuditReport(
+        run_id=run_id,
+        stage="metadata",
+        dry_run=dry_run,
+        targets=list(targets),
+        snapshot_ids=snapshot_ids,
+        finding_ids=finding_ids,
+        verified_count=verified,
+        needs_review_count=needs_review,
+        errors=errors,
+    )
+    if not dry_run:
+        store.complete_run(run_id, report.as_dict())
+    return report
+
+
+def _collect_metadata_evidence(
+    target: FontTarget,
+    registry: SourceRegistry,
+    *,
+    fetcher: AuditFetcher,
+) -> tuple[SnapshotDraft, FontFileMetadata]:
+    """승인 파일 또는 동일 눈누 상세의 @font-face 파일만 읽는다."""
+    from fontagit_pipeline.audit_metadata import (
+        MAX_FONT_FILE_BYTES,
+        classify_scripts,
+        inspect_font_metadata,
+        merge_font_metadata,
+    )
+
+    approved: list[tuple[int, str, CandidateUrl]] = []
+    for candidate in _all_candidates(target):
+        priority, candidate_source_kind = _candidate_priority(candidate, registry, target)
+        if (
+            candidate.document_role == "download"
+            and priority <= 1
+            and candidate_source_kind in {"official", "public"}
+            and _candidate_matches_target(candidate, target)
+        ):
+            approved.append((priority, candidate_source_kind, candidate))
+    approved.sort(key=lambda item: (item[0], item[2].url))
+
+    source_kind: str
+    source_page: str
+    file_urls: list[str]
+    partial_file = False
+    if approved:
+        _, source_kind, candidate = approved[0]
+        source_page = candidate.url
+        file_urls = [candidate.url]
+    elif _is_noonnu_reference(target):
+        page = fetcher(target.reference_url)
+        parsed = _parse_candidate(
+            page,
+            CandidateUrl(
+                url=target.reference_url,
+                document_role="metadata",
+                source="noonnu",
+                name_ko=target.name_ko,
+                maker=target.foundry,
+            ),
+        )
+        if not _discovered_identity_matches(target, parsed) or parsed is None:
+            raise AuditInputError("noonnu metadata identity does not match target")
+        file_urls = list(dict.fromkeys(parsed.font_file_candidates))
+        if not file_urls:
+            raise AuditInputError("noonnu snapshot has no font file candidate")
+        source_kind = "noonnu"
+        source_page = target.reference_url
+        unicode_blocks = sum(
+            "unicode-range" in block.casefold() for block in parsed.font_face_css
+        )
+        partial_file = unicode_blocks > len(file_urls)
+    else:
+        # discovery URL이나 legacy URL을 다운로드 후보로 승격하지 않는다.
+        raise AuditInputError("approved font file candidate is missing")
+
+    fetched_files: list[FetchResult] = []
+    metadata_files: list[FontFileMetadata] = []
+    for file_url in file_urls:
+        query = parse_qs(urlparse(file_url).query, keep_blank_values=True)
+        partial_file = partial_file or "text" in {key.casefold() for key in query}
+        fetched = fetcher(file_url)
+        if fetched.status < 200 or fetched.status >= 300:
+            raise AuditInputError("font file response is not successful")
+        if not fetched.content or len(fetched.content) > MAX_FONT_FILE_BYTES:
+            raise AuditInputError("font file response size is invalid")
+        suffix = Path(urlparse(fetched.final_url).path).suffix.lower()
+        if suffix not in {".ttf", ".otf", ".ttc", ".woff", ".woff2"}:
+            suffix = ".font"
+        temporary_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="wb", suffix=suffix, prefix="fontagit-audit-", delete=False
+            ) as handle:
+                handle.write(fetched.content)
+                handle.flush()
+                os.fsync(handle.fileno())
+                temporary_path = Path(handle.name)
+            inspected = inspect_font_metadata(temporary_path)
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
+        fetched_files.append(fetched)
+        metadata_files.append(inspected)
+
+    merged = merge_font_metadata(metadata_files, partial_file=partial_file)
+    coverage = classify_scripts(merged.codepoints)
+    extracted = {
+        **merged.extracted(),
+        "subsets": coverage.subsets,
+        "script_status": coverage.status,
+        "hangul_glyph_count": coverage.hangul_glyph_count,
+        "common_hangul_count": coverage.common_hangul_count,
+        "font_file_count": len(fetched_files),
+        "font_file_urls": file_urls,
+    }
+    normalized_sha256 = hashlib.sha256(
+        json.dumps(extracted, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(
+            "utf-8"
+        )
+    ).hexdigest()
+    first = fetched_files[0]
+    snapshot = SnapshotDraft(
+        font_id=target.font_id,
+        provider=target.provider,
+        provider_record_id=target.provider_record_id,
+        source_kind=source_kind,
+        document_kind="metadata",
+        request_url=source_page,
+        final_url=first.final_url,
+        http_status=first.status,
+        raw_text=None,
+        raw_sha256=merged.file_sha256,
+        normalized_sha256=normalized_sha256,
+        extracted=extracted,
+        evidence_locations={
+            "font_files": "approved download candidate"
+            if source_kind in {"official", "public"}
+            else "same noonnu snapshot @font-face",
+        },
+        extraction_rule_id="fonttools-cmap-v1",
+        parser_version=merged.parser_version,
+    )
+    return snapshot, merged
+
+
 def load_bootstrap_targets(path: Path) -> list[FontTarget]:
     """완료된 안정 출처키 bootstrap 산출물만 파일럿 입력으로 허용한다."""
     try:
@@ -376,6 +609,8 @@ def load_bootstrap_targets(path: Path) -> list[FontTarget]:
                     foundry_url=_optional(values, "foundry_url"),
                     download_url=_optional(values, "download_url"),
                     license_source_url=_optional(values, "license_source_url"),
+                    weights=_integer_tuple(values.get("weights"), "weights"),
+                    variants=_string_tuple(values.get("variants"), "variants"),
                     candidates=legacy_candidates,
                 )
             )
@@ -1440,6 +1675,26 @@ def _required(row: Mapping[str, object], key: str) -> str:
 def _optional(row: Mapping[str, object], key: str) -> str | None:
     value = row.get(key)
     return value if isinstance(value, str) and value.strip() else None
+
+
+def _integer_tuple(value: object, field_name: str) -> tuple[int, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list) or any(
+        isinstance(item, bool) or not isinstance(item, int) for item in value
+    ):
+        raise ValueError(field_name)
+    return tuple(value)
+
+
+def _string_tuple(value: object, field_name: str) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list) or any(
+        not isinstance(item, str) or not item.strip() for item in value
+    ):
+        raise ValueError(field_name)
+    return tuple(value)
 
 
 def _atomic_write(path: Path, content: bytes) -> None:
