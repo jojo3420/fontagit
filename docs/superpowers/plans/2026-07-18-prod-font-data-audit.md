@@ -714,7 +714,7 @@ git commit -m "feat: add safe font link observations"
 - Produces: extract_noonnu_font(html, source_url) -> NoonnuFontSnapshot
 - Produces: classify_license(snapshot, registry, rules) -> LicenseDecision
 
-- [ ] **Step 1: 눈누 범위 테스트 작성**
+- [x] **Step 1: 눈누 범위 테스트 작성**
 
 ~~~python
 def test_extracts_only_font_related_information():
@@ -733,7 +733,7 @@ def test_404_download_candidate_is_preserved_as_observation():
     assert snapshot.download_status == "needs_review"
 ~~~
 
-- [ ] **Step 2: 라이선스 신뢰 테스트 작성**
+- [x] **Step 2: 라이선스 신뢰 테스트 작성**
 
 ~~~python
 def test_approved_fingerprint_maps_six_fields():
@@ -750,7 +750,7 @@ def test_custom_or_llm_extraction_never_verifies():
     assert decision.auto_applicable is False
 ~~~
 
-- [ ] **Step 3: RED 확인**
+- [x] **Step 3: RED 확인**
 
 ~~~bash
 cd apps/pipeline
@@ -759,13 +759,13 @@ uv run pytest tests/test_audit_noonnu.py tests/test_audit_license.py -q
 
 Expected: 두 모듈이 없어 실패.
 
-- [ ] **Step 4: 눈누 parser 구현**
+- [x] **Step 4: 눈누 parser 구현**
 
 기존 noonnu_seed.py의 “첫 외부 링크” 휴리스틱을 재사용하지 않는다. 폰트 상세 영역 안에서 이름·영문명·제작사·분류·태그·가격·다운로드 CTA·라이선스 본문/허용표·@font-face CSS·WOFF/WOFF2/TTF/OTF URL·굵기·스타일·페이지 ID만 추출한다. 하단 SNS·광고·메뉴·관련 폰트는 결과에서 제외한다. 파일 URL은 언어 판별 후보로만 넘기고 source_tier 또는 한글 이름만으로 subsets를 만들지 않는다.
 
 원문 저장 정책이 structured-only면 raw_text는 None, raw_sha256과 evidence_locations는 유지한다.
 
-- [ ] **Step 5: 결정론적 라이선스 판정 구현**
+- [x] **Step 5: 결정론적 라이선스 판정 구현**
 
 verified 조건은 아래 셋 중 하나다.
 
@@ -775,7 +775,7 @@ verified 조건은 아래 셋 중 하나다.
 
 6개 필드는 allow_commercial, allow_modify, allow_redistribute, allow_embedding, allow_font_sale, attribution_requirement다. 원문에 없는 값은 null이다. 요약은 이 6개 값과 제한 문구만 사용한 고정 한국어 템플릿으로 만든다.
 
-- [ ] **Step 6: GREEN과 회귀 검사**
+- [x] **Step 6: GREEN과 회귀 검사**
 
 ~~~bash
 cd apps/pipeline
@@ -787,7 +787,12 @@ uv run mypy src
 
 Expected: 신규 테스트 4개와 기존 눈누 테스트 PASS.
 
-- [ ] **Step 7: 커밋**
+실행 결과: 신규·보완 핵심 테스트 11건, 기존 눈누 회귀 42건, 전체 pipeline
+테스트 183건이 통과했고 범위 내 ruff/mypy도 통과했다. 독립 검토에서 발견된
+승인 우회와 증거 위치 오류를 보완하고 재검토 승인을 받았다. 공식 라이선스
+fingerprint는 원문 확인과 사람 승인 전까지 등록하지 않았다.
+
+- [x] **Step 7: 커밋**
 
 ~~~bash
 git add apps/pipeline/src/fontagit_pipeline/audit_noonnu.py \
