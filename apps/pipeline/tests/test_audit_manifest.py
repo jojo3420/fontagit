@@ -22,6 +22,7 @@ from fontagit_pipeline.audit_manifest import (
 RUN_ID = UUID("00000000-0000-0000-0000-000000000701")
 FONT_ID = UUID("00000000-0000-0000-0000-000000000702")
 SNAPSHOT_ID = UUID("00000000-0000-0000-0000-000000000703")
+LICENSE_SNAPSHOT_ID = UUID("00000000-0000-0000-0000-000000000706")
 FINDING_ID = UUID("00000000-0000-0000-0000-000000000704")
 NOW = datetime(2026, 7, 18, 1, 2, 3, tzinfo=UTC)
 
@@ -70,6 +71,19 @@ def _snapshot() -> dict[str, object]:
     }
 
 
+def _license_snapshot() -> dict[str, object]:
+    snapshot = _snapshot()
+    snapshot.update(
+        {
+            "id": str(LICENSE_SNAPSHOT_ID),
+            "document_kind": "license",
+            "raw_sha256": "d" * 64,
+            "normalized_sha256": "e" * 64,
+        }
+    )
+    return snapshot
+
+
 def _row() -> dict[str, object]:
     return {
         "id": str(FONT_ID),
@@ -86,11 +100,16 @@ def _row() -> dict[str, object]:
         "download_evidence_id": None,
         "license_status": "pending",
         "license_verified": True,
-        "evidence_snapshots": [_snapshot()],
+        "evidence_snapshots": [_snapshot(), _license_snapshot()],
     }
 
 
 def _finding(field_name: str, before: object, proposed: object) -> dict[str, object]:
+    evidence_id = (
+        LICENSE_SNAPSHOT_ID
+        if field_name.startswith("license_") or field_name == "license_verified"
+        else SNAPSHOT_ID
+    )
     return {
         "id": str(FINDING_ID if field_name == "download_url" else UUID(int=FINDING_ID.int + 1)),
         "run_id": str(RUN_ID),
@@ -98,7 +117,7 @@ def _finding(field_name: str, before: object, proposed: object) -> dict[str, obj
         "field_name": field_name,
         "before_value": before,
         "proposed_value": proposed,
-        "evidence_id": str(SNAPSHOT_ID),
+        "evidence_id": str(evidence_id),
         "confidence": "official",
         "auto_applicable": False,
         "review_reason": "사람 검수 완료",
@@ -191,9 +210,40 @@ def test_manifest_rejects_unapproved_forbidden_stale_or_unbound_evidence(
     with pytest.raises(ManifestError, match="globally unique"):
         build_manifest(_run(), [duplicate_uuid_finding], [duplicate_uuid_row])
 
+    metadata_row = deepcopy(_row())
+    with pytest.raises(ManifestError, match="document/source kind"):
+        build_manifest(_run(), [_finding("foundry", None, "네이버")], [metadata_row])
+
+    noonnu_row = deepcopy(_row())
+    noonnu_row["evidence_snapshots"][0]["source_kind"] = "noonnu"
+    with pytest.raises(ManifestError, match="document/source kind"):
+        build_manifest(
+            _run(), [_finding("download_url", None, "https://clova.ai/font.zip")], [noonnu_row]
+        )
+
     bundle = build_manifest(
         _run(), [_finding("download_url", None, "https://clova.ai/font.zip")], [_row()]
     )
+    paths = write_manifest_bundle(bundle, tmp_path)
+    extra_evidence = json.loads(paths.forward.read_text(encoding="utf-8"))
+    unused = _license_snapshot()
+    unused.pop("font_id")
+    unused.pop("raw_retention_allowed")
+    unused["raw_text"] = None
+    unused["source_key"] = {"provider": "noonnu", "provider_record_id": "613"}
+    extra_evidence["evidence_bundle"]["snapshots"].append(unused)
+    extra_evidence["entries"][0]["evidence_ids"].append(str(LICENSE_SNAPSHOT_ID))
+    paths.forward.write_text(
+        json.dumps(extra_evidence, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    paths.forward_sha256.write_text(
+        __import__("hashlib").sha256(paths.forward.read_bytes()).hexdigest() + "\n",
+        encoding="ascii",
+    )
+    with pytest.raises(ManifestError, match="manifest JSON"):
+        verify_manifest_file(paths.forward, paths.forward_sha256)
+
     paths = write_manifest_bundle(bundle, tmp_path)
     malformed = json.loads(paths.forward.read_text(encoding="utf-8"))
     malformed["entries"][0]["after"]["unexpected"] = "value"

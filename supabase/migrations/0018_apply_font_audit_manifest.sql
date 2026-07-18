@@ -203,6 +203,19 @@ begin
     raise exception 'duplicate evidence UUID';
   end if;
   if exists (
+    select 1 from jsonb_array_elements(v_manifest->'entries') e
+    where jsonb_typeof(e->'evidence_ids') = 'array'
+      and jsonb_array_length(e->'evidence_ids') <> (
+        select count(distinct value) from jsonb_array_elements_text(e->'evidence_ids') as item(value)
+      )
+  ) or exists (
+    select 1 from jsonb_array_elements(v_manifest->'entries') e
+    where jsonb_typeof(e->'finding_ids') = 'array'
+      and jsonb_array_length(e->'finding_ids') <> (
+        select count(distinct value) from jsonb_array_elements_text(e->'finding_ids') as item(value)
+      )
+  ) then raise exception 'entry evidence/finding IDs must be unique'; end if;
+  if exists (
     select 1 from (
       select jsonb_array_elements_text(e->'evidence_ids') id from jsonb_array_elements(v_manifest->'entries') e
     ) q group by id having count(*) > 1
@@ -308,7 +321,23 @@ begin
          or (v_key like 'script_%' and (v_snapshot->>'document_kind'<>'metadata' or v_snapshot->>'source_kind' not in ('official','public'))) then
         raise exception 'evidence document/source kind mismatch';
       end if;
+      if v_finding->>'confidence' <> v_snapshot->>'source_kind'
+         or (v_key in ('foundry','foundry_url','name_en','name_ko','category_ko','tags','weights','variants','subsets')
+             and (v_snapshot->>'document_kind'<>'metadata' or v_snapshot->>'source_kind' not in ('official','public'))) then
+        raise exception 'metadata evidence is not official or public';
+      end if;
     end loop;
+    if exists (
+      select jsonb_array_elements_text(v_entry->'evidence_ids')
+      except
+      select f->>'evidence_id' from jsonb_array_elements(v_manifest#>'{evidence_bundle,findings}') f
+        where f->>'id' in (select jsonb_array_elements_text(v_entry->'finding_ids'))
+    ) or exists (
+      select f->>'evidence_id' from jsonb_array_elements(v_manifest#>'{evidence_bundle,findings}') f
+        where f->>'id' in (select jsonb_array_elements_text(v_entry->'finding_ids'))
+      except
+      select jsonb_array_elements_text(v_entry->'evidence_ids')
+    ) then raise exception 'entry evidence_ids do not exactly match finding evidence'; end if;
     if (select count(*) from jsonb_object_keys(v_entry->'after') k where k <> 'license_verified')
        <> jsonb_array_length(v_entry->'finding_ids')
        or ((v_entry->'after' ? 'license_verified') and not (v_entry->'after' ? 'license_status')) then
@@ -460,6 +489,11 @@ begin
 end;
 $$;
 
+revoke all on function fontagit._audit_manifest_service_role() from public,anon,authenticated,service_role;
+revoke all on function fontagit._audit_manifest_exact_keys(jsonb,text[],text) from public,anon,authenticated,service_role;
+revoke all on function fontagit._audit_manifest_approval_metadata_valid(jsonb) from public,anon,authenticated,service_role;
+revoke all on function fontagit._audit_font_value(uuid,text) from public,anon,authenticated,service_role;
+revoke all on function fontagit._audit_manifest_value_valid(text,jsonb) from public,anon,authenticated,service_role;
 revoke all on function fontagit.apply_font_audit_manifest(text,text,integer) from public,anon,authenticated;
 revoke all on function fontagit.apply_font_source_bootstrap(text,text,integer) from public,anon,authenticated;
 grant execute on function fontagit.apply_font_audit_manifest(text,text,integer) to service_role;

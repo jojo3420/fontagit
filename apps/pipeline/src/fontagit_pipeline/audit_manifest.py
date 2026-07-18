@@ -83,6 +83,19 @@ _PERMISSION_FIELDS = frozenset(
     }
 )
 _TEXT_ARRAY_FIELDS = frozenset({"tags", "variants", "subsets"})
+_METADATA_FIELDS = frozenset(
+    {
+        "foundry",
+        "foundry_url",
+        "name_en",
+        "name_ko",
+        "category_ko",
+        "tags",
+        "weights",
+        "variants",
+        "subsets",
+    }
+)
 _RUN_KEYS = frozenset(
     {
         "id", "stage", "target_environment", "target_count", "success_count",
@@ -110,6 +123,34 @@ _FINDING_KEYS = frozenset(
 
 class ManifestError(ValueError):
     """manifest가 안전하게 생성·검증될 수 없을 때 발생한다."""
+
+
+def _evidence_role_is_valid(
+    field_name: str, snapshot: Mapping[str, object], confidence: object
+) -> bool:
+    if field_name.startswith("download_"):
+        required_document = "download"
+    elif field_name.startswith("license_") or field_name in {
+        "allow_commercial",
+        "allow_font_sale",
+        "allow_embedding",
+        "allow_redistribute",
+        "allow_modify",
+        "attribution_requirement",
+        "is_commercial_free",
+        "license_verified",
+    }:
+        required_document = "license"
+    elif field_name.startswith("script_") or field_name in _METADATA_FIELDS:
+        required_document = "metadata"
+    else:
+        return False
+    source_kind = snapshot.get("source_kind")
+    return (
+        source_kind in {"official", "public"}
+        and snapshot.get("document_kind") == required_document
+        and confidence == source_kind
+    )
 
 
 class SourceKey(BaseModel):
@@ -275,6 +316,10 @@ class FontAuditManifest(BaseModel):
                 or finding.get("proposed_value") != expected_after
             ):
                 raise ValueError("finding does not exactly authorize entry field")
+            if not _evidence_role_is_valid(
+                field_name, snapshot_for_finding, finding.get("confidence")
+            ):
+                raise ValueError("finding evidence document/source kind is not approved")
             findings[finding_id] = finding
 
         entry_evidence_ids = {item for entry in self.entries for item in entry.evidence_ids}
@@ -282,6 +327,12 @@ class FontAuditManifest(BaseModel):
         if entry_evidence_ids != set(snapshots) or entry_finding_ids != set(findings):
             raise ValueError("entries must reference every and only bundled evidence")
         for entry in self.entries:
+            referenced_evidence_ids = {
+                _uuid(findings[item]["evidence_id"], "finding.evidence_id")
+                for item in entry.finding_ids
+            }
+            if set(entry.evidence_ids) != referenced_evidence_ids:
+                raise ValueError("entry evidence_ids must exactly match finding evidence")
             authorized_fields = {str(findings[item]["field_name"]) for item in entry.finding_ids}
             derived_fields = (
                 {"license_verified"}
@@ -552,6 +603,10 @@ def build_manifest(
             evidence_snapshot, snapshot_key = snapshots_by_id[evidence_id]
             if snapshot_key != key:
                 raise ManifestError("finding evidence belongs to another source key")
+            if not _evidence_role_is_valid(
+                field_name, evidence_snapshot, finding.get("confidence")
+            ):
+                raise ManifestError("finding evidence document/source kind is not approved")
             exported_snapshots[evidence_id] = _snapshot_for_export(evidence_snapshot, key)
             finding_id = _uuid(finding.get("id"), "finding.id")
             finding_ids.add(finding_id)

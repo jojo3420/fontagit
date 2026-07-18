@@ -61,6 +61,12 @@ $$;
 do $$
 declare v jsonb:=pg_temp.manifest('00000000-0000-0000-0000-000000001100'); v_text text; v_hash text;
 begin
+  if has_function_privilege('anon','fontagit._audit_font_value(uuid,text)','EXECUTE')
+     or has_function_privilege('authenticated','fontagit._audit_manifest_exact_keys(jsonb,text[],text)','EXECUTE')
+     or has_function_privilege('service_role','fontagit._audit_manifest_value_valid(text,jsonb)','EXECUTE')
+     or not has_function_privilege('service_role','fontagit.apply_font_audit_manifest(text,text,integer)','EXECUTE') then
+    raise exception 'audit helper/RPC execute privileges are unsafe';
+  end if;
   v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex');
   if fontagit.apply_font_audit_manifest(v_text,v_hash,1)<>2 then raise exception 'normal apply failed'; end if;
   if (select count(*) from fontagit.font_source_snapshots)<>2 or (select count(*) from fontagit.font_audit_findings where status='applied')<>2
@@ -124,6 +130,12 @@ begin
   v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex'); v_failed:=false;
   begin perform fontagit.apply_font_audit_manifest(v_text,v_hash,1); exception when others then if sqlerrm not like '%baseline SHA%' then raise; end if; v_failed:=true; end;
   if not v_failed then raise exception 'run baseline mismatch was accepted'; end if;
+
+  v:=pg_temp.manifest('00000000-0000-0000-0000-000000001100');
+  v:=jsonb_set(v,'{entries,0,evidence_ids}',(v#>'{entries,0,evidence_ids}') || jsonb_build_array('00000000-0000-0000-0000-000000001201'));
+  v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex'); v_failed:=false;
+  begin perform fontagit.apply_font_audit_manifest(v_text,v_hash,1); exception when others then if sqlerrm not like '%entry evidence/finding IDs must be unique%' then raise; end if; v_failed:=true; end;
+  if not v_failed then raise exception 'duplicate entry evidence id was accepted'; end if;
   if (select count(*) from fontagit.font_source_snapshots)<>v_before or (select count(*) from fontagit.font_audit_findings)<>v_before_findings then raise exception 'invalid manifest wrote evidence'; end if;
 end;
 $$;
@@ -160,8 +172,12 @@ declare v jsonb; v_text text; v_hash text; v_failed boolean := false;
 begin
   select jsonb_build_object('schema_version',1,'matched',2,'unmatched',0,'conflicts',0,'review_rows','[]'::jsonb,'entries',jsonb_agg(jsonb_build_object(
     'font_id',id,'slug',slug,'provider','noonnu','provider_record_id',case slug when 'bootstrap-three' then '2003' else '2001' end,'source_url','https://noonnu.cc/font_page/x',
-    'before',jsonb_build_object('source_tier',source_tier,'slug',slug,'name_en',name_en,'name_ko',name_ko,'official_url',official_url,'foundry',foundry,'updated_at',updated_at),'public_updates','{}'::jsonb) order by slug))
+    'before',jsonb_build_object('source_tier',source_tier,'slug',slug,'name_en',name_en,'name_ko',name_ko,'official_url',official_url,'foundry',foundry,'updated_at',updated_at),'public_updates','{}'::jsonb)
+    order by case slug when 'bootstrap-three' then 1 else 2 end))
   into v from fontagit.fonts where slug in ('bootstrap-three','bootstrap-four');
+  if v#>>'{entries,0,provider_record_id}'<>'2003' or v#>>'{entries,1,provider_record_id}'<>'2001' then
+    raise exception 'bootstrap collision fixture order is invalid';
+  end if;
   v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex');
   begin
     perform fontagit.apply_font_source_bootstrap(v_text,v_hash,1);

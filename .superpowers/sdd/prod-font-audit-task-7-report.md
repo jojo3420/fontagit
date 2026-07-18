@@ -46,6 +46,14 @@
 - prod CLI는 전체 해시 2회 확인(`--confirm-hash`, `--approved-hash`), 승인 ID, `FONTAGIT_PROD_MANIFEST_ENABLED=true`, 대화형 `yes`를 모두 요구한다. manifest 파일은 한 번 읽은 동일 바이트로 해시·파싱·RPC 전송한다.
 - 로컬 PostgreSQL 17 포트 55437 SQL `ALL PASS`, focused `10 passed`, 전체 pipeline `184 passed`, scoped ruff/mypy 통과. 원격 DB와 네트워크는 사용하지 않았다.
 
+## 최종 근거 권한 보강
+
+- 내부 SQL helper는 PUBLIC·anon·authenticated·service_role 모두 직접 실행할 수 없고, service role은 공개 RPC 두 개만 실행할 수 있다.
+- 다운로드·라이선스·일반 메타데이터·문자 지원 근거의 문서 역할을 분리했다. 공개 확정 근거는 official/public만 허용하며 Noonnu는 승인 근거로 사용할 수 없다.
+- entry별 `evidence_ids`는 해당 entry의 승인 finding이 실제 참조하는 snapshot ID 집합과 정확히 같아야 한다.
+- bootstrap 충돌 테스트는 첫 entry `2003` 신규, 둘째 `2001` 기존 충돌 순서를 고정하고 `2003`이 0건인지 확인한다.
+- 로컬 PostgreSQL 17 포트 55517에서 0001~0018과 SQL 5개 사례 `ALL PASS`. Python focused `11 passed`, 전체 `185 passed`, scoped ruff/mypy 통과. 원격 DB·prod·네트워크는 사용하지 않았다.
+
 ## 재검토 2차 수정 (2026-07-18)
 
 - SQL RED: `reviewed_at=null`, `reviewed_by=[]`, orphan snapshot, 잘못된 top-level baseline SHA, bootstrap `matched` 불일치 문서를 추가했다. 기존 함수는 승인 메타데이터/정확 집합 검증 전에 다른 충돌로 진행하거나 잘못된 입력을 허용했다.
@@ -59,3 +67,10 @@
 - Python 핵심 테스트는 같은 bytes로 hash·파싱을 확인하고, prod에서 enable 또는 승인 SHA가 빠지면 입력창·RPC 전에 중단하며 manifest 본문을 실행당 한 번만 읽는 것을 검증한다. RPC의 `p_schema_version`은 정수다.
 - SQL 거부 테스트는 null `reviewed_at`, 배열 `reviewed_by`, orphan snapshot, 잘못된 top baseline, top/run baseline 불일치가 snapshot/finding/font 변경 없이 거부되는지 확인한다. bootstrap matched 불일치 뒤 `font_sources` 전체 행 수도 변하지 않는다.
 - 검증: 로컬 임시 PostgreSQL 17 migration + SQL `ALL PASS`; Python focused 11 passed, 전체 185 passed, scoped ruff/mypy 통과. 원격 dev/prod에는 접근하거나 적용하지 않았다.
+
+## PR 전 evidence-role 보강 (2026-07-18)
+
+- 동시 작업으로 들어온 evidence 역할 검증, helper 함수 execute 권한 회수, bootstrap 충돌 fixture 순서 고정을 보존했다.
+- 추가로 한 entry 안의 `evidence_ids`와 `finding_ids`는 각각 배열 길이와 distinct UUID 수가 같아야 한다. 중복 ID는 before/evidence import/font update 이전에 거부한다.
+- SQL은 동일 evidence UUID를 entry에 두 번 넣은 문서를 거부하고 snapshot·finding 수와 fonts 값이 변하지 않는지 확인했다.
+- 검증: 로컬 임시 PostgreSQL 17 migration + SQL `ALL PASS`; Python focused 2 passed, 전체 185 passed, scoped ruff/mypy 통과. 원격 dev/prod 적용은 하지 않았다.
