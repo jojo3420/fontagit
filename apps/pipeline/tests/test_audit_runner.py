@@ -12,6 +12,7 @@ from fontagit_pipeline.audit_runner import (
     AuditGateError,
     CandidateUrl,
     FontTarget,
+    _finding_id,
     run_legal_audit,
     select_pilot,
     write_dry_run_artifacts,
@@ -164,6 +165,17 @@ def test_findings_are_immutable_per_run_and_urls_use_safe_priority() -> None:
         "https://clova.ai/license",
     ]
     assert first.needs_review_count == 1
+    draft_one = FindingDraft(
+        font_id=target.font_id,
+        field_name="source_discovery",
+        before_value=None,
+        proposed_value={"first": True},
+        evidence_id=None,
+        confidence="reference",
+        review_reason="same dry-run key",
+    )
+    draft_two = replace(draft_one, proposed_value={"second": True})
+    assert _finding_id(first.run_id, draft_one) == _finding_id(first.run_id, draft_two)
     store.mark_applied(first.finding_ids[0])
     repeat_key = store.save_finding(
         first.run_id,
@@ -210,6 +222,14 @@ def test_findings_are_immutable_per_run_and_urls_use_safe_priority() -> None:
     assert [noonnu_store.finding_draft(item).proposed_value for item in noonnu_report.finding_ids] == [
         "https://clova.ai/handwriting/list.html"
     ]
+    mismatch_report = run_legal_audit(
+        [replace(noonnu_target, name_ko="다른 폰트")],
+        InMemoryAuditStore(),
+        registry={"version": 1, "entries": []},
+        rules=rules,
+        fetcher=noonnu_fetch,
+    )
+    assert mismatch_report.finding_ids == []
 
 
 def test_dry_run_writes_artifacts_without_calling_store(tmp_path: Path) -> None:
