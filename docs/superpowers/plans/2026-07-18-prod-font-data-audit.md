@@ -820,7 +820,7 @@ git commit -m "feat: extract and classify font license evidence"
 - Produces: run_legal_audit(targets, store, registry, rules) -> AuditReport
 - CLI: font-audit-run --stage legal --limit 50 --out output/audit/pilot
 
-- [ ] **Step 1: 파일럿과 멱등성 테스트 작성**
+- [x] **Step 1: 파일럿과 멱등성 테스트 작성**
 
 ~~~python
 def test_pilot_is_deterministic_and_contains_reported_fonts():
@@ -837,7 +837,7 @@ def test_same_snapshot_and_finding_are_idempotent(fake_store):
     assert fake_store.finding_count == 1
 ~~~
 
-- [ ] **Step 2: RED 확인**
+- [x] **Step 2: RED 확인**
 
 ~~~bash
 cd apps/pipeline
@@ -846,11 +846,11 @@ uv run pytest tests/test_audit_runner.py -q
 
 Expected: audit_runner 모듈이 없어 실패.
 
-- [ ] **Step 3: AuditStore 구현**
+- [x] **Step 3: AuditStore 구현**
 
 모든 snapshot은 append-only insert다. 동일 font_id + provider + provider_record_id + document_kind + normalized_sha256면 기존 ID를 반환한다. finding은 run_id + font_id + field_name으로 upsert하되 applied finding은 수정하지 않고 새 run의 finding을 만든다.
 
-- [ ] **Step 4: 파일럿 선택과 보고서 구현**
+- [x] **Step 4: 파일럿 선택과 보고서 구현**
 
 선택 순서는 흰꼬리수리·횡성한우체 고정 포함 → source tier → 제작사 → domain → slug 정렬의 층화 표본이다. 결과 JSON/Markdown에는 exact target, verified, needs_review, broken, 오류, 도메인별 집계를 기록한다.
 
@@ -865,7 +865,7 @@ if report.needs_review_count / report.target_count > 0.10:
     raise AuditGateError("pilot review ratio exceeds 10%")
 ~~~
 
-- [ ] **Step 5: CLI 연결**
+- [x] **Step 5: CLI 연결**
 
 ~~~text
 fontagit-pipeline font-audit-run \
@@ -878,7 +878,7 @@ fontagit-pipeline font-audit-run \
 
 기본은 dev 쓰기이며 prod URL과 service key를 받지 않는다. --dry-run은 DB 대신 JSON artifact만 만든다.
 
-- [ ] **Step 6: GREEN과 정적 검사**
+- [x] **Step 6: GREEN과 정적 검사**
 
 ~~~bash
 cd apps/pipeline
@@ -889,7 +889,13 @@ uv run mypy src
 
 Expected: 테스트 2개 PASS, ruff/mypy 오류 0.
 
-- [ ] **Step 7: 커밋**
+실행 결과: 핵심 audit/config 테스트 8건, 전체 pipeline 테스트 182건과 범위 내
+ruff/mypy가 통과했다. 50종 fixture dry-run은 외부 요청·DB 쓰기 없이 JSON,
+Markdown, SHA-256을 만들고 pending 안전 게이트로 종료 코드 3을 반환했다.
+독립 검토에서 finding 실행 경계, prod 차단, CTA 후보, legacy URL, 원문 SHA
+보존 문제를 보완하고 최종 승인을 받았다. 실제 dev 50종 수집은 아직 실행하지 않았다.
+
+- [x] **Step 7: 커밋**
 
 ~~~bash
 git add apps/pipeline/src/fontagit_pipeline/audit_store.py \
