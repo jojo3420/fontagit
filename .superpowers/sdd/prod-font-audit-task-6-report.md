@@ -87,3 +87,10 @@
 - 수집 원문은 공개값에 저장하지 않고 SHA-256만 snapshot 내부 근거로 보존한다.
 - 검증: focused `3 passed`, audit/config `36 passed`, 전체 pipeline `182 passed`, scoped ruff/mypy 통과.
 - 실제 prod/dev DB 쓰기, migration, deploy, 외부 네트워크 호출은 실행하지 않았다.
+
+## 최종 리뷰 경계 검증
+
+- RED: 빈 대상은 실행을 시작한 뒤 통과했고, `before.official_url`은 역할별 기존 후보로 확대됐으며 structured-only snapshot은 빈 문자열 해시를 만들 수 있었다.
+- GREEN: 빈 대상은 `start_run` 전 `AuditInputError`로 중단한다. legacy URL은 `existing-db/metadata` 검수 후보 하나로만 보존한다. 수집 bytes SHA-256은 snapshot 저장값과 structured evidence에 함께 남긴다.
+- 검증: audit/config `8 passed`, 전체 pipeline `182 passed`, scoped ruff/mypy 통과.
+- CLI dry-run은 실제 bootstrap 산출물이 저장소에 없어 그 입력으로는 중단했다. 별도 50종 fixture manifest로 JSON/SHA 생성(`6c1492663df7f0f350eaa2cace57e3f5014498787b183aa7f706bbe6f674da8b`)과 pending 안전 게이트 종료 코드 3을 확인했다. 이 실행도 외부 네트워크·DB 요청 0회다.
