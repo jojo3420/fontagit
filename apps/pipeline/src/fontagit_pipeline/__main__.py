@@ -480,6 +480,51 @@ def main_audit_bootstrap(args: argparse.Namespace) -> int:
     return 0
 
 
+def main_audit_run(args: argparse.Namespace) -> int:
+    """법적 감사 파일럿을 실행하고 JSON·Markdown 보고서를 남긴다."""
+    from fontagit_pipeline.audit_license import _load_rules
+    from fontagit_pipeline.audit_policy import load_source_registry
+    from fontagit_pipeline.audit_runner import (
+        AuditGateError,
+        load_bootstrap_targets,
+        run_legal_audit,
+        select_pilot,
+        write_audit_artifacts,
+    )
+    from fontagit_pipeline.audit_store import InMemoryAuditStore, SupabaseAuditStore
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    try:
+        targets = load_bootstrap_targets(args.bootstrap)
+        selected = select_pilot(targets, size=args.limit, require_slugs=args.require_slug)
+        registry = load_source_registry()
+        rules = _load_rules(Path(__file__).with_name("data") / "license_rules.json")
+        if args.dry_run:
+            report = run_legal_audit(
+                selected, InMemoryAuditStore(), registry, rules, dry_run=True
+            )
+        else:
+            from fontagit_pipeline.config import load_audit_settings
+
+            settings = load_audit_settings()
+            if not settings.supabase_url or not settings.supabase_secret_key:
+                raise ValueError("dev 감사 저장에는 URL과 service key가 필요합니다")
+            if settings.supabase_prod_url and settings.supabase_url == settings.supabase_prod_url:
+                raise ValueError("dev URL이 prod URL과 같아 감사 쓰기를 중단합니다")
+            store = SupabaseAuditStore.from_dev_credentials(
+                settings.supabase_url, settings.supabase_secret_key
+            )
+            report = run_legal_audit(selected, store, registry, rules)
+        digest = write_audit_artifacts(report, args.out)
+        report.assert_safe()
+    except (AuditGateError, OSError, ValueError) as exc:
+        logger.error("감사 파일럿 중단: %s", exc)
+        return 3
+
+    logger.info("감사 파일럿 보고서 저장: %s (sha256=%s)", args.out, digest)
+    return 0
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="FontAgit 파이프라인",
@@ -595,6 +640,27 @@ if __name__ == "__main__":
         "--out", type=Path, required=True, help="bootstrap JSON 출력 경로"
     )
     bootstrap_parser.set_defaults(func=main_audit_bootstrap)
+
+    audit_run_parser = subparsers.add_parser(
+        "font-audit-run",
+        help="50종 법적 감사 파일럿 실행 (기본 dev 저장, --dry-run은 파일만 생성)",
+    )
+    audit_run_parser.add_argument("--stage", choices=["legal"], required=True)
+    audit_run_parser.add_argument("--limit", type=int, default=50)
+    audit_run_parser.add_argument(
+        "--require-slug", action="append", default=[], help="파일럿에 반드시 포함할 slug"
+    )
+    audit_run_parser.add_argument("--out", type=Path, required=True)
+    audit_run_parser.add_argument(
+        "--bootstrap",
+        type=Path,
+        default=Path("output") / "audit" / "bootstrap-manifest.json",
+        help="검증된 안정 출처키 bootstrap artifact 경로",
+    )
+    audit_run_parser.add_argument(
+        "--dry-run", action="store_true", help="DB 자격증명·DB 쓰기 없이 파일 산출물만 생성"
+    )
+    audit_run_parser.set_defaults(func=main_audit_run)
 
     args = parser.parse_args()
 
