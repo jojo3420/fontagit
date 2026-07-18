@@ -8,6 +8,9 @@ from pathlib import Path
 import pytest
 
 from fontagit_pipeline.audit_http import (
+    FetchTimeoutError,
+    NetworkFetchError,
+    ResponseTooLargeError,
     UnsafeAddressError,
     classify_download,
     fetch_public_url,
@@ -20,6 +23,38 @@ class _CompletedCurl:
 
     def __init__(self, status: int = 200) -> None:
         self.stdout = str(status)
+
+
+class _StreamingCurl:
+    returncode = 0
+    stderr = ""
+
+    def __init__(self, chunks: list[bytes], status: int = 200) -> None:
+        self.stdout = _ChunkStream(chunks)
+        self.stderr = _ChunkStream([])
+        self.terminated = False
+        self.waited = False
+
+    def wait(self, timeout: float | None = None) -> int:
+        self.waited = True
+        return self.returncode
+
+    def poll(self) -> int | None:
+        return self.returncode if self.waited or self.terminated else None
+
+    def terminate(self) -> None:
+        self.terminated = True
+
+    def kill(self) -> None:
+        self.terminated = True
+
+
+class _ChunkStream:
+    def __init__(self, chunks: list[bytes]) -> None:
+        self._chunks = iter(chunks)
+
+    def read(self, _: int = -1) -> bytes:
+        return next(self._chunks, b"")
 
 
 def _dns_result(address: str) -> list[tuple[object, ...]]:
@@ -47,21 +82,16 @@ def test_public_https_rechecks_redirect_and_uses_pinned_curl_resolution(
         dns_calls.append(host)
         return _dns_result("93.184.216.34" if host == "fonts.example" else "1.1.1.1")
 
-    def fake_run(
-        argv: list[str], *, timeout: float, shell: bool, **_: object
-    ) -> _CompletedCurl:
+    def fake_popen(argv: list[str], *, shell: bool, **_: object) -> _StreamingCurl:
         curl_calls.append(argv)
         header_path = Path(argv[argv.index("--dump-header") + 1])
-        body_path = Path(argv[argv.index("--output") + 1])
         response_headers = headers.pop(0)
         header_path.write_bytes(response_headers)
-        body_path.write_bytes(b"font-data")
-        assert timeout == 21
         assert shell is False
-        return _CompletedCurl(302 if b" 302 " in response_headers else 200)
+        return _StreamingCurl([b"font-data"])
 
     monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
     monkeypatch.setattr("tempfile.gettempdir", lambda: str(tmp_path))
 
     result = fetch_public_url("https://fonts.example/download")
@@ -105,6 +135,57 @@ def test_private_or_metadata_dns_result_is_blocked_before_curl(
         fetch_public_url("https://metadata.example/latest")
 
     assert called is False
+
+
+@pytest.mark.parametrize(
+    ("returncode", "error"),
+    [(28, FetchTimeoutError), (18, NetworkFetchError)],
+)
+def test_curl_transport_failure_cannot_be_mistaken_for_http_success(
+    monkeypatch: pytest.MonkeyPatch, returncode: int, error: type[Exception]
+) -> None:
+    """남은 200 헤더·stdout이 있어도 timeout/전송 실패는 정상 응답이 아니다."""
+
+    def fake_getaddrinfo(host: str, port: int, **_: object) -> list[tuple[object, ...]]:
+        return _dns_result("93.184.216.34")
+
+    def fake_popen(argv: list[str], **_: object) -> _StreamingCurl:
+        header_path = Path(argv[argv.index("--dump-header") + 1])
+        header_path.write_bytes(b"HTTP/1.1 200 OK\r\n\r\n")
+        result = _StreamingCurl([b"partial"])
+        result.returncode = returncode
+        return result
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+
+    with pytest.raises(error):
+        fetch_public_url("https://fonts.example/download")
+
+
+def test_chunked_body_is_terminated_as_soon_as_it_exceeds_limit(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Content-Length가 없어도 max_bytes 다음 1바이트에서 전송을 끊는다."""
+    process = _StreamingCurl([b"1234", b"5"])
+
+    def fake_getaddrinfo(host: str, port: int, **_: object) -> list[tuple[object, ...]]:
+        return _dns_result("93.184.216.34")
+
+    def fake_popen(*_: object, **__: object) -> _StreamingCurl:
+        return process
+
+    def forbidden_run(*_: object, **__: object) -> _CompletedCurl:
+        raise AssertionError("body must be streamed instead of collected by subprocess.run")
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(subprocess, "run", forbidden_run)
+
+    with pytest.raises(ResponseTooLargeError):
+        fetch_public_url("https://fonts.example/download", max_bytes=4)
+
+    assert process.terminated is True
 
 
 def test_broken_requires_two_independent_observations_24_hours_apart() -> None:

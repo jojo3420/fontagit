@@ -15,6 +15,7 @@ from fontagit_pipeline.audit_models import DownloadStatus
 
 _MAX_BYTES = 1_048_576
 _MAX_REDIRECTS = 5
+_READ_CHUNK_SIZE = 64 * 1024
 _REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 _CURL_BASE = (
     "curl",
@@ -222,16 +223,41 @@ def _header_values(headers: bytes) -> tuple[int | None, str | None]:
     return None, None
 
 
-def _curl_status(value: str) -> int | None:
-    value = value.strip()
-    return int(value) if len(value) == 3 and value.isdigit() else None
+def _stop_process(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=1)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=1)
+
+
+def _read_limited_body(process: subprocess.Popen[bytes], max_bytes: int) -> bytes:
+    if process.stdout is None:
+        _stop_process(process)
+        raise NetworkFetchError("curl response stream is unavailable")
+    content = bytearray()
+    try:
+        while True:
+            remaining = max_bytes - len(content)
+            chunk = process.stdout.read(min(_READ_CHUNK_SIZE, remaining + 1))
+            if not chunk:
+                return bytes(content)
+            if len(chunk) > remaining:
+                _stop_process(process)
+                raise ResponseTooLargeError("response body exceeds byte limit")
+            content.extend(chunk)
+    except BaseException:
+        _stop_process(process)
+        raise
 
 
 def _fetch_once(target: _PublicTarget, max_bytes: int) -> tuple[int, str | None, bytes]:
     with tempfile.TemporaryDirectory(prefix="fontagit-link-") as temporary_directory:
         directory = Path(temporary_directory)
         header_path = directory / "headers"
-        body_path = directory / "body"
         command = [
             *_CURL_BASE,
             "--max-filesize",
@@ -241,34 +267,38 @@ def _fetch_once(target: _PublicTarget, max_bytes: int) -> tuple[int, str | None,
             "--dump-header",
             str(header_path),
             "--output",
-            str(body_path),
-            "--write-out",
-            "%{http_code}",
+            "-",
             target.url,
         ]
         try:
-            completed = subprocess.run(
+            process = subprocess.Popen(
                 command,
-                capture_output=True,
-                check=False,
                 shell=False,
-                text=True,
-                timeout=21,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
             )
-        except subprocess.TimeoutExpired as error:
-            raise FetchTimeoutError("link observation timed out") from error
         except OSError as error:
             raise NetworkFetchError("curl request failed") from error
 
+        try:
+            content = _read_limited_body(process, max_bytes)
+            try:
+                returncode = process.wait(timeout=21)
+            except subprocess.TimeoutExpired as error:
+                _stop_process(process)
+                raise FetchTimeoutError("link observation timed out") from error
+        finally:
+            _stop_process(process)
+
         status, location = _header_values(header_path.read_bytes() if header_path.exists() else b"")
-        curl_status = _curl_status(completed.stdout)
-        if curl_status is not None:
-            status = curl_status
+        if returncode == 28:
+            raise FetchTimeoutError("link observation timed out")
+        if returncode == 63:
+            raise ResponseTooLargeError("response body exceeds byte limit")
+        if returncode not in {0, 22}:
+            raise NetworkFetchError("curl request failed")
         if status is None or status == 0:
             raise NetworkFetchError("curl returned no HTTP response")
-        content = body_path.read_bytes() if body_path.exists() else b""
-        if len(content) > max_bytes:
-            raise ResponseTooLargeError("response body exceeds byte limit")
         return status, location, content
 
 
