@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 import hashlib
 import json
 from pathlib import Path
@@ -15,9 +16,13 @@ from fontagit_pipeline.audit_runner import (
     CandidateUrl,
     FontTarget,
     AuditInputError,
+    ScheduledObservation,
     _fetched_snapshot,
     _finding_id,
     load_bootstrap_targets,
+    build_scheduled_artifact,
+    import_observations,
+    read_regular_file_once,
     run_legal_audit,
     select_pilot,
     write_dry_run_artifacts,
@@ -413,3 +418,114 @@ def test_dry_run_writes_artifacts_without_calling_store(tmp_path: Path) -> None:
             snapshot_ids=[],
             finding_ids=[],
         ).assert_safe()
+
+
+def test_scheduled_download_import_requires_distinct_runs_24_hours_apart() -> None:
+    """한 번의 404는 검수 대상이고, 24시간 뒤 별도 실행만 broken이다."""
+    store = InMemoryAuditStore()
+    font_id = uuid4()
+    started = datetime(2026, 7, 18, tzinfo=UTC)
+    first = build_scheduled_artifact(
+        "download",
+        [
+            ScheduledObservation(
+                font_id=font_id,
+                normalized_url="https://fonts.example/file.zip",
+                observed_at=started,
+                http_status=404,
+                final_url="https://fonts.example/file.zip",
+                content_sha256=hashlib.sha256(b"missing").hexdigest(),
+            )
+        ],
+        run_id=uuid4(),
+        generated_at=started,
+    )
+    first_result = import_observations(first.canonical_bytes, first.sha256, store)
+    assert (first_result.status, first_result.applied_count) == ("needs_review", 0)
+
+    second = build_scheduled_artifact(
+        "download",
+        [replace(first.observations[0], observed_at=started + timedelta(hours=25))],
+        run_id=uuid4(),
+        generated_at=started + timedelta(hours=25),
+    )
+    second_result = import_observations(second.canonical_bytes, second.sha256, store)
+    assert (second_result.status, second_result.applied_count) == ("broken", 0)
+    assert import_observations(second.canonical_bytes, second.sha256, store).status == "already_imported"
+    spoofed = build_scheduled_artifact(
+        "download",
+        [replace(second.observations[0], http_status=200)],
+        run_id=second.run_id,
+        generated_at=second.generated_at,
+    )
+    with pytest.raises(AuditGateError, match="run_id"):
+        import_observations(spoofed.canonical_bytes, spoofed.sha256, store)
+
+
+def test_scheduled_artifact_rejects_empty_open_schema_bad_hash_and_symlink(tmp_path: Path) -> None:
+    """빈 실행, 알 수 없는 필드, 해시 불일치는 저장 전에 모두 막는다."""
+    with pytest.raises(AuditGateError, match="empty artifact"):
+        build_scheduled_artifact("download", [], run_id=uuid4())
+
+    valid = build_scheduled_artifact(
+        "download",
+        [
+            ScheduledObservation(
+                font_id=uuid4(),
+                normalized_url="https://fonts.example/font.zip",
+                observed_at=datetime(2026, 7, 18, tzinfo=UTC),
+                http_status=200,
+                final_url="https://fonts.example/font.zip",
+                content_sha256="a" * 64,
+            )
+        ],
+        run_id=uuid4(),
+    )
+    opened = json.loads(valid.canonical_bytes)
+    opened["raw_html"] = "must never be accepted"
+    opened_bytes = json.dumps(opened, sort_keys=True, separators=(",", ":")).encode()
+    store = InMemoryAuditStore()
+    with pytest.raises(AuditGateError, match="schema"):
+        import_observations(opened_bytes, hashlib.sha256(opened_bytes).hexdigest(), store)
+    with pytest.raises(AuditGateError, match="SHA-256"):
+        import_observations(valid.canonical_bytes, "0" * 64, store)
+    artifact_path = tmp_path / "observations.json"
+    artifact_path.write_bytes(valid.canonical_bytes)
+    symlink_path = tmp_path / "artifact-link.json"
+    symlink_path.symlink_to(artifact_path)
+    with pytest.raises(AuditGateError, match="safe regular file"):
+        read_regular_file_once(symlink_path, max_bytes=8 * 1024 * 1024)
+    assert store.write_calls == 0
+
+
+def test_scheduled_license_hash_change_creates_review_without_public_apply() -> None:
+    """라이선스 본문 hash 변화는 finding만 만들고 공개값은 자동 변경하지 않는다."""
+    store = InMemoryAuditStore()
+    font_id = uuid4()
+    started = datetime(2026, 7, 18, tzinfo=UTC)
+    first = build_scheduled_artifact(
+        "license",
+        [
+            ScheduledObservation(
+                font_id=font_id,
+                normalized_url="https://foundry.example/license",
+                observed_at=started,
+                http_status=200,
+                final_url="https://foundry.example/license",
+                content_sha256="a" * 64,
+            )
+        ],
+        run_id=uuid4(),
+        generated_at=started,
+    )
+    assert import_observations(first.canonical_bytes, first.sha256, store).status == "verified"
+
+    changed = build_scheduled_artifact(
+        "license",
+        [replace(first.observations[0], observed_at=started + timedelta(days=90), content_sha256="b" * 64)],
+        run_id=uuid4(),
+        generated_at=started + timedelta(days=90),
+    )
+    result = import_observations(changed.canonical_bytes, changed.sha256, store)
+    assert (result.status, result.applied_count) == ("needs_review", 0)
+    assert store.finding_count == 1

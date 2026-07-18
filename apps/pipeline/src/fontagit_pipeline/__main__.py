@@ -504,6 +504,80 @@ def main_audit_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def main_audit_scan(args: argparse.Namespace) -> int:
+    """공개 prod RLS와 안전한 HTTP 경계만 사용해 예약 관찰을 만든다."""
+    from fontagit_pipeline.audit_runner import (
+        AuditGateError,
+        load_prod_public_scheduled_targets,
+        scan_scheduled_targets,
+        write_scheduled_artifact,
+    )
+    from fontagit_pipeline.config import load_audit_settings
+
+    if args.source != "prod-public":
+        logger.error("허용되지 않은 예약 감사 출처입니다")
+        return 2
+    try:
+        settings = load_audit_settings()
+        if not settings.supabase_url or not settings.supabase_anon_key:
+            raise AuditGateError("prod 공개 URL과 anon key가 필요합니다")
+        from supabase import create_client
+
+        public_schema = create_client(
+            settings.supabase_url, settings.supabase_anon_key
+        ).schema("fontagit")
+        targets = load_prod_public_scheduled_targets(public_schema, args.kind)
+        artifact = scan_scheduled_targets(args.kind, targets)
+        digest = write_scheduled_artifact(artifact, args.out)
+    except (AuditGateError, OSError, ValueError) as exc:
+        logger.error("예약 감사 scan 중단: %s", exc)
+        return 3
+    except Exception as exc:  # 공개 API/외부 HTTP 경계
+        logger.error("예약 감사 scan 실패: %s", exc.__class__.__name__)
+        return 3
+    logger.info(
+        "예약 감사 artifact 저장: kind=%s targets=%d sha256=%s",
+        args.kind,
+        artifact.target_count,
+        digest,
+    )
+    return 0
+
+
+def main_audit_import(args: argparse.Namespace) -> int:
+    """고정 artifact를 검증해 dev append-only 감사 테이블에만 넣는다."""
+    from fontagit_pipeline.audit_runner import (
+        AuditGateError,
+        import_observations,
+        read_regular_file_once,
+    )
+    from fontagit_pipeline.audit_store import SupabaseAuditStore
+    from fontagit_pipeline.config import load_audit_settings
+
+    try:
+        artifact_bytes = read_regular_file_once(args.artifact, max_bytes=8 * 1024 * 1024)
+        sha_bytes = read_regular_file_once(args.sha256, max_bytes=128)
+        expected_sha256 = sha_bytes.decode("ascii")
+        settings = load_audit_settings()
+        dev_url, dev_key = settings.dev_write_credentials()
+        store = SupabaseAuditStore.from_dev_credentials(dev_url, dev_key)
+        result = import_observations(artifact_bytes, expected_sha256, store)
+    except (AuditGateError, OSError, UnicodeError, ValueError) as exc:
+        logger.error("예약 감사 import 중단: %s", exc)
+        return 3
+    except Exception as exc:  # dev DB 경계; 자격증명은 기록하지 않는다.
+        logger.error("예약 감사 import 실패: %s", exc.__class__.__name__)
+        return 3
+    logger.info(
+        "예약 감사 import 완료: status=%s observations=%d findings=%d applied=%d",
+        result.status,
+        result.observation_count,
+        result.finding_count,
+        result.applied_count,
+    )
+    return 0
+
+
 def main_audit_manifest_apply(args: argparse.Namespace) -> int:
     """검증된 manifest 하나만 전용 RPC로 적용한다.
 
@@ -703,6 +777,23 @@ if __name__ == "__main__":
         "--dry-run", action="store_true", help="DB 자격증명·DB 쓰기 없이 파일 산출물만 생성"
     )
     audit_run_parser.set_defaults(func=main_audit_run)
+
+    audit_scan_parser = subparsers.add_parser(
+        "font-audit-scan",
+        help="공개 prod 링크를 읽기 전용 검사해 검증 가능한 artifact 생성",
+    )
+    audit_scan_parser.add_argument("--kind", choices=["download", "license"], required=True)
+    audit_scan_parser.add_argument("--source", choices=["prod-public"], required=True)
+    audit_scan_parser.add_argument("--out", type=Path, required=True)
+    audit_scan_parser.set_defaults(func=main_audit_scan)
+
+    audit_import_parser = subparsers.add_parser(
+        "font-audit-import",
+        help="검증된 예약 artifact를 dev 감사 테이블에만 import",
+    )
+    audit_import_parser.add_argument("--artifact", type=Path, required=True)
+    audit_import_parser.add_argument("--sha256", type=Path, required=True)
+    audit_import_parser.set_defaults(func=main_audit_import)
 
     manifest_parser = subparsers.add_parser(
         "font-audit-manifest",

@@ -68,6 +68,28 @@ class AuditStore(Protocol):
 
     def complete_run(self, run_id: UUID, report: Mapping[str, object]) -> None: ...
 
+    def scheduled_run_status(
+        self, run_id: UUID, *, kind: str, artifact_sha256: str
+    ) -> str | None: ...
+
+    def start_scheduled_run(
+        self,
+        run_id: UUID,
+        *,
+        kind: str,
+        target_count: int,
+        artifact_sha256: str,
+        started_at: datetime,
+    ) -> None: ...
+
+    def previous_observations(
+        self,
+        font_id: UUID,
+        normalized_url: str,
+        *,
+        before: datetime,
+    ) -> list[Mapping[str, object]]: ...
+
 
 class InMemoryAuditStore:
     """테스트와 dry-run 검증에 쓰는 append-only 저장소."""
@@ -77,6 +99,7 @@ class InMemoryAuditStore:
         self.write_calls = 0
         self._snapshots: dict[tuple[str, ...], UUID] = {}
         self._observations: dict[tuple[UUID, str, str], UUID] = {}
+        self._observation_rows: dict[tuple[UUID, str, str], dict[str, object]] = {}
         self._findings: dict[tuple[UUID, UUID, str], UUID] = {}
         self._finding_ids: set[UUID] = set()
         self._finding_drafts: dict[UUID, FindingDraft] = {}
@@ -144,7 +167,10 @@ class InMemoryAuditStore:
         normalized_url = observation.get("normalized_url")
         if not isinstance(font_id, str) or not isinstance(normalized_url, str):
             raise ValueError("observation requires font_id and normalized_url")
-        return self._observations.setdefault((run_id, font_id, normalized_url), uuid4())
+        key = (run_id, font_id, normalized_url)
+        observation_id = self._observations.setdefault(key, uuid4())
+        self._observation_rows.setdefault(key, {**dict(observation), "run_id": str(run_id)})
+        return observation_id
 
     def save_finding(self, run_id: UUID, finding: FindingDraft) -> UUID:
         self._write()
@@ -163,6 +189,63 @@ class InMemoryAuditStore:
     def complete_run(self, run_id: UUID, report: Mapping[str, object]) -> None:
         self._write()
         self._runs[run_id] = {**self._runs[run_id], "status": "completed", "report": dict(report)}
+
+    def scheduled_run_status(
+        self, run_id: UUID, *, kind: str, artifact_sha256: str
+    ) -> str | None:
+        row = self._runs.get(run_id)
+        if row and (
+            row.get("stage") != "scheduled"
+            or row.get("kind") != kind
+            or row.get("baseline_sha256") != artifact_sha256
+        ):
+            return "mismatch"
+        status = row.get("status") if row else None
+        return status if isinstance(status, str) else None
+
+    def start_scheduled_run(
+        self,
+        run_id: UUID,
+        *,
+        kind: str,
+        target_count: int,
+        artifact_sha256: str,
+        started_at: datetime,
+    ) -> None:
+        self._write()
+        self._runs.setdefault(
+            run_id,
+            {
+                "stage": "scheduled",
+                "kind": kind,
+                "target_count": target_count,
+                "baseline_sha256": artifact_sha256,
+                "started_at": started_at.isoformat(),
+                "status": "running",
+            },
+        )
+
+    def previous_observations(
+        self,
+        font_id: UUID,
+        normalized_url: str,
+        *,
+        before: datetime,
+    ) -> list[Mapping[str, object]]:
+        rows: list[Mapping[str, object]] = []
+        for (_, stored_font_id, stored_url), row in self._observation_rows.items():
+            if stored_font_id != str(font_id) or stored_url != normalized_url:
+                continue
+            observed_at = row.get("observed_at")
+            if not isinstance(observed_at, str):
+                continue
+            try:
+                observed = datetime.fromisoformat(observed_at.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if observed < before:
+                rows.append(row)
+        return rows
 
 
 class SupabaseAuditStore:
@@ -329,6 +412,73 @@ class SupabaseAuditStore:
                 "finished_at": datetime.now(UTC).isoformat(),
             }
         ).eq("id", str(run_id)).execute()
+
+    def scheduled_run_status(
+        self, run_id: UUID, *, kind: str, artifact_sha256: str
+    ) -> str | None:
+        data = (
+            self._schema.table("font_audit_runs")
+            .select("status,stage,parser_version,baseline_sha256")
+            .eq("id", str(run_id))
+            .limit(1)
+            .execute()
+            .data
+        )
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, Mapping) or (
+            row.get("stage") != "scheduled"
+            or row.get("parser_version") != f"scheduled-{kind}-v1"
+            or row.get("baseline_sha256") != artifact_sha256
+        ):
+            return "mismatch"
+        value = row.get("status")
+        return value if isinstance(value, str) else None
+
+    def start_scheduled_run(
+        self,
+        run_id: UUID,
+        *,
+        kind: str,
+        target_count: int,
+        artifact_sha256: str,
+        started_at: datetime,
+    ) -> None:
+        self._one(
+            "font_audit_runs",
+            {
+                "id": str(run_id),
+                "stage": "scheduled",
+                "target_environment": "dev",
+                "target_count": target_count,
+                "parser_version": f"scheduled-{kind}-v1",
+                "baseline_sha256": artifact_sha256,
+                "dry_run": False,
+                "started_at": started_at.isoformat(),
+            },
+        )
+
+    def previous_observations(
+        self,
+        font_id: UUID,
+        normalized_url: str,
+        *,
+        before: datetime,
+    ) -> list[Mapping[str, object]]:
+        data = (
+            self._schema.table("font_link_observations")
+            .select("run_id,observed_at,http_status,content_sha256,error_kind")
+            .eq("font_id", str(font_id))
+            .eq("normalized_url", normalized_url)
+            .lt("observed_at", before.isoformat())
+            .order("observed_at")
+            .execute()
+            .data
+        )
+        if not isinstance(data, list) or not all(isinstance(row, Mapping) for row in data):
+            raise RuntimeError("이전 예약 관찰 조회 결과가 올바르지 않습니다")
+        return data
 
 
 def _report_count(report: Mapping[str, object], key: str) -> int:

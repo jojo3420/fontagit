@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
+import stat
 import tempfile
 import unicodedata
 from collections import defaultdict, deque
@@ -12,8 +14,9 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
-from uuid import NAMESPACE_URL, UUID, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from fontagit_pipeline.audit_http import FetchError, FetchResult, classify_download, fetch_public_url
 from fontagit_pipeline.audit_license import classify_license
@@ -28,6 +31,27 @@ _DOCUMENT_FIELDS = {
     "license": "license_source_url",
 }
 _REQUIRED_LEGAL_ROLES = ("download", "license")
+_SCHEDULED_KINDS = {"download", "license"}
+_SCHEDULED_ERROR_KINDS = {"blocked", "timeout", "network", "oversize"}
+_SCHEDULED_ROOT_FIELDS = {
+    "schema_version",
+    "run_id",
+    "kind",
+    "generated_at",
+    "target_count",
+    "observations",
+    "errors",
+}
+_SCHEDULED_OBSERVATION_FIELDS = {
+    "font_id",
+    "normalized_url",
+    "observed_at",
+    "http_status",
+    "final_url",
+    "content_sha256",
+    "error_kind",
+}
+_MAX_SCHEDULED_ARTIFACT_BYTES = 8 * 1024 * 1024
 
 
 class AuditInputError(ValueError):
@@ -36,6 +60,80 @@ class AuditInputError(ValueError):
 
 class AuditGateError(RuntimeError):
     """검수 대기 또는 과도한 재확인 비율이 남았을 때 발생한다."""
+
+
+@dataclass(frozen=True)
+class ScheduledObservation:
+    """예약 실행에서 외부로 내보낼 수 있는 최소 관찰값."""
+
+    font_id: UUID
+    normalized_url: str
+    observed_at: datetime
+    http_status: int | None
+    final_url: str | None
+    content_sha256: str | None
+    error_kind: str | None = None
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "font_id": str(self.font_id),
+            "normalized_url": self.normalized_url,
+            "observed_at": _utc_text(self.observed_at),
+            "http_status": self.http_status,
+            "final_url": self.final_url,
+            "content_sha256": self.content_sha256,
+            "error_kind": self.error_kind,
+        }
+
+
+@dataclass(frozen=True)
+class ScheduledArtifact:
+    """원문·헤더·자격증명을 담지 않는 예약 감사 산출물."""
+
+    schema_version: int
+    run_id: UUID
+    kind: str
+    generated_at: datetime
+    target_count: int
+    observations: tuple[ScheduledObservation, ...]
+    errors: tuple[str, ...] = ()
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "run_id": str(self.run_id),
+            "kind": self.kind,
+            "generated_at": _utc_text(self.generated_at),
+            "target_count": self.target_count,
+            "observations": [item.as_dict() for item in self.observations],
+            "errors": list(self.errors),
+        }
+
+    @property
+    def canonical_bytes(self) -> bytes:
+        return _canonical_json(self.as_dict())
+
+    @property
+    def sha256(self) -> str:
+        return hashlib.sha256(self.canonical_bytes).hexdigest()
+
+
+@dataclass(frozen=True)
+class ScheduledImportResult:
+    """공개 폰트 값을 적용하지 않는 import 결과."""
+
+    status: str
+    applied_count: int
+    observation_count: int
+    finding_count: int
+
+
+@dataclass(frozen=True)
+class ScheduledTarget:
+    """공개 prod에서 읽은 폰트 ID와 검사 URL."""
+
+    font_id: UUID
+    url: str
 
 
 @dataclass(frozen=True)
@@ -284,6 +382,428 @@ def load_bootstrap_targets(path: Path) -> list[FontTarget]:
         except (TypeError, ValueError) as exc:
             raise AuditInputError("bootstrap entry 필드가 올바르지 않습니다") from exc
     return targets
+
+
+def build_scheduled_artifact(
+    kind: str,
+    observations: Sequence[ScheduledObservation],
+    *,
+    run_id: UUID | None = None,
+    generated_at: datetime | None = None,
+    errors: Sequence[str] = (),
+) -> ScheduledArtifact:
+    """완전히 처리된 1회 scan만 canonical artifact로 고정한다."""
+    if kind not in _SCHEDULED_KINDS:
+        raise AuditGateError("scheduled artifact kind is invalid")
+    if not observations:
+        raise AuditGateError("empty artifact")
+    if errors:
+        raise AuditGateError("scheduled scan contains unprocessed errors")
+    keys = {(item.font_id, item.normalized_url) for item in observations}
+    if len(keys) != len(observations):
+        raise AuditGateError("scheduled artifact observation is duplicated")
+    for observation in observations:
+        _validate_scheduled_observation(observation)
+    created = generated_at or datetime.now(UTC)
+    _require_aware_utc(created, "generated_at")
+    return ScheduledArtifact(
+        schema_version=1,
+        run_id=run_id or uuid4(),
+        kind=kind,
+        generated_at=created.astimezone(UTC),
+        target_count=len(observations),
+        observations=tuple(observations),
+        errors=(),
+    )
+
+
+def scan_scheduled_targets(
+    kind: str,
+    targets: Sequence[ScheduledTarget],
+    *,
+    fetcher: AuditFetcher = fetch_public_url,
+    now: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> ScheduledArtifact:
+    """외부 URL을 기존 SSRF 방어 경계로만 읽어 예약 artifact를 만든다."""
+    if not targets:
+        raise AuditGateError("scheduled scan target count is zero")
+    observations: list[ScheduledObservation] = []
+    errors: list[str] = []
+    for target in targets:
+        try:
+            fetched = fetcher(target.url)
+        except FetchError as exc:
+            errors.append(f"{target.font_id}:{exc.__class__.__name__}")
+            continue
+        observations.append(
+            ScheduledObservation(
+                font_id=target.font_id,
+                normalized_url=target.url,
+                observed_at=now(),
+                http_status=fetched.status,
+                final_url=fetched.final_url,
+                content_sha256=fetched.content_sha256,
+            )
+        )
+    if len(observations) != len(targets):
+        raise AuditGateError(
+            f"scheduled scan did not process every target ({len(errors)} errors)"
+        )
+    return build_scheduled_artifact(kind, observations)
+
+
+def load_prod_public_scheduled_targets(schema: Any, kind: str) -> list[ScheduledTarget]:
+    """anon client의 공개 RLS 조회로 검사할 URL 목록을 exact-count 로드한다."""
+    if kind not in _SCHEDULED_KINDS:
+        raise AuditGateError("scheduled scan kind is invalid")
+    column = "download_url" if kind == "download" else "license_source_url"
+    rows: list[Mapping[str, object]] = []
+    offset = 0
+    page_size = 1000
+    exact_total: int | None = None
+    while True:
+        response = (
+            schema.table("fonts")
+            .select(f"id,{column}", count="exact")
+            .eq("status", "published")
+            .not_.is_(column, "null")
+            .order("id")
+            .range(offset, offset + page_size - 1)
+            .execute()
+        )
+        page = response.data
+        count = response.count
+        if not isinstance(page, list) or not all(isinstance(row, Mapping) for row in page):
+            raise AuditGateError("prod public scheduled target response is invalid")
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+            raise AuditGateError("prod public scheduled target exact count is missing")
+        if exact_total is None:
+            exact_total = count
+        elif exact_total != count:
+            raise AuditGateError("prod public scheduled target count changed during scan")
+        rows.extend(page)
+        if len(page) < page_size:
+            break
+        offset += page_size
+    if exact_total != len(rows) or not rows:
+        raise AuditGateError("prod public scheduled target count is zero or incomplete")
+    targets: list[ScheduledTarget] = []
+    for row in rows:
+        font_id = row.get("id")
+        url = row.get(column)
+        if not isinstance(font_id, str) or not isinstance(url, str) or not url.strip():
+            raise AuditGateError("prod public scheduled target schema is invalid")
+        _validate_public_http_url(url, column)
+        targets.append(ScheduledTarget(font_id=UUID(font_id), url=url))
+    if len({(item.font_id, item.url) for item in targets}) != len(targets):
+        raise AuditGateError("prod public scheduled target is duplicated")
+    return targets
+
+
+def write_scheduled_artifact(artifact: ScheduledArtifact, out: Path) -> str:
+    """검증된 artifact와 SHA sidecar만 원자적으로 저장한다."""
+    content = artifact.canonical_bytes
+    digest = hashlib.sha256(content).hexdigest()
+    _atomic_write(out / "observations.json", content)
+    _atomic_write(out / "observations.sha256", f"{digest}\n".encode("ascii"))
+    return digest
+
+
+def read_regular_file_once(path: Path, *, max_bytes: int) -> bytes:
+    """symlink을 따르지 않고 같은 열린 파일 설명자에서 한 번만 읽는다."""
+    if max_bytes < 1:
+        raise ValueError("max_bytes must be positive")
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise AuditGateError("scheduled artifact file is not a safe regular file") from exc
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode) or before.st_size < 1 or before.st_size > max_bytes:
+            raise AuditGateError("scheduled artifact file size is invalid")
+        chunks: list[bytes] = []
+        remaining = max_bytes + 1
+        while remaining:
+            chunk = os.read(descriptor, min(64 * 1024, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        content = b"".join(chunks)
+        after = os.fstat(descriptor)
+        if (
+            len(content) > max_bytes
+            or before.st_dev != after.st_dev
+            or before.st_ino != after.st_ino
+            or before.st_size != after.st_size
+            or len(content) != after.st_size
+        ):
+            raise AuditGateError("scheduled artifact file changed while reading")
+        return content
+    finally:
+        os.close(descriptor)
+
+
+def parse_scheduled_artifact(payload_bytes: bytes, expected_sha256: str) -> ScheduledArtifact:
+    """해시를 먼저 확인한 뒤 closed schema와 canonical bytes를 검증한다."""
+    if not payload_bytes or len(payload_bytes) > _MAX_SCHEDULED_ARTIFACT_BYTES:
+        raise AuditGateError("scheduled artifact size is invalid")
+    expected = expected_sha256.strip()
+    if len(expected) != 64 or any(char not in "0123456789abcdef" for char in expected):
+        raise AuditGateError("scheduled artifact SHA-256 is invalid")
+    actual = hashlib.sha256(payload_bytes).hexdigest()
+    if not hmac.compare_digest(actual, expected):
+        raise AuditGateError("scheduled artifact SHA-256 mismatch")
+    try:
+        payload = json.loads(payload_bytes)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise AuditGateError("scheduled artifact schema is invalid") from exc
+    if not isinstance(payload, dict) or set(payload) != _SCHEDULED_ROOT_FIELDS:
+        raise AuditGateError("scheduled artifact schema is not closed")
+    if payload.get("schema_version") != 1:
+        raise AuditGateError("scheduled artifact schema_version is invalid")
+    kind = payload.get("kind")
+    raw_observations = payload.get("observations")
+    raw_errors = payload.get("errors")
+    target_count = payload.get("target_count")
+    if (
+        kind not in _SCHEDULED_KINDS
+        or not isinstance(raw_observations, list)
+        or not raw_observations
+        or not isinstance(raw_errors, list)
+        or raw_errors
+        or isinstance(target_count, bool)
+        or not isinstance(target_count, int)
+        or target_count != len(raw_observations)
+    ):
+        raise AuditGateError("scheduled artifact schema is invalid")
+    try:
+        artifact = ScheduledArtifact(
+            schema_version=1,
+            run_id=UUID(_strict_string(payload, "run_id")),
+            kind=kind,
+            generated_at=_parse_utc(_strict_string(payload, "generated_at"), "generated_at"),
+            target_count=target_count,
+            observations=tuple(_parse_scheduled_observation(item) for item in raw_observations),
+            errors=(),
+        )
+    except (TypeError, ValueError) as exc:
+        raise AuditGateError("scheduled artifact schema is invalid") from exc
+    if len({(item.font_id, item.normalized_url) for item in artifact.observations}) != target_count:
+        raise AuditGateError("scheduled artifact observation is duplicated")
+    if artifact.canonical_bytes != payload_bytes:
+        raise AuditGateError("scheduled artifact bytes are not canonical")
+    return artifact
+
+
+def import_observations(
+    payload_bytes: bytes,
+    expected_sha256: str,
+    store: AuditStore,
+) -> ScheduledImportResult:
+    """검증한 예약 관찰을 dev 감사 테이블에만 append한다."""
+    artifact = parse_scheduled_artifact(payload_bytes, expected_sha256)
+    existing_status = store.scheduled_run_status(
+        artifact.run_id, kind=artifact.kind, artifact_sha256=artifact.sha256
+    )
+    if existing_status == "completed":
+        return ScheduledImportResult("already_imported", 0, 0, 0)
+    if existing_status not in {None, "running"}:
+        raise AuditGateError("scheduled run_id is not importable")
+    if existing_status is None:
+        store.start_scheduled_run(
+            artifact.run_id,
+            kind=artifact.kind,
+            target_count=artifact.target_count,
+            artifact_sha256=artifact.sha256,
+            started_at=artifact.generated_at,
+        )
+
+    statuses: list[str] = []
+    finding_count = 0
+    for observation in artifact.observations:
+        history = store.previous_observations(
+            observation.font_id, observation.normalized_url, before=observation.observed_at
+        )
+        evidence_id: UUID | None = None
+        if artifact.kind == "license" and observation.content_sha256 is not None:
+            evidence_id = store.save_snapshot(
+                artifact.run_id,
+                SnapshotDraft(
+                    font_id=observation.font_id,
+                    provider="scheduled-audit",
+                    provider_record_id=str(observation.font_id),
+                    source_kind="public",
+                    document_kind="license",
+                    request_url=observation.normalized_url,
+                    final_url=observation.final_url or observation.normalized_url,
+                    http_status=observation.http_status,
+                    raw_text=None,
+                    raw_sha256=observation.content_sha256,
+                    normalized_sha256=observation.content_sha256,
+                    extracted={"content_sha256": observation.content_sha256},
+                    evidence_locations={"source": "scheduled-artifact"},
+                    extraction_rule_id="scheduled-license-hash-v1",
+                    collected_at=observation.observed_at,
+                ),
+            )
+        store.save_observation(
+            artifact.run_id,
+            {
+                **observation.as_dict(),
+                "snapshot_id": str(evidence_id) if evidence_id else None,
+            },
+        )
+        status = _scheduled_status(artifact.kind, observation, history)
+        statuses.append(status)
+        if status in {"needs_review", "broken"}:
+            store.save_finding(
+                artifact.run_id,
+                FindingDraft(
+                    font_id=observation.font_id,
+                    field_name=("download_status" if artifact.kind == "download" else "license_status"),
+                    before_value=None,
+                    proposed_value=status,
+                    evidence_id=evidence_id,
+                    confidence="unverified",
+                    review_reason=(
+                        "scheduled_download_observation"
+                        if artifact.kind == "download"
+                        else "scheduled_license_hash_changed"
+                    ),
+                    auto_applicable=False,
+                ),
+            )
+            finding_count += 1
+    final_status = "broken" if "broken" in statuses else (
+        "needs_review" if "needs_review" in statuses else "verified"
+    )
+    store.complete_run(
+        artifact.run_id,
+        {
+            "success_count": artifact.target_count,
+            "verified_count": sum(item == "verified" for item in statuses),
+            "needs_review_count": sum(item == "needs_review" for item in statuses),
+            "broken_count": sum(item == "broken" for item in statuses),
+        },
+    )
+    return ScheduledImportResult(final_status, 0, artifact.target_count, finding_count)
+
+
+def _scheduled_status(
+    kind: str,
+    observation: ScheduledObservation,
+    history: Sequence[Mapping[str, object]],
+) -> str:
+    current = observation.as_dict()
+    current["run_id"] = "current"
+    if kind == "download":
+        if observation.http_status in {404, 410}:
+            return classify_download([*history, current])
+        return "verified" if observation.http_status is not None and 200 <= observation.http_status < 400 else "needs_review"
+    previous_hashes = {
+        value
+        for row in history
+        if isinstance((value := row.get("content_sha256")), str)
+    }
+    if observation.http_status is None or not (200 <= observation.http_status < 400):
+        return "needs_review"
+    if observation.content_sha256 is None:
+        return "needs_review"
+    return "needs_review" if previous_hashes and observation.content_sha256 not in previous_hashes else "verified"
+
+
+def _parse_scheduled_observation(value: object) -> ScheduledObservation:
+    if not isinstance(value, dict) or set(value) != _SCHEDULED_OBSERVATION_FIELDS:
+        raise AuditGateError("scheduled observation schema is not closed")
+    status = value.get("http_status")
+    if isinstance(status, bool) or (status is not None and not isinstance(status, int)):
+        raise AuditGateError("scheduled observation http_status is invalid")
+    final_url = value.get("final_url")
+    digest = value.get("content_sha256")
+    error_kind = value.get("error_kind")
+    if final_url is not None and not isinstance(final_url, str):
+        raise AuditGateError("scheduled observation final_url is invalid")
+    if digest is not None and not isinstance(digest, str):
+        raise AuditGateError("scheduled observation content_sha256 is invalid")
+    if error_kind is not None and not isinstance(error_kind, str):
+        raise AuditGateError("scheduled observation error_kind is invalid")
+    observation = ScheduledObservation(
+        font_id=UUID(_strict_string(value, "font_id")),
+        normalized_url=_strict_string(value, "normalized_url"),
+        observed_at=_parse_utc(_strict_string(value, "observed_at"), "observed_at"),
+        http_status=status,
+        final_url=final_url,
+        content_sha256=digest,
+        error_kind=error_kind,
+    )
+    _validate_scheduled_observation(observation)
+    return observation
+
+
+def _validate_scheduled_observation(observation: ScheduledObservation) -> None:
+    _validate_public_http_url(observation.normalized_url, "normalized_url")
+    if observation.final_url is not None:
+        _validate_public_http_url(observation.final_url, "final_url")
+    _require_aware_utc(observation.observed_at, "observed_at")
+    if observation.http_status is not None and not 100 <= observation.http_status <= 599:
+        raise AuditGateError("scheduled observation http_status is invalid")
+    if observation.content_sha256 is not None and (
+        len(observation.content_sha256) != 64
+        or any(char not in "0123456789abcdef" for char in observation.content_sha256)
+    ):
+        raise AuditGateError("scheduled observation content_sha256 is invalid")
+    if observation.error_kind not in {None, *_SCHEDULED_ERROR_KINDS}:
+        raise AuditGateError("scheduled observation error_kind is invalid")
+    if observation.error_kind is not None:
+        raise AuditGateError("scheduled artifact contains an unprocessed error")
+
+
+def _validate_public_http_url(value: str, field_name: str) -> None:
+    try:
+        parsed = urlparse(value)
+        port = parsed.port
+    except ValueError as exc:
+        raise AuditGateError(f"scheduled observation {field_name} is invalid") from exc
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or port is not None and not 1 <= port <= 65535
+    ):
+        raise AuditGateError(f"scheduled observation {field_name} is invalid")
+
+
+def _parse_utc(value: str, field_name: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise AuditGateError(f"scheduled artifact {field_name} is invalid") from exc
+    _require_aware_utc(parsed, field_name)
+    return parsed.astimezone(UTC)
+
+
+def _require_aware_utc(value: datetime, field_name: str) -> None:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise AuditGateError(f"scheduled artifact {field_name} must include timezone")
+
+
+def _utc_text(value: datetime) -> str:
+    _require_aware_utc(value, "timestamp")
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _strict_string(value: Mapping[str, object], key: str) -> str:
+    item = value.get(key)
+    if not isinstance(item, str) or not item:
+        raise AuditGateError(f"scheduled artifact {key} is invalid")
+    return item
+
+
+def _canonical_json(value: Mapping[str, object]) -> bytes:
+    return (json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
 
 
 def write_audit_artifacts(report: AuditReport, out: Path) -> str:
