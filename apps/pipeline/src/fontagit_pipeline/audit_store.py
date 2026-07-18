@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -28,16 +27,12 @@ class SnapshotDraft:
     extracted: Mapping[str, object]
     evidence_locations: Mapping[str, object]
     normalized_sha256: str
+    raw_sha256: str | None = None
     raw_text: str | None = None
     http_status: int | None = None
     extraction_rule_id: str | None = None
     parser_version: str = "audit-runner-v1"
     collected_at: datetime | None = None
-
-    @property
-    def raw_sha256(self) -> str:
-        return hashlib.sha256((self.raw_text or "").encode("utf-8")).hexdigest()
-
 
 @dataclass(frozen=True)
 class FindingDraft:
@@ -81,6 +76,7 @@ class InMemoryAuditStore:
         self.fail_on_write = fail_on_write
         self.write_calls = 0
         self._snapshots: dict[tuple[str, ...], UUID] = {}
+        self._observations: dict[tuple[UUID, str, str], UUID] = {}
         self._findings: dict[tuple[UUID, UUID, str], UUID] = {}
         self._finding_ids: set[UUID] = set()
         self._finding_drafts: dict[UUID, FindingDraft] = {}
@@ -90,6 +86,10 @@ class InMemoryAuditStore:
     @property
     def finding_count(self) -> int:
         return len(self._finding_ids)
+
+    @property
+    def observation_count(self) -> int:
+        return len(self._observations)
 
     def mark_applied(self, finding_id: UUID) -> None:
         """테스트에서 적용 완료된 finding을 불변 상태로 전환한다."""
@@ -126,6 +126,8 @@ class InMemoryAuditStore:
         return run_id
 
     def save_snapshot(self, run_id: UUID, snapshot: SnapshotDraft) -> UUID:
+        if snapshot.raw_sha256 is None:
+            raise ValueError("observed snapshot requires an explicit raw_sha256")
         self._write()
         key = (
             str(snapshot.font_id),
@@ -138,7 +140,11 @@ class InMemoryAuditStore:
 
     def save_observation(self, run_id: UUID, observation: Mapping[str, object]) -> UUID:
         self._write()
-        return uuid4()
+        font_id = observation.get("font_id")
+        normalized_url = observation.get("normalized_url")
+        if not isinstance(font_id, str) or not isinstance(normalized_url, str):
+            raise ValueError("observation requires font_id and normalized_url")
+        return self._observations.setdefault((run_id, font_id, normalized_url), uuid4())
 
     def save_finding(self, run_id: UUID, finding: FindingDraft) -> UUID:
         self._write()
@@ -236,6 +242,8 @@ class SupabaseAuditStore:
         return _row_uuid(row)
 
     def save_snapshot(self, run_id: UUID, snapshot: SnapshotDraft) -> UUID:
+        if snapshot.raw_sha256 is None:
+            raise ValueError("observed snapshot requires an explicit raw_sha256")
         payload = {
             "run_id": str(run_id),
             "font_id": str(snapshot.font_id),
@@ -270,7 +278,21 @@ class SupabaseAuditStore:
         return _row_uuid(row)
 
     def save_observation(self, run_id: UUID, observation: Mapping[str, object]) -> UUID:
-        return _row_uuid(self._one("font_link_observations", {"run_id": str(run_id), **observation}))
+        font_id = observation.get("font_id")
+        normalized_url = observation.get("normalized_url")
+        if not isinstance(font_id, str) or not isinstance(normalized_url, str):
+            raise ValueError("observation requires font_id and normalized_url")
+        row = self._insert_once(
+            "font_link_observations",
+            {**observation, "run_id": str(run_id)},
+            on_conflict="run_id,font_id,normalized_url",
+            lookup={
+                "run_id": str(run_id),
+                "font_id": font_id,
+                "normalized_url": normalized_url,
+            },
+        )
+        return _row_uuid(row)
 
     def save_finding(self, run_id: UUID, finding: FindingDraft) -> UUID:
         payload = {

@@ -27,6 +27,7 @@ _DOCUMENT_FIELDS = {
     "download": "download_url",
     "license": "license_source_url",
 }
+_REQUIRED_LEGAL_ROLES = ("download", "license")
 
 
 class AuditInputError(ValueError):
@@ -178,6 +179,8 @@ def run_legal_audit(
     fetcher: AuditFetcher = fetch_public_url,
 ) -> AuditReport:
     """승인된 후보만 안전하게 수집하고 검수 finding을 append-only로 기록한다."""
+    if not targets:
+        raise AuditInputError("audit requires at least one target")
     source_registry = registry if isinstance(registry, SourceRegistry) else SourceRegistry.model_validate(registry)
     _validate_license_rules(rules)
     baseline_sha256 = _baseline_sha256(targets)
@@ -242,18 +245,40 @@ def load_bootstrap_targets(path: Path) -> list[FontTarget]:
         before = entry.get("before")
         if not isinstance(before, Mapping):
             raise AuditInputError("bootstrap entry before가 올바르지 않습니다")
+        current = entry.get("current")
+        if current is not None and not isinstance(current, Mapping):
+            raise AuditInputError("bootstrap entry current가 올바르지 않습니다")
+        values = {**before, **current} if isinstance(current, Mapping) else before
         try:
+            name_ko = _optional(values, "name_ko")
+            foundry = _optional(values, "foundry")
+            # bootstrap의 before.official_url은 이전 적재값이라는 증거다.
+            # 역할을 알 수 없으므로 현재 URL이나 자동 적용 후보로 승격하지 않는다.
+            legacy_url = _optional(before, "official_url")
+            legacy_candidates = (
+                CandidateUrl(
+                    url=legacy_url,
+                    document_role="metadata",
+                    source="existing-db",
+                    name_ko=_optional(before, "name_ko"),
+                    maker=_optional(before, "foundry"),
+                ),
+            ) if legacy_url else ()
             targets.append(
                 FontTarget(
                     font_id=UUID(_required(entry, "font_id")),
                     slug=_required(entry, "slug"),
-                    name_ko=_optional(before, "name_ko"),
-                    name_en=_optional(before, "name_en"),
-                    source_tier=_required(before, "source_tier"),
+                    name_ko=name_ko,
+                    name_en=_optional(values, "name_en"),
+                    source_tier=_required(values, "source_tier"),
                     provider=_required(entry, "provider"),
                     provider_record_id=_required(entry, "provider_record_id"),
                     reference_url=_required(entry, "source_url"),
-                    foundry=_optional(before, "foundry"),
+                    foundry=foundry,
+                    foundry_url=_optional(values, "foundry_url"),
+                    download_url=_optional(values, "download_url"),
+                    license_source_url=_optional(values, "license_source_url"),
+                    candidates=legacy_candidates,
                 )
             )
         except (TypeError, ValueError) as exc:
@@ -337,7 +362,7 @@ def _audit_target(
         )
         finding_ids.append(_save_finding(store, run_id, finding, dry_run))
 
-    outcomes: list[str] = []
+    outcomes = {role: "pending" for role in _REQUIRED_LEGAL_ROLES}
     for role, field_name in _DOCUMENT_FIELDS.items():
         candidate = _choose_candidate(candidates, effective_target, role, registry)
         if candidate is None:
@@ -355,7 +380,7 @@ def _audit_target(
             if outcome not in {"verified", "needs_review", "broken", "pending"}:
                 raise AuditInputError("invalid dry-run fixture status")
             if role in {"download", "license"}:
-                outcomes.append(outcome)
+                outcomes[role] = outcome
             finding_ids.append(
                 _save_finding(
                     store,
@@ -375,8 +400,11 @@ def _audit_target(
             continue
 
         fetched = fetcher(candidate.url)
+        raw_sha256 = hashlib.sha256(fetched.content).hexdigest()
         parsed = _parse_candidate(fetched, candidate)
-        extracted, evidence = _extracted_evidence(target, candidate, parsed)
+        extracted, evidence = _extracted_evidence(
+            target, candidate, parsed, raw_sha256=raw_sha256
+        )
         snapshot = _fetched_snapshot(
             target,
             candidate,
@@ -384,6 +412,7 @@ def _audit_target(
             source_kind,
             extracted,
             evidence,
+            raw_sha256=raw_sha256,
         )
         snapshot_id = _save_snapshot(store, run_id, snapshot, dry_run)
         snapshot_ids.append(snapshot_id)
@@ -392,7 +421,7 @@ def _audit_target(
 
         outcome = _candidate_outcome(candidate, fetched, parsed, registry, rules)
         if role in {"download", "license"}:
-            outcomes.append(outcome)
+            outcomes[role] = outcome
         finding = FindingDraft(
             font_id=target.font_id,
             field_name=field_name,
@@ -467,10 +496,19 @@ def _discover_noonnu_cta(
         name_ko=target.name_ko,
         maker=target.foundry,
     )
+    raw_sha256 = hashlib.sha256(fetched.content).hexdigest()
     parsed = _parse_candidate(fetched, reference)
-    extracted, evidence = _extracted_evidence(target, reference, parsed)
+    extracted, evidence = _extracted_evidence(
+        target, reference, parsed, raw_sha256=raw_sha256
+    )
     snapshot = _fetched_snapshot(
-        target, reference, fetched, "noonnu", extracted, evidence
+        target,
+        reference,
+        fetched,
+        "noonnu",
+        extracted,
+        evidence,
+        raw_sha256=raw_sha256,
     )
     snapshot_id = _save_snapshot(store, run_id, snapshot, dry_run)
     if not dry_run:
@@ -512,6 +550,8 @@ def _extracted_evidence(
     target: FontTarget,
     candidate: CandidateUrl,
     parsed: NoonnuFontSnapshot | None,
+    *,
+    raw_sha256: str | None = None,
 ) -> tuple[dict[str, object], dict[str, object]]:
     extracted: dict[str, object] = {
         "candidate_role": candidate.document_role,
@@ -521,6 +561,8 @@ def _extracted_evidence(
         "target_slug": target.slug,
     }
     evidence: dict[str, object] = {"candidate_url": "audit_runner.candidate"}
+    if raw_sha256 is not None:
+        extracted["raw_sha256"] = raw_sha256
     if parsed:
         extracted.update(
             {
@@ -540,14 +582,17 @@ def _fetched_snapshot(
     source_kind: str,
     extracted: Mapping[str, object],
     evidence: Mapping[str, object],
+    *,
+    raw_sha256: str,
 ) -> SnapshotDraft:
     document_kind = "metadata" if candidate.document_role == "homepage" else candidate.document_role
+    extracted_payload = {**extracted, "raw_sha256": raw_sha256}
     normalized_payload = {
         "request_url": candidate.url,
         "final_url": fetched.final_url,
         "document_role": candidate.document_role,
         "source_kind": source_kind,
-        "extracted": extracted,
+        "extracted": extracted_payload,
         "evidence_locations": evidence,
     }
     normalized = hashlib.sha256(
@@ -567,9 +612,10 @@ def _fetched_snapshot(
         request_url=candidate.url,
         final_url=fetched.final_url,
         http_status=fetched.status,
-        extracted=dict(extracted),
+        extracted=extracted_payload,
         evidence_locations=dict(evidence),
         normalized_sha256=normalized,
+        raw_sha256=raw_sha256,
         extraction_rule_id="candidate-priority-v2",
     )
 
@@ -614,6 +660,7 @@ def _planned_snapshot(
         extracted=extracted,
         evidence_locations=evidence,
         normalized_sha256=normalized,
+        raw_sha256=None,
         extraction_rule_id="candidate-priority-dry-run-v2",
     )
 
@@ -673,14 +720,15 @@ def _parsed_identity_matches(parsed: NoonnuFontSnapshot | None, candidate: Candi
     )
 
 
-def _target_status(outcomes: Sequence[str]) -> str:
-    if not outcomes:
-        return "pending"
-    if "broken" in outcomes:
+def _target_status(outcomes: Mapping[str, str]) -> str:
+    values = [outcomes[role] for role in _REQUIRED_LEGAL_ROLES]
+    if "broken" in values:
         return "broken"
-    if "needs_review" in outcomes:
+    if "needs_review" in values:
         return "needs_review"
-    return "verified" if "verified" in outcomes else "pending"
+    if "pending" in values:
+        return "pending"
+    return "verified" if all(value == "verified" for value in values) else "pending"
 
 
 def _save_snapshot(

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import hashlib
+import json
 from pathlib import Path
 from uuid import uuid4
 
@@ -12,7 +14,10 @@ from fontagit_pipeline.audit_runner import (
     AuditGateError,
     CandidateUrl,
     FontTarget,
+    AuditInputError,
+    _fetched_snapshot,
     _finding_id,
+    load_bootstrap_targets,
     run_legal_audit,
     select_pilot,
     write_dry_run_artifacts,
@@ -190,6 +195,18 @@ def test_findings_are_immutable_per_run_and_urls_use_safe_priority() -> None:
         ),
     )
     assert repeat_key == first.finding_ids[0]
+    observation = {
+        "font_id": str(target.font_id),
+        "snapshot_id": str(first.snapshot_ids[0]),
+        "normalized_url": "https://clova.ai/shared",
+    }
+    observation_store = InMemoryAuditStore()
+    first_observation = observation_store.save_observation(first.run_id, observation)
+    second_observation = observation_store.save_observation(
+        first.run_id, {**observation, "snapshot_id": str(first.snapshot_ids[-1])}
+    )
+    assert first_observation == second_observation
+    assert observation_store.observation_count == 1
     store.mark_applied(first.finding_ids[0])
     assert store.save_finding(
         first.run_id,
@@ -251,6 +268,70 @@ def test_dry_run_writes_artifacts_without_calling_store(tmp_path: Path) -> None:
     assert (tmp_path / "pilot.json.sha256").read_text(encoding="ascii") == f"{digest}\n"
     assert store.write_calls == 0
 
+    with pytest.raises(AuditInputError, match="at least one"):
+        run_legal_audit(
+            [],
+            InMemoryAuditStore(fail_on_write=True),
+            registry={"version": 1, "entries": []},
+            rules={"version": 1, "standard_licenses": [], "maker_templates": []},
+            dry_run=True,
+            fetcher=_forbidden_fetch,
+        )
+
+    legacy_manifest = tmp_path / "bootstrap.json"
+    legacy_manifest.write_text(
+        json.dumps(
+            {
+                "entries": [
+                    {
+                        "font_id": str(uuid4()),
+                        "slug": "legacy-font",
+                        "provider": "noonnu",
+                        "provider_record_id": "999",
+                        "source_url": "https://noonnu.cc/font_page/999",
+                        "before": {
+                            "name_ko": "레거시 폰트",
+                            "source_tier": "B",
+                            "foundry": "레거시 제작사",
+                            "official_url": "https://legacy.example/download",
+                            "foundry_url": "https://legacy.example/",
+                            "download_url": "https://legacy.example/file",
+                            "license_source_url": "https://legacy.example/license",
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    legacy_target = load_bootstrap_targets(legacy_manifest)[0]
+    assert (
+        legacy_target.foundry_url,
+        legacy_target.download_url,
+        legacy_target.license_source_url,
+    ) == (
+        "https://legacy.example/",
+        "https://legacy.example/file",
+        "https://legacy.example/license",
+    )
+    assert {(item.document_role, item.url, item.source) for item in legacy_target.candidates} == {
+        ("metadata", "https://legacy.example/download", "existing-db"),
+    }
+
+    raw = b"observed source bytes"
+    snapshot = _fetched_snapshot(
+        _targets()[0],
+        CandidateUrl("https://source.example/license", "license", "official", "name", "maker"),
+        FetchResult(200, "https://source.example/license", raw, hashlib.sha256(raw).hexdigest(), 0),
+        "official",
+        {},
+        {},
+        raw_sha256=hashlib.sha256(raw).hexdigest(),
+    )
+    assert snapshot.raw_text is None
+    assert snapshot.raw_sha256 == hashlib.sha256(raw).hexdigest()
+    assert snapshot.extracted["raw_sha256"] == hashlib.sha256(raw).hexdigest()
+
     fixture_target = replace(
         _targets()[0],
         foundry="네이버",
@@ -287,6 +368,34 @@ def test_dry_run_writes_artifacts_without_calling_store(tmp_path: Path) -> None:
         fetcher=_forbidden_fetch,
     )
     assert fixture_report.broken_count == 1
+
+    incomplete_target = replace(
+        fixture_target,
+        candidates=(replace(fixture_target.candidates[0], dry_run_status="verified"),),
+    )
+    incomplete_report = run_legal_audit(
+        [incomplete_target],
+        store,
+        registry={
+            "version": 1,
+            "entries": [
+                {
+                    "maker": "네이버",
+                    "domain": "clova.ai",
+                    "roles": ["download"],
+                    "source_kind": "official",
+                    "approved_by": "reviewer",
+                    "approved_at": "2026-07-18T00:00:00Z",
+                    "evidence_snapshot_id": "evidence-1",
+                }
+            ],
+        },
+        rules={"version": 1, "standard_licenses": [], "maker_templates": []},
+        dry_run=True,
+        fetcher=_forbidden_fetch,
+    )
+    assert incomplete_report.verified_count == 0
+    assert incomplete_report.pending_count == 1
 
     with pytest.raises(ValueError, match="ALLOWLIST"):
         AuditSettings(
