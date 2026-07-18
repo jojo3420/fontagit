@@ -70,6 +70,8 @@ class CandidateUrl:
     name_ko: str | None
     maker: str | None
     meaningful_cta: bool = False
+    observations: tuple[Mapping[str, object], ...] = ()
+    dry_run_status: str | None = None
 
 
 AuditFetcher = Callable[[str], FetchResult]
@@ -303,10 +305,20 @@ def _audit_target(
     fetcher: AuditFetcher,
 ) -> _TargetResult:
     candidates = _all_candidates(target)
+    reference_result = _discover_noonnu_cta(
+        target,
+        candidates,
+        run_id,
+        store,
+        registry,
+        dry_run=dry_run,
+        fetcher=fetcher,
+    )
+    candidates.extend(reference_result.candidates)
     discovery = [
         item for item in candidates if _candidate_priority(item, registry, target)[0] >= 4
     ]
-    snapshot_ids: list[UUID] = []
+    snapshot_ids: list[UUID] = list(reference_result.snapshot_ids)
     finding_ids: list[UUID] = []
 
     if discovery:
@@ -326,7 +338,7 @@ def _audit_target(
 
     outcomes: list[str] = []
     for role, field_name in _DOCUMENT_FIELDS.items():
-        candidate = _choose_candidate(target, role, registry)
+        candidate = _choose_candidate(candidates, target, role, registry)
         if candidate is None:
             continue
         priority, source_kind = _candidate_priority(candidate, registry, target)
@@ -338,8 +350,11 @@ def _audit_target(
             snapshot = _planned_snapshot(target, candidate, source_kind)
             snapshot_id = _save_snapshot(store, run_id, snapshot, dry_run=True)
             snapshot_ids.append(snapshot_id)
+            outcome = candidate.dry_run_status or "pending"
+            if outcome not in {"verified", "needs_review", "broken", "pending"}:
+                raise AuditInputError("invalid dry-run fixture status")
             if role in {"download", "license"}:
-                outcomes.append("pending")
+                outcomes.append(outcome)
             finding_ids.append(
                 _save_finding(
                     store,
@@ -351,7 +366,7 @@ def _audit_target(
                         proposed_value=candidate.url,
                         evidence_id=snapshot_id,
                         confidence="reference" if source_kind == "noonnu" else source_kind,
-                        review_reason="dry-run candidate was not requested",
+                        review_reason=f"dry-run fixture status: {outcome}",
                     ),
                     dry_run=True,
                 )
@@ -372,19 +387,7 @@ def _audit_target(
         snapshot_id = _save_snapshot(store, run_id, snapshot, dry_run)
         snapshot_ids.append(snapshot_id)
         if not dry_run:
-            store.save_observation(
-                run_id,
-                {
-                    "font_id": str(target.font_id),
-                    "snapshot_id": str(snapshot_id),
-                    "normalized_url": fetched.final_url,
-                    "observed_at": datetime.now(UTC).isoformat(),
-                    "http_status": fetched.status,
-                    "final_url": fetched.final_url,
-                    "content_sha256": fetched.content_sha256,
-                    "error_kind": None,
-                },
-            )
+            _save_link_observation(store, run_id, target, snapshot_id, fetched)
 
         outcome = _candidate_outcome(candidate, fetched, parsed, registry, rules)
         if role in {"download", "license"}:
@@ -423,21 +426,69 @@ def _all_candidates(target: FontTarget) -> list[CandidateUrl]:
                     maker=target.foundry,
                 )
             )
-    if _is_noonnu_url(target.reference_url):
-        candidates.append(
-            CandidateUrl(
-                url=target.reference_url,
-                document_role="homepage",
-                source="noonnu",
-                name_ko=target.name_ko,
-                maker=target.foundry,
-                meaningful_cta=True,
-            )
-        )
     unique: dict[tuple[str, str], CandidateUrl] = {}
     for candidate in candidates:
         unique.setdefault((candidate.document_role, candidate.url), candidate)
     return list(unique.values())
+
+
+@dataclass(frozen=True)
+class _DiscoveryResult:
+    candidates: list[CandidateUrl]
+    snapshot_ids: list[UUID]
+
+
+def _discover_noonnu_cta(
+    target: FontTarget,
+    candidates: Sequence[CandidateUrl],
+    run_id: UUID,
+    store: AuditStore,
+    registry: SourceRegistry,
+    *,
+    dry_run: bool,
+    fetcher: AuditFetcher,
+) -> _DiscoveryResult:
+    approved_download = any(
+        item.document_role == "download"
+        and _candidate_matches_target(item, target)
+        and _candidate_priority(item, registry, target)[0] <= 1
+        for item in candidates
+    )
+    if dry_run or approved_download or not _is_noonnu_reference(target) or not target.foundry:
+        return _DiscoveryResult([], [])
+
+    fetched = fetcher(target.reference_url)
+    reference = CandidateUrl(
+        url=target.reference_url,
+        document_role="metadata",
+        source="noonnu",
+        name_ko=target.name_ko,
+        maker=target.foundry,
+    )
+    parsed = _parse_candidate(fetched, reference)
+    extracted, evidence = _extracted_evidence(target, reference, parsed)
+    snapshot = _fetched_snapshot(
+        target, reference, fetched, "noonnu", extracted, evidence
+    )
+    snapshot_id = _save_snapshot(store, run_id, snapshot, dry_run)
+    if not dry_run:
+        _save_link_observation(store, run_id, target, snapshot_id, fetched)
+    if parsed is None:
+        return _DiscoveryResult([], [snapshot_id])
+    return _DiscoveryResult(
+        [
+            CandidateUrl(
+                url=url,
+                document_role="download",
+                source="noonnu",
+                name_ko=parsed.name_ko,
+                maker=parsed.foundry,
+                meaningful_cta=True,
+            )
+            for url in parsed.download_candidates
+        ],
+        [snapshot_id],
+    )
 
 
 def _parse_candidate(
@@ -521,7 +572,7 @@ def _fetched_snapshot(
 def _planned_snapshot(
     target: FontTarget, candidate: CandidateUrl, source_kind: str
 ) -> SnapshotDraft:
-    """dry-run의 후보 메타데이터다. URL을 요청하거나 원문을 보관하지 않는다."""
+    """네트워크 없는 dry-run에서 후보와 fixture 판정 근거를 안정적으로 남긴다."""
     document_kind = "metadata" if candidate.document_role == "homepage" else candidate.document_role
     extracted = {
         "candidate_role": candidate.document_role,
@@ -529,9 +580,23 @@ def _planned_snapshot(
         "name_ko": candidate.name_ko,
         "maker": candidate.maker,
         "target_slug": target.slug,
+        "fixture_status": candidate.dry_run_status,
     }
+    evidence = {"candidate_url": "audit_runner.dry_run_fixture"}
     normalized = hashlib.sha256(
-        json.dumps(extracted | {"url": candidate.url}, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        json.dumps(
+            {
+                "request_url": candidate.url,
+                "final_url": candidate.url,
+                "document_role": candidate.document_role,
+                "source_kind": source_kind,
+                "extracted": extracted,
+                "evidence_locations": evidence,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
     ).hexdigest()
     return SnapshotDraft(
         font_id=target.font_id,
@@ -542,9 +607,9 @@ def _planned_snapshot(
         request_url=candidate.url,
         final_url=candidate.url,
         extracted=extracted,
-        evidence_locations={"candidate_url": "audit_runner.dry_run"},
+        evidence_locations=evidence,
         normalized_sha256=normalized,
-        extraction_rule_id="candidate-priority-dry-run-v1",
+        extraction_rule_id="candidate-priority-dry-run-v2",
     )
 
 
@@ -562,15 +627,37 @@ def _candidate_outcome(
             "observed_at": datetime.now(UTC).isoformat(),
         }
         if fetched.status in {404, 410}:
-            return classify_download([observation])
+            return classify_download([*candidate.observations, observation])
         # URL 응답만으로는 대상 폰트 파일·문서 일치를 증명할 수 없다.
-        return "needs_review"
+        return "verified" if _parsed_identity_matches(parsed, candidate) else "needs_review"
     if candidate.document_role == "license":
         if candidate.source not in {"official", "public"} or not _parsed_identity_matches(parsed, candidate):
             return "needs_review"
         assert parsed is not None
         return classify_license(parsed, registry, rules).status
     return "needs_review"
+
+
+def _save_link_observation(
+    store: AuditStore,
+    run_id: UUID,
+    target: FontTarget,
+    snapshot_id: UUID,
+    fetched: FetchResult,
+) -> None:
+    store.save_observation(
+        run_id,
+        {
+            "font_id": str(target.font_id),
+            "snapshot_id": str(snapshot_id),
+            "normalized_url": fetched.final_url,
+            "observed_at": datetime.now(UTC).isoformat(),
+            "http_status": fetched.status,
+            "final_url": fetched.final_url,
+            "content_sha256": fetched.content_sha256,
+            "error_kind": None,
+        },
+    )
 
 
 def _parsed_identity_matches(parsed: NoonnuFontSnapshot | None, candidate: CandidateUrl) -> bool:
@@ -668,13 +755,14 @@ def _exactly_one_slug(fonts: Sequence[FontTarget], slug: str) -> FontTarget:
 
 
 def _choose_candidate(
+    candidates: Sequence[CandidateUrl],
     target: FontTarget,
     role: str,
     registry: SourceRegistry,
 ) -> CandidateUrl | None:
     """승인 제작사·공공기관·눈누 CTA·기존 주소 순으로 하나만 고른다."""
-    candidates = [item for item in _all_candidates(target) if item.document_role == role]
-    valid = [item for item in candidates if _candidate_matches_target(item, target)]
+    role_candidates = [item for item in candidates if item.document_role == role]
+    valid = [item for item in role_candidates if _candidate_matches_target(item, target)]
     valid.sort(key=lambda item: _candidate_priority(item, registry, target))
     if not valid:
         return None
@@ -687,6 +775,8 @@ def _candidate_priority(
     registry: SourceRegistry,
     target: FontTarget,
 ) -> tuple[int, str]:
+    if candidate.source == "discovery":
+        return 4, "discovery"
     entry = _approved_registry_entry(candidate, registry, target)
     if entry is not None and entry.source_kind == "official":
         return 0, "official"

@@ -83,6 +83,9 @@ def test_pilot_is_deterministic_and_requires_unique_stable_slugs() -> None:
     assert len(selected) == 50
     assert {"흰꼬리수리", "횡성한우체"} <= {target.slug for target in selected}
     assert selected == select_pilot(targets, size=50)
+    assert abs(sum(item.source_tier == "A" for item in selected) - sum(item.source_tier == "B" for item in selected)) <= 2
+    with pytest.raises(ValueError, match="required slug"):
+        select_pilot(targets, size=50, require_slugs=["없는-폰트"])
     duplicate_slug = replace(targets[0], font_id=uuid4())
     with pytest.raises(ValueError, match="slug"):
         select_pilot([*targets, duplicate_slug], size=50)
@@ -195,6 +198,43 @@ def test_dry_run_writes_artifacts_without_calling_store(tmp_path: Path) -> None:
     assert (tmp_path / "pilot.md").exists()
     assert (tmp_path / "pilot.json.sha256").read_text(encoding="ascii") == f"{digest}\n"
     assert store.write_calls == 0
+
+    fixture_target = replace(
+        _targets()[0],
+        foundry="네이버",
+        candidates=(
+            CandidateUrl(
+                url="https://clova.ai/handwriting/list.html",
+                document_role="download",
+                source="official",
+                name_ko="흰꼬리수리 별칭",
+                maker="네이버",
+                dry_run_status="broken",
+            ),
+        ),
+    )
+    fixture_report = run_legal_audit(
+        [fixture_target],
+        store,
+        registry={
+            "version": 1,
+            "entries": [
+                {
+                    "maker": "네이버",
+                    "domain": "clova.ai",
+                    "roles": ["download"],
+                    "source_kind": "official",
+                    "approved_by": "reviewer",
+                    "approved_at": "2026-07-18T00:00:00Z",
+                    "evidence_snapshot_id": "evidence-1",
+                }
+            ],
+        },
+        rules={"version": 1, "standard_licenses": [], "maker_templates": []},
+        dry_run=True,
+        fetcher=_forbidden_fetch,
+    )
+    assert fixture_report.broken_count == 1
 
     with pytest.raises(ValueError, match="ALLOWLIST"):
         AuditSettings(
