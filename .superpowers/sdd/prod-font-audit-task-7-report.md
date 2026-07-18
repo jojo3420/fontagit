@@ -52,3 +52,10 @@
 - GREEN: `reviewed_by`는 JSON string + 공백 제거 후 비어 있지 않음, `reviewed_at`은 timezone이 있는 JSON string과 안전한 timestamp cast를 요구한다. status도 JSON string `approved`만 허용한다.
 - entry가 가리키는 snapshot/finding ID 집합과 bundle 집합이 정확히 같아야 하며, top/run baseline SHA는 64자리 소문자 hex와 동일값을 요구한다. bootstrap은 non-negative 정수 집계와 `entries`·`review_rows` 수의 계약을 확인한다.
 - 로컬 임시 PostgreSQL 17에서 0018 재적용과 SQL `ALL PASS`를 확인했다. Python focused 2 passed, 전체 184 passed, scoped ruff/mypy 통과. 원격 dev/prod 적용은 하지 않았다.
+
+## 동시 작업 통합·거부 경로 증명 (2026-07-18)
+
+- 작업 중 다른 작업자가 남긴 dirty 변경(`verify_manifest_bytes`, 한 번 읽은 bytes 재사용, prod enable·승인 ID·승인 SHA gate)을 확인해 의도대로 보존·통합했다. 누가 만들었는지는 Git 작업 트리에 기록돼 있지 않아 특정할 수 없다.
+- Python 핵심 테스트는 같은 bytes로 hash·파싱을 확인하고, prod에서 enable 또는 승인 SHA가 빠지면 입력창·RPC 전에 중단하며 manifest 본문을 실행당 한 번만 읽는 것을 검증한다. RPC의 `p_schema_version`은 정수다.
+- SQL 거부 테스트는 null `reviewed_at`, 배열 `reviewed_by`, orphan snapshot, 잘못된 top baseline, top/run baseline 불일치가 snapshot/finding/font 변경 없이 거부되는지 확인한다. bootstrap matched 불일치 뒤 `font_sources` 전체 행 수도 변하지 않는다.
+- 검증: 로컬 임시 PostgreSQL 17 migration + SQL `ALL PASS`; Python focused 11 passed, 전체 185 passed, scoped ruff/mypy 통과. 원격 dev/prod에는 접근하거나 적용하지 않았다.

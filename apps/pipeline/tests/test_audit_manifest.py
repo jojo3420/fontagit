@@ -13,6 +13,7 @@ import pytest
 from fontagit_pipeline.audit_manifest import (
     ManifestError,
     build_manifest,
+    verify_manifest_bytes,
     verify_manifest_file,
     write_manifest_bundle,
 )
@@ -137,6 +138,9 @@ def test_manifest_is_deterministic_reversible_and_hash_verified(tmp_path: Path) 
 
     paths = write_manifest_bundle(first, tmp_path)
     assert verify_manifest_file(paths.forward, paths.forward_sha256) == first.forward
+    assert verify_manifest_bytes(
+        paths.forward.read_bytes(), paths.forward_sha256.read_text(encoding="ascii")
+    ) == first.forward
     assert verify_manifest_file(paths.reverse, paths.reverse_sha256) == first.reverse
     tampered = json.loads(paths.forward.read_text(encoding="utf-8"))
     tampered["entries"][0]["after"]["download_url"] = "https://evil.example/font.zip"

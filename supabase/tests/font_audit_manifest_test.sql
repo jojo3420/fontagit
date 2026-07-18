@@ -119,6 +119,11 @@ begin
   v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex'); v_failed:=false;
   begin perform fontagit.apply_font_audit_manifest(v_text,v_hash,1); exception when others then if sqlerrm not like '%baseline SHA%' then raise; end if; v_failed:=true; end;
   if not v_failed then raise exception 'invalid baseline was accepted'; end if;
+
+  v:=pg_temp.manifest('00000000-0000-0000-0000-000000001100'); v:=jsonb_set(v,'{evidence_bundle,run,baseline_sha256}',to_jsonb(repeat('b',64)));
+  v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex'); v_failed:=false;
+  begin perform fontagit.apply_font_audit_manifest(v_text,v_hash,1); exception when others then if sqlerrm not like '%baseline SHA%' then raise; end if; v_failed:=true; end;
+  if not v_failed then raise exception 'run baseline mismatch was accepted'; end if;
   if (select count(*) from fontagit.font_source_snapshots)<>v_before or (select count(*) from fontagit.font_audit_findings)<>v_before_findings then raise exception 'invalid manifest wrote evidence'; end if;
 end;
 $$;
@@ -128,7 +133,7 @@ insert into fontagit.fonts(id,slug,name_en,name_ko,category_ko,source_tier,offic
  ('00000000-0000-0000-0000-000000001003','bootstrap-one','Bootstrap One','연결 하나','고딕','B','https://example.test/three','draft',false,'pending'),
  ('00000000-0000-0000-0000-000000001004','bootstrap-two','Bootstrap Two','연결 둘','고딕','B','https://example.test/four','draft',false,'pending');
 do $$
-declare v jsonb; v_text text; v_hash text;
+declare v jsonb; v_text text; v_hash text; v_source_count integer;
 begin
   select jsonb_build_object('schema_version',1,'matched',2,'unmatched',0,'conflicts',0,'review_rows','[]'::jsonb,'entries',jsonb_agg(jsonb_build_object(
     'font_id',id,'slug',slug,'provider','noonnu','provider_record_id',case slug when 'bootstrap-one' then '2001' else '2002' end,'source_url','https://noonnu.cc/font_page/x',
@@ -139,8 +144,10 @@ begin
      or exists(select 1 from fontagit.fonts where slug like 'bootstrap-%' and foundry is not null) then
     raise exception 'bootstrap normal apply changed public data';
   end if;
+  select count(*) into v_source_count from fontagit.font_sources;
   v:=jsonb_set(v,'{matched}','1'::jsonb); v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex');
   begin perform fontagit.apply_font_source_bootstrap(v_text,v_hash,1); raise exception 'bootstrap count mismatch should fail'; exception when others then if sqlerrm not like '%bootstrap counts%' then raise; end if; end;
+  if (select count(*) from fontagit.font_sources)<>v_source_count then raise exception 'bootstrap count mismatch changed font_sources'; end if;
 end;
 $$;
 
