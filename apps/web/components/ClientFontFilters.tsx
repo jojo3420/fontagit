@@ -1,16 +1,27 @@
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
+import type { Font } from "@/types/font";
 import { parseFilterQuery, buildFilterQuery } from "@/lib/filters";
 import styles from "./FontFilters.module.css";
 
 const CATEGORIES = ["고딕", "명조", "손글씨", "장식"] as const;
 const PRICES = ["무료", "유료"] as const;
 
-export function ClientFontFilters() {
+interface ClientFontFiltersProps {
+  fonts: Font[];
+}
+
+export function ClientFontFilters({ fonts }: ClientFontFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { categories, tiers, sort } = parseFilterQuery(searchParams);
+
+  // 카테고리별 개수 계산
+  const categoryCount = new Map<string, number>();
+  CATEGORIES.forEach((cat) => {
+    categoryCount.set(cat, fonts.filter((f) => f.category === cat).length);
+  });
 
   const handleCategoryChange = (category: string, checked: boolean) => {
     const newCategories = new Set(categories);
@@ -49,7 +60,7 @@ export function ClientFontFilters() {
               checked={categories.has(c)}
               onChange={(e) => handleCategoryChange(c, e.target.checked)}
             />
-            {c}
+            {c} {categoryCount.get(c)}
           </label>
         ))}
       </section>
