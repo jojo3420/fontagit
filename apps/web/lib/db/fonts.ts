@@ -79,25 +79,53 @@ export async function getFontBySlug(slug: string): Promise<Font | null> {
 }
 
 export async function getAllSlugs(): Promise<string[]> {
-  const { data, error } = await supabaseClient
-    .from("fonts")
-    .select("slug")
-    .in("status", ["published", "hold", "discontinued"]);
+  const pageSize = 1000;
+  const allData: { slug: string }[] = [];
+  let from = 0;
 
-  if (error) throw error;
+  while (true) {
+    const { data, error } = await supabaseClient
+      .from("fonts")
+      .select("slug")
+      .in("status", ["published", "hold", "discontinued"])
+      .order("slug")
+      .range(from, from + pageSize - 1);
 
-  return (data || []).map((row: { slug: string }) => row.slug);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+
+    allData.push(...data);
+    if (data.length < pageSize) break;
+
+    from += pageSize;
+  }
+
+  return allData.map((row) => row.slug);
 }
 
 export async function getPublishedSlugs(): Promise<string[]> {
-  const { data, error } = await supabaseClient
-    .from("fonts")
-    .select("slug")
-    .eq("status", "published");
+  const pageSize = 1000;
+  const allData: { slug: string }[] = [];
+  let from = 0;
 
-  if (error) throw error;
+  while (true) {
+    const { data, error } = await supabaseClient
+      .from("fonts")
+      .select("slug")
+      .eq("status", "published")
+      .order("slug")
+      .range(from, from + pageSize - 1);
 
-  return (data || []).map((row: { slug: string }) => row.slug);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+
+    allData.push(...data);
+    if (data.length < pageSize) break;
+
+    from += pageSize;
+  }
+
+  return allData.map((row) => row.slug);
 }
 
 export function filterFreeAlternatives(

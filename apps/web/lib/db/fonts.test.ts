@@ -1,5 +1,5 @@
 import { beforeEach, describe, it, expect, vi } from "vitest";
-import { filterFreeAlternatives, getPublishedSlugs, getAllFonts } from "@/lib/db/fonts";
+import { filterFreeAlternatives, getPublishedSlugs, getAllSlugs, getAllFonts } from "@/lib/db/fonts";
 import { fonts } from "@/data/fonts";
 import { supabaseClient } from "./client";
 
@@ -15,10 +15,12 @@ beforeEach(() => {
 
 describe("getPublishedSlugs", () => {
   it("published 상태의 slug만 조회한다", async () => {
-    const eq = vi.fn().mockResolvedValue({
+    const range = vi.fn().mockResolvedValue({
       data: [{ slug: "noto-sans-kr" }],
       error: null,
     });
+    const order = vi.fn().mockReturnValue({ range });
+    const eq = vi.fn().mockReturnValue({ order });
     const select = vi.fn().mockReturnValue({ eq });
     vi.mocked(supabaseClient.from).mockReturnValue({ select } as never);
 
@@ -26,6 +28,109 @@ describe("getPublishedSlugs", () => {
     expect(supabaseClient.from).toHaveBeenCalledWith("fonts");
     expect(select).toHaveBeenCalledWith("slug");
     expect(eq).toHaveBeenCalledWith("status", "published");
+    expect(order).toHaveBeenCalledWith("slug");
+  });
+
+  it("1,000개를 넘는 published 폰트 slug를 페이지네이션으로 전량 조회한다", async () => {
+    // 첫 번째 배치: 1,000개
+    const firstBatch = Array.from({ length: 1000 }, (_, i) => ({
+      slug: `font-${i}`,
+    }));
+
+    // 두 번째 배치: 242개 (총 1,242개)
+    const secondBatch = Array.from({ length: 242 }, (_, i) => ({
+      slug: `font-${1000 + i}`,
+    }));
+
+    let rangeCallCount = 0;
+    const range = vi.fn().mockImplementation(() => {
+      rangeCallCount++;
+      if (rangeCallCount === 1) {
+        return Promise.resolve({ data: firstBatch, error: null });
+      } else {
+        return Promise.resolve({ data: secondBatch, error: null });
+      }
+    });
+
+    const order = vi.fn().mockReturnValue({ range });
+    const eq = vi.fn().mockReturnValue({ order });
+    const select = vi.fn().mockReturnValue({ eq });
+
+    vi.mocked(supabaseClient.from).mockReturnValue({ select } as never);
+
+    const result = await getPublishedSlugs();
+
+    expect(result).toHaveLength(1242);
+    expect(result[0]).toBe("font-0");
+    expect(result[1241]).toBe("font-1241");
+  });
+});
+
+describe("getAllSlugs", () => {
+  it("published, hold, discontinued 상태의 모든 slug를 조회한다", async () => {
+    const range = vi.fn().mockResolvedValue({
+      data: [
+        { slug: "noto-sans-kr" },
+        { slug: "한글-고딕" },
+        { slug: "paused-font" },
+      ],
+      error: null,
+    });
+    const order = vi.fn().mockReturnValue({ range });
+    const inChain = vi.fn().mockReturnValue({ order });
+    const select = vi.fn().mockReturnValue({ in: inChain });
+    vi.mocked(supabaseClient.from).mockReturnValue({ select } as never);
+
+    const result = await getAllSlugs();
+
+    expect(result).toEqual([
+      "noto-sans-kr",
+      "한글-고딕",
+      "paused-font",
+    ]);
+    expect(supabaseClient.from).toHaveBeenCalledWith("fonts");
+    expect(select).toHaveBeenCalledWith("slug");
+    expect(inChain).toHaveBeenCalledWith("status", [
+      "published",
+      "hold",
+      "discontinued",
+    ]);
+    expect(order).toHaveBeenCalledWith("slug");
+  });
+
+  it("1,000개를 넘는 slug를 페이지네이션으로 전량 조회한다", async () => {
+    // 첫 번째 배치: 1,000개
+    const firstBatch = Array.from({ length: 1000 }, (_, i) => ({
+      slug: `font-${i}`,
+    }));
+
+    // 두 번째 배치: 242개 (총 1,242개, 서비스 실제 규모)
+    const secondBatch = Array.from({ length: 242 }, (_, i) => ({
+      slug: `font-${1000 + i}`,
+    }));
+
+    let rangeCallCount = 0;
+    const range = vi.fn().mockImplementation(() => {
+      rangeCallCount++;
+      if (rangeCallCount === 1) {
+        return Promise.resolve({ data: firstBatch, error: null });
+      } else {
+        return Promise.resolve({ data: secondBatch, error: null });
+      }
+    });
+
+    const order = vi.fn().mockReturnValue({ range });
+    const inChain = vi.fn().mockReturnValue({ order });
+    const select = vi.fn().mockReturnValue({ in: inChain });
+
+    vi.mocked(supabaseClient.from).mockReturnValue({ select } as never);
+
+    const result = await getAllSlugs();
+
+    expect(result).toHaveLength(1242);
+    expect(result[0]).toBe("font-0");
+    expect(result[1241]).toBe("font-1241");
+    expect(range).toHaveBeenCalledTimes(2);
   });
 });
 
