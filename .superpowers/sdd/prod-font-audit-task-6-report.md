@@ -64,3 +64,17 @@
 - focused: `uv run pytest tests/test_audit_runner.py tests/test_config.py -q` → `8 passed`
 - full pipeline: `uv run pytest -q` → `182 passed`
 - scoped ruff/mypy → 통과
+
+## 재리뷰 보완: dry-run 키와 눈누 CTA
+
+- RED: dry-run finding UUID가 `proposed_value`에 따라 달라졌고, dev 쓰기 설정은 prod URL/key가 없는 상태도 통과했다.
+- GREEN: dry-run finding UUID는 `(run_id, font_id, field_name)`만 사용한다. 같은 키의 proposal 본문이 달라도 같은 UUID다.
+- 눈누 상세는 injected fetcher로만 읽어 `extract_noonnu_font`의 이름·제작사·다운로드 CTA를 구조화한다. 대상 이름이 맞고 DB 제작사가 비어 있으면 상세 제작사로 보완한다. 제작사가 있으면 일치해야 하며, 이름 또는 제작사가 다르면 CTA 후보를 만들지 않는다. CTA 목적지 도메인이 `noonnu.cc`일 필요는 없다.
+- dev 감사 쓰기는 `SUPABASE_DEV_URL`, `SUPABASE_DEV_SECRET_KEY`, allowlist와 함께 `SUPABASE_PROD_URL`, `SUPABASE_PROD_SECRET_KEY` 모두를 필수 비교값으로 요구한다. project ref와 service key가 모두 달라야 한다.
+- dry-run은 fetcher·AuditStore를 호출하지 않는다. `/tmp/fontagit-task6-rereview/pilot.json` SHA-256은 `1581cc704a2672e599d9aafb12d0ab68ef54579d57c9abd85ad3760d19055e26`이며 pending gate 종료 코드 3이 정상 발생했다.
+
+## 재리뷰 최종 검증
+
+- focused: `8 passed`
+- full pipeline: `182 passed`
+- scoped ruff/mypy: 통과
