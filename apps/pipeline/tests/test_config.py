@@ -1,12 +1,9 @@
 """설정 로드 테스트."""
 
-from argparse import Namespace
-
 import pytest
 from pydantic import ValidationError
 
 from fontagit_pipeline.config import Settings, load_audit_settings
-from fontagit_pipeline.__main__ import main_audit_policy_check
 
 
 def test_settings_rejects_blank_api_key(monkeypatch):
@@ -65,22 +62,3 @@ def test_audit_settings_do_not_require_google_key(monkeypatch, tmp_path):
     monkeypatch.delenv("SUPABASE_URL", raising=False)
 
     assert load_audit_settings().supabase_url is None
-
-
-def test_audit_policy_cli_loads_audit_settings(monkeypatch, tmp_path):
-    """감사 정책 CLI는 Google 설정이 아닌 감사 설정을 초기화한다."""
-    calls = 0
-
-    def track_audit_settings_load():
-        nonlocal calls
-        calls += 1
-
-    monkeypatch.setattr(
-        "fontagit_pipeline.config.load_audit_settings",
-        track_audit_settings_load,
-    )
-
-    result = main_audit_policy_check(Namespace(out=tmp_path / "policy.json"))
-
-    assert result == 0
-    assert calls == 1

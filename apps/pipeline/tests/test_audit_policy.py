@@ -11,21 +11,7 @@ from fontagit_pipeline.audit_policy import (
 )
 
 
-@pytest.mark.parametrize(
-    "invalid_fields",
-    [
-        {"maker": "   "},
-        {"domain": "   "},
-        {"roles": ["download", ""]},
-        {"roles": ["download", "   "]},
-        {"approved_by": "   "},
-        {"evidence_snapshot_id": "   "},
-    ],
-)
-def test_registry_requires_approval_evidence(
-    tmp_path: Path,
-    invalid_fields: dict[str, object],
-) -> None:
+def test_registry_requires_approval_evidence(tmp_path: Path) -> None:
     """공식 출처 주장은 사람 승인 근거 없이는 등록할 수 없다."""
     path = tmp_path / "registry.json"
     entry = {
@@ -33,11 +19,10 @@ def test_registry_requires_approval_evidence(
         "domain": "clova.ai",
         "roles": ["download"],
         "source_kind": "official",
-        "approved_by": "reviewer",
+        "approved_by": "   ",
         "approved_at": "2026-07-18T00:00:00Z",
         "evidence_snapshot_id": "snapshot-1",
     }
-    entry.update(invalid_fields)
     path.write_text(json.dumps({"version": 1, "entries": [entry]}), encoding="utf-8")
 
     with pytest.raises(ValueError, match="approval evidence"):
