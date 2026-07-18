@@ -15,6 +15,14 @@ import styles from "./page.module.css";
 
 export const dynamicParams = false;
 
+function decodeRouteSlug(slug: string): string {
+  try {
+    return decodeURIComponent(slug);
+  } catch {
+    return slug;
+  }
+}
+
 export async function generateStaticParams() {
   const slugs = await getAllSlugs();
   return slugs.map((slug) => ({ slug }));
@@ -25,7 +33,8 @@ export async function generateMetadata({
 }: {
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
-  const { slug } = await params;
+  const { slug: encodedSlug } = await params;
+  const slug = decodeRouteSlug(encodedSlug);
   const font = await getFontBySlug(slug);
 
   if (!font) {
@@ -38,7 +47,14 @@ export async function generateMetadata({
 
   const fontUrl = getSiteUrl(`/fonts/${font.slug}/`);
   const tierLabel = font.tier === "free" ? "무료" : "유료";
-  const description = `${font.foundry} 제작 서체. ${tierLabel} 라이선스. ${font.availableWeights.length}가지 굵기.`;
+  const foundry = font.foundry?.trim();
+  const description = [
+    foundry ? `${foundry} 제작 서체.` : null,
+    `${tierLabel} 라이선스.`,
+    `${font.availableWeights.length}가지 굵기.`,
+  ]
+    .filter(Boolean)
+    .join(" ");
   const isPublished = (font.status ?? "published") === "published";
 
   return {
@@ -58,7 +74,8 @@ export async function generateMetadata({
 }
 
 export default async function FontDetail({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
+  const { slug: encodedSlug } = await params;
+  const slug = decodeRouteSlug(encodedSlug);
   const font = await getFontBySlug(slug);
   if (!font) notFound();
 
