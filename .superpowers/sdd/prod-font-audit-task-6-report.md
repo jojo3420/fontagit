@@ -78,3 +78,12 @@
 - focused: `8 passed`
 - full pipeline: `182 passed`
 - scoped ruff/mypy: 통과
+
+## 필수 역할·실제 bootstrap·관찰 멱등성 보완
+
+- 다운로드와 라이선스를 필수 역할로 따로 집계한다. 둘 중 하나라도 없으면 전체 폰트는 `verified`가 될 수 없다.
+- Task 3 manifest의 `before`와 선택적 `current`에서 제작사·홈페이지·다운로드·라이선스 URL을 읽는다. 역할이 없는 `official_url`은 metadata discovery로만 유지한다.
+- 링크 관찰은 DB unique key `(run_id, font_id, normalized_url)`로 원자 upsert한다. 같은 URL의 여러 역할은 첫 관찰을 재사용하고 역할은 snapshot과 finding에 남긴다.
+- 수집 원문은 공개값에 저장하지 않고 SHA-256만 snapshot 내부 근거로 보존한다.
+- 검증: focused `3 passed`, audit/config `36 passed`, 전체 pipeline `182 passed`, scoped ruff/mypy 통과.
+- 실제 prod/dev DB 쓰기, migration, deploy, 외부 네트워크 호출은 실행하지 않았다.
