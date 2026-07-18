@@ -63,14 +63,15 @@ def approve(
         raise ValueError(f"finding이 proposed 상태가 아님: {finding_id}")
 
     reviewed_at = datetime.now(UTC).isoformat()
+    update_data = {
+        "status": "approved",
+        "reviewed_by": reviewer,
+        "reviewed_at": reviewed_at,
+    }
+    if note and note.strip():
+        update_data["review_reason"] = note.strip()
     updated = (
-        table.update(
-            {
-                "status": "approved",
-                "reviewed_by": reviewer,
-                "reviewed_at": reviewed_at,
-            }
-        )
+        table.update(update_data)
         .eq("id", finding_id)
         .eq("status", "proposed")
         .execute()
@@ -91,7 +92,8 @@ def reject(
     reviewer = reviewed_by.strip()
     if not reviewer:
         raise ValueError("reviewed_by가 필요합니다")
-    if not note.strip():
+    reason = note.strip()
+    if not reason:
         raise ValueError("반려 사유가 필요합니다")
 
     table = schema.table("font_audit_findings")
@@ -105,6 +107,7 @@ def reject(
                 "status": "rejected",
                 "reviewed_by": reviewer,
                 "reviewed_at": datetime.now(UTC).isoformat(),
+                "review_reason": reason,
             }
         )
         .eq("id", finding_id)

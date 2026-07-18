@@ -29,13 +29,44 @@ def test_approve_updates_only_the_exact_proposed_finding(mocker) -> None:
     """승인은 지정한 finding 하나의 검수 메타데이터만 바꾼다."""
     schema, tables, finding_id = _finding_schema(mocker)
 
-    nr.approve(schema, finding_id, reviewed_by="operator@example.com")
+    nr.approve(
+        schema,
+        finding_id,
+        reviewed_by="operator@example.com",
+        note="  제작사 원문 확인  ",
+    )
 
     finding = tables["font_audit_findings"]
     payload = finding.update.call_args.args[0]
     assert payload["status"] == "approved"
     assert payload["reviewed_by"] == "operator@example.com"
     assert payload["reviewed_at"]
+    assert payload["review_reason"] == "제작사 원문 확인"
+    finding.update.return_value.eq.assert_called_once_with("id", finding_id)
+    finding.update.return_value.eq.return_value.eq.assert_called_once_with(
+        "status", "proposed"
+    )
+    tables["fonts"].update.assert_not_called()
+    tables["license_proposals"].update.assert_not_called()
+
+
+def test_reject_records_reason_on_only_the_exact_proposed_finding(mocker) -> None:
+    """반려는 지정 finding에 공백을 정리한 사유만 기록한다."""
+    schema, tables, finding_id = _finding_schema(mocker)
+
+    nr.reject(
+        schema,
+        finding_id,
+        reviewed_by="operator@example.com",
+        note="  공식 다운로드 근거 없음  ",
+    )
+
+    finding = tables["font_audit_findings"]
+    payload = finding.update.call_args.args[0]
+    assert payload["status"] == "rejected"
+    assert payload["reviewed_by"] == "operator@example.com"
+    assert payload["reviewed_at"]
+    assert payload["review_reason"] == "공식 다운로드 근거 없음"
     finding.update.return_value.eq.assert_called_once_with("id", finding_id)
     finding.update.return_value.eq.return_value.eq.assert_called_once_with(
         "status", "proposed"
