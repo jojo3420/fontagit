@@ -1,229 +1,64 @@
-"""눈누 라이선스 제안 검수 테스트."""
-import json
-from datetime import datetime, timezone
+"""눈누 finding 검수 경계의 핵심 회귀 테스트."""
 
 import pytest
 
 from fontagit_pipeline import noonnu_review as nr
 
 
-class TestBuildFontUpdateFromProposal:
-    """build_font_update_from_proposal 함수 테스트."""
-
-    def test_basic_fields(self) -> None:
-        """기본 필드 변환 검증."""
-        proposal = {
-            "proposed_commercial_free": True,
-            "proposed_embedding": "allowed",
-            "proposed_redistribute": "allowed",
-            "proposed_modify": "allowed",
-            "proposed_license_type": "OFL",
-            "proposed_weights": [400, 700],
-            "proposed_italic": False,
-            "raw_permissions": {
-                "embedding": "allowed",
-                "print": "allowed",
-                "website": "allowed",
-                "packaging": "allowed",
-                "video": "allowed",
-                "branding": "allowed",
-            },
-        }
-        official_url = "https://fonts.google.com/specimen/Roboto"
-
-        result = nr.build_font_update_from_proposal(proposal, official_url)
-
-        assert result["is_commercial_free"] is True
-        assert result["allow_embedding"] == "allowed"
-        assert result["allow_redistribute"] == "allowed"
-        assert result["allow_modify"] == "allowed"
-        assert result["license_type"] == "OFL"
-        assert result["license_verified"] is True
-        assert result["auto_approved"] is False
-        assert result["status"] == "published"
-        assert result["license_source_url"] == official_url
-        assert result["weights"] == [400, 700]
-        assert result["variants"] == []
-
-    def test_with_italic(self) -> None:
-        """이탤릭 포함 검증."""
-        proposal = {
-            "proposed_commercial_free": True,
-            "proposed_embedding": "allowed",
-            "proposed_redistribute": None,
-            "proposed_modify": None,
-            "proposed_license_type": "Apache",
-            "proposed_weights": [],
-            "proposed_italic": True,
-            "raw_permissions": {
-                "embedding": "allowed",
-                "print": "allowed",
-                "website": "allowed",
-                "packaging": "allowed",
-                "video": "allowed",
-                "branding": "allowed",
-            },
-        }
-
-        result = nr.build_font_update_from_proposal(proposal, "http://example.com")
-
-        assert result["variants"] == ["italic"]
-
-    def test_license_note_recalculation(self) -> None:
-        """조건부 라이선스 노트 재계산 검증."""
-        proposal = {
-            "proposed_commercial_free": False,
-            "proposed_embedding": "conditional",
-            "proposed_redistribute": None,
-            "proposed_modify": None,
-            "proposed_license_type": "custom",
-            "proposed_weights": [400],
-            "proposed_italic": False,
-            "raw_permissions": {
-                "embedding": "conditional",
-                "print": "allowed",
-                "website": "conditional",
-                "packaging": "allowed",
-                "video": "allowed",
-                "branding": "allowed",
-            },
-        }
-
-        result = nr.build_font_update_from_proposal(proposal, "http://example.com")
-
-        # map_license_rows에서 계산된 license_note 포함 확인
-        assert result["license_note"] is not None
-        assert "임베딩 조건부" in result["license_note"]
-
-    def test_verified_at_format(self) -> None:
-        """verified_at이 ISO 형식인지 검증."""
-        proposal = {
-            "proposed_commercial_free": True,
-            "proposed_embedding": "allowed",
-            "proposed_redistribute": None,
-            "proposed_modify": None,
-            "proposed_license_type": "OFL",
-            "proposed_weights": [],
-            "proposed_italic": False,
-            "raw_permissions": {
-                "embedding": "allowed",
-                "print": "allowed",
-                "website": "allowed",
-                "packaging": "allowed",
-                "video": "allowed",
-                "branding": "allowed",
-            },
-        }
-
-        result = nr.build_font_update_from_proposal(proposal, "http://example.com")
-
-        # ISO 형식 검증 (확인만)
-        assert "verified_at" in result
-        assert isinstance(result["verified_at"], str)
-        # ISO 형식은 'T'를 포함
-        assert "T" in result["verified_at"]
-
-    def test_empty_weights_default(self) -> None:
-        """empty weights는 [] 유지."""
-        proposal = {
-            "proposed_commercial_free": True,
-            "proposed_embedding": "allowed",
-            "proposed_redistribute": None,
-            "proposed_modify": None,
-            "proposed_license_type": "OFL",
-            "proposed_weights": None,
-            "proposed_italic": False,
-            "raw_permissions": {
-                "embedding": "allowed",
-                "print": "allowed",
-                "website": "allowed",
-                "packaging": "allowed",
-                "video": "allowed",
-                "branding": "allowed",
-            },
-        }
-
-        result = nr.build_font_update_from_proposal(proposal, "http://example.com")
-
-        assert result["weights"] == []
+def _finding_schema(mocker, *, status: str = "proposed"):
+    tables = {
+        "font_audit_findings": mocker.MagicMock(),
+        "fonts": mocker.MagicMock(),
+        "license_proposals": mocker.MagicMock(),
+    }
+    schema = mocker.MagicMock()
+    schema.table.side_effect = tables.__getitem__
+    finding_id = "30000000-0000-0000-0000-000000000008"
+    finding = tables["font_audit_findings"]
+    finding.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+        "id": finding_id,
+        "status": status,
+    }
+    finding.update.return_value.eq.return_value.eq.return_value.execute.return_value.data = [
+        {"id": finding_id}
+    ]
+    return schema, tables, finding_id
 
 
-class TestApprove:
-    """approve 함수 테스트 (M5 상태 검증)"""
+def test_approve_updates_only_the_exact_proposed_finding(mocker) -> None:
+    """승인은 지정한 finding 하나의 검수 메타데이터만 바꾼다."""
+    schema, tables, finding_id = _finding_schema(mocker)
 
-    def test_approve_requires_proposed_status(self, mocker) -> None:
-        """review_status가 proposed가 아니면 거부 (M5 검증)"""
-        mock_schema = mocker.MagicMock()
-        # license_proposals 조회: review_status='approved' (이미 승인됨)
-        mock_schema.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [
-            {
-                "review_status": "approved",
-                "parse_status": "parsed",
-                "proposed_commercial_free": True,
-            }
-        ]
+    nr.approve(schema, finding_id, reviewed_by="operator@example.com")
 
-        with pytest.raises(ValueError, match="proposed 상태가 아님"):
-            nr.approve(mock_schema, "test-slug")
-
-    def test_approve_requires_parsed_status(self, mocker) -> None:
-        """parse_status가 parsed가 아니면 거부 (M5 검증)"""
-        mock_schema = mocker.MagicMock()
-        # license_proposals 조회: parse_status='failed'
-        mock_schema.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [
-            {
-                "review_status": "proposed",
-                "parse_status": "failed",
-                "proposed_commercial_free": True,
-            }
-        ]
-
-        with pytest.raises(ValueError, match="parsed 상태가 아님"):
-            nr.approve(mock_schema, "test-slug")
-
-    def test_approve_requires_commercial_free_confirmed(self, mocker) -> None:
-        """proposed_commercial_free가 None이면 거부 (M5 검증)"""
-        mock_schema = mocker.MagicMock()
-        # license_proposals 조회: proposed_commercial_free=None
-        mock_schema.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [
-            {
-                "review_status": "proposed",
-                "parse_status": "parsed",
-                "proposed_commercial_free": None,
-            }
-        ]
-
-        with pytest.raises(ValueError, match="proposed_commercial_free가 None"):
-            nr.approve(mock_schema, "test-slug")
+    finding = tables["font_audit_findings"]
+    payload = finding.update.call_args.args[0]
+    assert payload["status"] == "approved"
+    assert payload["reviewed_by"] == "operator@example.com"
+    assert payload["reviewed_at"]
+    finding.update.return_value.eq.assert_called_once_with("id", finding_id)
+    finding.update.return_value.eq.return_value.eq.assert_called_once_with(
+        "status", "proposed"
+    )
+    tables["fonts"].update.assert_not_called()
+    tables["license_proposals"].update.assert_not_called()
 
 
-class TestSampleSize:
-    """sample_size 함수 테스트."""
+def test_approve_rejects_applied_finding_without_writing(mocker) -> None:
+    """이미 적용된 finding은 다시 승인하지 않는다."""
+    schema, tables, finding_id = _finding_schema(mocker, status="applied")
 
-    def test_total_100_pct_5(self) -> None:
-        """100개 중 5% → 5개."""
-        assert nr.sample_size(100, 5) == 5
+    with pytest.raises(ValueError, match="proposed"):
+        nr.approve(schema, finding_id, reviewed_by="operator@example.com")
 
-    def test_total_3_pct_5(self) -> None:
-        """3개 중 5% → ceil(3*5/100)=1개(최소값)."""
-        assert nr.sample_size(3, 5) == 1
+    tables["font_audit_findings"].update.assert_not_called()
 
-    def test_total_0_pct_5(self) -> None:
-        """0개 중 5% → 0개."""
-        assert nr.sample_size(0, 5) == 0
 
-    def test_negative_total(self) -> None:
-        """음수 total → 0개."""
-        assert nr.sample_size(-10, 5) == 0
+def test_approve_requires_reviewer_identity(mocker) -> None:
+    """검수자 식별자 없이는 승인할 수 없다."""
+    schema, tables, finding_id = _finding_schema(mocker)
 
-    def test_total_20_pct_10(self) -> None:
-        """20개 중 10% → 2개."""
-        assert nr.sample_size(20, 10) == 2
+    with pytest.raises(ValueError, match="reviewed_by"):
+        nr.approve(schema, finding_id, reviewed_by="  ")
 
-    def test_total_1_pct_1(self) -> None:
-        """1개 중 1% → ceil(1*1/100)=1개(최소값)."""
-        assert nr.sample_size(1, 1) == 1
-
-    def test_total_200_pct_25(self) -> None:
-        """200개 중 25% → 50개."""
-        assert nr.sample_size(200, 25) == 50
+    tables["font_audit_findings"].select.assert_not_called()

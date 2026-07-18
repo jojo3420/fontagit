@@ -259,26 +259,41 @@ def main_noonnu_review(args: argparse.Namespace) -> int:
         action = args.action
 
         if action == "list":
-            proposals = list_pending(schema)
-            logger.info("검수 대기: %d건", len(proposals))
-            for p in proposals:
+            findings = list_pending(schema)
+            logger.info("검수 대기: %d건", len(findings))
+            for finding in findings:
                 logger.info(
-                    "  - %s (%s): %s",
-                    p.get("slug"),
-                    p.get("proposed_license_type"),
-                    p.get("source_url"),
+                    "  - finding=%s font=%s field=%s",
+                    finding.get("id"),
+                    finding.get("font_id"),
+                    finding.get("field_name"),
                 )
             return 0
 
         elif action == "approve":
-            approve(schema, args.slug, note=args.note)
+            if not args.finding_id or not args.reviewed_by:
+                logger.error("approve는 --finding-id와 --reviewed-by가 필수입니다")
+                return 1
+            approve(
+                schema,
+                args.finding_id,
+                reviewed_by=args.reviewed_by,
+                note=args.note,
+            )
             return 0
 
         elif action == "reject":
-            if not args.note:
-                logger.error("--note는 필수입니다")
+            if not args.finding_id or not args.reviewed_by or not args.note:
+                logger.error(
+                    "reject는 --finding-id, --reviewed-by, --note가 필수입니다"
+                )
                 return 1
-            reject(schema, args.slug, note=args.note)
+            reject(
+                schema,
+                args.finding_id,
+                reviewed_by=args.reviewed_by,
+                note=args.note,
+            )
             return 0
 
         elif action == "audit-sample":
@@ -334,49 +349,15 @@ def main_noonnu_publish(args: argparse.Namespace) -> int:
         logger.error("Dev Supabase 설정이 필요합니다.")
         return 2
 
-    # prod 접속 설정 (필수)
-    if not settings.supabase_prod_url or not settings.supabase_prod_secret_key:
-        logger.error(
-            "Prod Supabase 설정이 필요합니다 "
-            "(SUPABASE_PROD_URL, SUPABASE_PROD_SECRET_KEY)."
-        )
-        return 2
-
     try:
         # Dev 스키마 접속
         dev_client = create_client(settings.supabase_url, settings.supabase_secret_key)
         dev_schema = dev_client.schema("fontagit")
-
-        # prod 환경 오염 방지: dev URL로 prod 쓰기 금지
-        if settings.supabase_prod_url == settings.supabase_url:
-            logger.error(
-                "prod URL이 dev URL과 동일합니다. 설정을 확인하세요."
-            )
-            return 2
-
-        # dry_run 여부 결정
         dry_run = not getattr(args, "confirm", False)
-
-        if not dry_run:
-            # 실제 쓰기를 위한 대화형 확인
-            total_rows, _ = publish_to_prod(
-                dev_schema,
-                settings.supabase_prod_url,
-                settings.supabase_prod_secret_key,
-                dry_run=True,
-            )
-            confirm_input = input(
-                f"prod에 {total_rows}건 발행합니다. 계속하려면 'yes' 입력: "
-            )
-            if confirm_input.strip() != "yes":
-                logger.info("사용자 취소")
-                return 1
-
-        # 실행
         total, written = publish_to_prod(
             dev_schema,
-            settings.supabase_prod_url,
-            settings.supabase_prod_secret_key,
+            settings.supabase_prod_url or "",
+            settings.supabase_prod_secret_key or "",
             dry_run=dry_run,
         )
         logger.info("완료: 대상 %d개, 쓰기 %d개", total, written)
@@ -634,7 +615,13 @@ if __name__ == "__main__":
         help="실행 액션",
     )
     review_parser.add_argument(
-        "--slug", type=str, default=None, help="폰트 슬러그(approve/reject/unpublish에서 필수)"
+        "--slug", type=str, default=None, help="폰트 슬러그(unpublish legacy 명령용)"
+    )
+    review_parser.add_argument(
+        "--finding-id", type=str, default=None, help="승인/반려할 감사 finding ID"
+    )
+    review_parser.add_argument(
+        "--reviewed-by", type=str, default=None, help="검수자 식별자(승인/반려 필수)"
     )
     review_parser.add_argument(
         "--note", type=str, default=None, help="검수자 코멘트(approve에서 선택, reject/unpublish에서 필수)"
@@ -647,12 +634,12 @@ if __name__ == "__main__":
     # noonnu-publish 명령
     publish_parser = subparsers.add_parser(
         "noonnu-publish",
-        help="눈누 Tier B prod 발행 (dev→prod 동기화, 기본 dry-run)",
+        help="[deprecated] 대상 수 dry-run만 제공; 적용은 font-audit-manifest apply",
     )
     publish_parser.add_argument(
         "--confirm",
         action="store_true",
-        help="실제 prod 쓰기 활성화 (이중 확인 필수)",
+        help="[deprecated] 항상 차단됨; font-audit-manifest apply 사용",
     )
     publish_parser.set_defaults(func=main_noonnu_publish)
 
