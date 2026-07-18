@@ -9,7 +9,7 @@ import tempfile
 import unicodedata
 from collections import defaultdict, deque
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
@@ -314,9 +314,10 @@ def _audit_target(
         dry_run=dry_run,
         fetcher=fetcher,
     )
+    effective_target = reference_result.target
     candidates.extend(reference_result.candidates)
     discovery = [
-        item for item in candidates if _candidate_priority(item, registry, target)[0] >= 4
+        item for item in candidates if _candidate_priority(item, registry, effective_target)[0] >= 4
     ]
     snapshot_ids: list[UUID] = list(reference_result.snapshot_ids)
     finding_ids: list[UUID] = []
@@ -338,10 +339,10 @@ def _audit_target(
 
     outcomes: list[str] = []
     for role, field_name in _DOCUMENT_FIELDS.items():
-        candidate = _choose_candidate(candidates, target, role, registry)
+        candidate = _choose_candidate(candidates, effective_target, role, registry)
         if candidate is None:
             continue
-        priority, source_kind = _candidate_priority(candidate, registry, target)
+        priority, source_kind = _candidate_priority(candidate, registry, effective_target)
         # 일반 discovery와 승인되지 않은 기존 DB URL은 요청하지 않는다.
         if priority >= 4 or source_kind not in {"official", "public", "noonnu"}:
             continue
@@ -436,6 +437,7 @@ def _all_candidates(target: FontTarget) -> list[CandidateUrl]:
 class _DiscoveryResult:
     candidates: list[CandidateUrl]
     snapshot_ids: list[UUID]
+    target: FontTarget
 
 
 def _discover_noonnu_cta(
@@ -454,8 +456,8 @@ def _discover_noonnu_cta(
         and _candidate_priority(item, registry, target)[0] <= 1
         for item in candidates
     )
-    if dry_run or approved_download or not _is_noonnu_reference(target) or not target.foundry:
-        return _DiscoveryResult([], [])
+    if dry_run or approved_download or not _is_noonnu_reference(target):
+        return _DiscoveryResult([], [], target)
 
     fetched = fetcher(target.reference_url)
     reference = CandidateUrl(
@@ -473,8 +475,10 @@ def _discover_noonnu_cta(
     snapshot_id = _save_snapshot(store, run_id, snapshot, dry_run)
     if not dry_run:
         _save_link_observation(store, run_id, target, snapshot_id, fetched)
-    if parsed is None:
-        return _DiscoveryResult([], [snapshot_id])
+    if not _discovered_identity_matches(target, parsed):
+        return _DiscoveryResult([], [snapshot_id], target)
+    assert parsed is not None
+    resolved_target = replace(target, foundry=parsed.foundry)
     return _DiscoveryResult(
         [
             CandidateUrl(
@@ -488,6 +492,7 @@ def _discover_noonnu_cta(
             for url in parsed.download_candidates
         ],
         [snapshot_id],
+        resolved_target,
     )
 
 
@@ -743,7 +748,7 @@ def _snapshot_id(snapshot: SnapshotDraft) -> UUID:
 def _finding_id(run_id: UUID, finding: FindingDraft) -> UUID:
     return uuid5(
         NAMESPACE_URL,
-        f"{run_id}:{finding.font_id}:{finding.field_name}:{json.dumps(finding.proposed_value, sort_keys=True)}",
+        f"{run_id}:{finding.font_id}:{finding.field_name}",
     )
 
 
@@ -785,7 +790,6 @@ def _candidate_priority(
     if (
         candidate.source == "noonnu"
         and candidate.meaningful_cta
-        and _is_noonnu_url(candidate.url)
         and _is_noonnu_reference(target)
     ):
         return 2, "noonnu"
@@ -830,6 +834,15 @@ def _is_noonnu_reference(target: FontTarget) -> bool:
 
 def _is_noonnu_url(url: str) -> bool:
     return (urlparse(url).hostname or "").lower().rstrip(".") == "noonnu.cc"
+
+
+def _discovered_identity_matches(target: FontTarget, parsed: NoonnuFontSnapshot | None) -> bool:
+    """눈누 이름·제작사가 DB 대상과 일치할 때만 외부 CTA를 후보로 남긴다."""
+    if parsed is None or not target.name_ko:
+        return False
+    if _normalize_text(parsed.name_ko) != _normalize_text(target.name_ko):
+        return False
+    return not target.foundry or _normalize_text(parsed.foundry) == _normalize_text(target.foundry)
 
 
 def _normalize_text(value: str | None) -> str:

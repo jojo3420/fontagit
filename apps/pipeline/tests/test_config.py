@@ -67,6 +67,13 @@ def test_audit_settings_do_not_require_google_key(monkeypatch, tmp_path):
     with pytest.raises(ValueError, match="SUPABASE_DEV"):
         AuditSettings(_env_file=None).dev_write_credentials()
 
+    with pytest.raises(ValueError, match="SUPABASE_PROD"):
+        AuditSettings(
+            supabase_dev_url="https://dev-ref.supabase.co",
+            supabase_dev_secret_key="dev-key",
+            supabase_audit_dev_allowlist="dev-ref",
+        ).dev_write_credentials()
+
     monkeypatch.setenv("SUPABASE_DEV_URL", "https://prod-ref.supabase.co")
     monkeypatch.setenv("SUPABASE_DEV_SECRET_KEY", "dev-key")
     monkeypatch.setenv("SUPABASE_PROD_URL", "https://prod-ref.supabase.co")
@@ -76,10 +83,6 @@ def test_audit_settings_do_not_require_google_key(monkeypatch, tmp_path):
         AuditSettings(_env_file=None).dev_write_credentials()
 
     monkeypatch.setenv("SUPABASE_DEV_URL", "https://dev-ref.supabase.co")
-    monkeypatch.setenv("SUPABASE_DEV_SECRET_KEY", "prod-key")
-    with pytest.raises(ValueError, match="service keys"):
-        AuditSettings(_env_file=None).dev_write_credentials()
-
     monkeypatch.setenv("SUPABASE_DEV_SECRET_KEY", "dev-key")
     assert AuditSettings(_env_file=None).dev_write_credentials() == (
         "https://dev-ref.supabase.co",

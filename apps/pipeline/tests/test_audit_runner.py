@@ -165,6 +165,20 @@ def test_findings_are_immutable_per_run_and_urls_use_safe_priority() -> None:
     ]
     assert first.needs_review_count == 1
     store.mark_applied(first.finding_ids[0])
+    repeat_key = store.save_finding(
+        first.run_id,
+        FindingDraft(
+            font_id=target.font_id,
+            field_name="source_discovery",
+            before_value=None,
+            proposed_value={"changed": True},
+            evidence_id=None,
+            confidence="reference",
+            review_reason="same key",
+        ),
+    )
+    assert repeat_key == first.finding_ids[0]
+    store.mark_applied(first.finding_ids[0])
     assert store.save_finding(
         first.run_id,
         # 같은 run / font / field는 applied 뒤에도 덮어쓰지 않는다.
@@ -178,6 +192,24 @@ def test_findings_are_immutable_per_run_and_urls_use_safe_priority() -> None:
             review_reason="must stay immutable",
         ),
     ) == first.finding_ids[0]
+
+    fixture = Path(__file__).parent / "fixtures" / "audit" / "noonnu-white-tailed-eagle.html"
+    reference_html = fixture.read_bytes()
+
+    def noonnu_fetch(url: str) -> FetchResult:
+        content = reference_html if url.endswith("/613") else b"<html><body>cta</body></html>"
+        return FetchResult(200, url, content, "1" * 64, 0)
+
+    noonnu_target = replace(
+        _targets()[0], name_ko="흰꼬리수리", foundry=None, candidates=()
+    )
+    noonnu_store = InMemoryAuditStore()
+    noonnu_report = run_legal_audit(
+        [noonnu_target], noonnu_store, registry={"version": 1, "entries": []}, rules=rules, fetcher=noonnu_fetch
+    )
+    assert [noonnu_store.finding_draft(item).proposed_value for item in noonnu_report.finding_ids] == [
+        "https://clova.ai/handwriting/list.html"
+    ]
 
 
 def test_dry_run_writes_artifacts_without_calling_store(tmp_path: Path) -> None:

@@ -65,13 +65,14 @@ class AuditSettings(BaseSettings):
         if not approved or (url.rstrip("/") not in approved and dev_ref not in approved):
             raise ValueError("SUPABASE_AUDIT_DEV_ALLOWLIST must approve the dev URL or project ref")
 
-        if self.supabase_prod_url:
-            prod_ref = _supabase_project_ref(self.supabase_prod_url)
-            if prod_ref is None:
-                raise ValueError("SUPABASE_PROD_URL must be a valid Supabase project URL")
-            if url.rstrip("/") == self.supabase_prod_url.rstrip("/") or dev_ref == prod_ref:
-                raise ValueError("dev and prod Supabase project refs must differ")
-        if self.supabase_prod_secret_key and hmac.compare_digest(key, self.supabase_prod_secret_key):
+        prod_url = _required_setting(self.supabase_prod_url, "SUPABASE_PROD_URL")
+        prod_key = _required_setting(self.supabase_prod_secret_key, "SUPABASE_PROD_SECRET_KEY")
+        prod_ref = _supabase_project_ref(prod_url)
+        if prod_ref is None:
+            raise ValueError("SUPABASE_PROD_URL must be a valid Supabase project URL")
+        if url.rstrip("/") == prod_url.rstrip("/") or dev_ref == prod_ref:
+            raise ValueError("dev and prod Supabase project refs must differ")
+        if hmac.compare_digest(key, prod_key):
             raise ValueError("dev and prod service keys must differ")
         return url, key
 
