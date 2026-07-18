@@ -523,7 +523,7 @@ git commit -m "feat: define font audit trust policy"
 - Produces CLI: font-audit-export-baseline --source prod-public --out PATH
 - Produces CLI: font-audit-bootstrap --prod-snapshot PATH --out PATH
 
-- [ ] **Step 1: 정확 일치와 충돌 테스트 작성**
+- [x] **Step 1: 정확 일치와 충돌 테스트 작성**
 
 ~~~python
 def test_tier_b_exact_match_builds_no_public_update():
@@ -551,7 +551,7 @@ def test_zero_or_multiple_candidates_are_review_only():
     assert result.conflicts == 1
 ~~~
 
-- [ ] **Step 2: RED 확인**
+- [x] **Step 2: RED 확인**
 
 ~~~bash
 cd apps/pipeline
@@ -560,13 +560,13 @@ uv run pytest tests/test_audit_bootstrap.py -q
 
 Expected: build_bootstrap_manifest가 없어 실패.
 
-- [ ] **Step 3: bootstrap 구현**
+- [x] **Step 3: bootstrap 구현**
 
 Tier A key는 source_tier + name_en + slug + 기존 Google URL, Tier B key는 source_tier + slug + NFC 정규화 name_ko + 당시 official_url을 사용한다. foundry는 초기 조건에서 제외하되 현재값 null을 precondition에 기록한다. 후보 0개·2개 이상은 entries에 넣지 않고 review_rows에 넣는다.
 
 BootstrapResult는 matched, unmatched, conflicts, entries, review_rows를 가진다. 출력 JSON은 원자 저장하고 SHA-256을 같은 이름의 .sha256 파일에 기록한다.
 
-- [ ] **Step 4: CLI 연결**
+- [x] **Step 4: CLI 연결**
 
 __main__.py에 아래 명령을 추가한다.
 
@@ -578,7 +578,7 @@ fontagit-pipeline font-audit-bootstrap \
 
 font-audit-export-baseline은 AuditSettings의 anon URL/key만 사용해 exact count, 정렬 slug, 중복 0, 기준선 해시를 검증한다. 쓰기 키를 받지 않는다.
 
-- [ ] **Step 5: GREEN과 실데이터 dry-run**
+- [x] **Step 5: GREEN과 실데이터 dry-run**
 
 ~~~bash
 cd apps/pipeline
@@ -590,7 +590,12 @@ uv run python -m fontagit_pipeline font-audit-bootstrap \
 
 Expected: matched + unmatched + conflicts = 기준선 exact count. public_updates는 전부 빈 객체.
 
-- [ ] **Step 6: 커밋**
+실행 결과: prod 공개 anon API를 읽기 전용으로 조회해 기준선 1,240건을
+내보냈다. 1,240건 모두 안정 출처키와 정확히 일치했고, 미매칭·충돌·공개값
+수정은 0건이었다. Google Fonts 130건, 눈누 1,110건이며 중복 출처키와
+SHA-256 불일치도 0건이다. prod 쓰기·migration·deploy는 실행하지 않았다.
+
+- [x] **Step 6: 커밋**
 
 ~~~bash
 git add apps/pipeline/src/fontagit_pipeline/audit_bootstrap.py \
