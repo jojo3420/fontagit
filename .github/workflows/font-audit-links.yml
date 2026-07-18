@@ -28,8 +28,9 @@ jobs:
           --kind download --source prod-public --out output/audit/scheduled
         working-directory: apps/pipeline
         env:
-          SUPABASE_URL: ${{ secrets.PROD_PUBLIC_SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.PROD_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_PROD_PUBLIC_URL: ${{ vars.PROD_PUBLIC_SUPABASE_URL }}
+          SUPABASE_PROD_PUBLIC_ANON_KEY: ${{ secrets.PROD_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_PROD_PUBLIC_ALLOWLIST: ${{ vars.PROD_PUBLIC_SUPABASE_ALLOWLIST }}
       - name: Upload closed observation artifact
         uses: actions/upload-artifact@v4
         with:

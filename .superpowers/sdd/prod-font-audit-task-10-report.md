@@ -22,6 +22,14 @@
 - 보안 정적 검사: workflow의 `SERVICE|SECRET_KEY|PROD_SECRET` 0건, 예약 감사 구현의 새 HTTP 우회 0건.
 - CLI: scan/import `--help` 오프라인 실행 성공.
 
+## HIGH 보완: 공개 자격증명 경계
+
+- 일반 `SUPABASE_URL`·`SUPABASE_ANON_KEY` fallback을 제거하고 예약 scan 전용 prod 공개 URL·anon key·allowlist를 필수로 바꿨다.
+- URL은 path·query·fragment·userinfo가 없는 HTTPS origin만 허용한다. Managed Supabase는 project ref 또는 전체 origin이 allowlist와 정확히 같아야 하고, self-hosted는 전체 origin이 정확히 같아야 한다.
+- `sb_publishable_` 공개 키만 허용하고 `sb_secret_`는 거부한다. legacy JWT는 크기를 제한하고 중복·알 수 없는 claim을 거부한 뒤 role이 정확히 `anon`인지 형식만 확인한다. 서명 검증은 Supabase에 맡긴다.
+- 공격자 URL, 일반 설정 fallback, legacy `service_role` JWT가 SDK와 fetch 전에 중단되고 키·decoded claim이 로그에 남지 않는 RED→GREEN 회귀 검사를 기존 핵심 테스트에 통합했다.
+- workflow는 공개 URL·allowlist를 GitHub variables에서, anon key만 GitHub secret에서 받도록 분리했다.
+
 ## 실행하지 않은 작업과 남은 위험
 
 - 실제 workflow, 외부 폰트 URL, dev/prod DB 네트워크는 실행하지 않았다.

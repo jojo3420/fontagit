@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from argparse import Namespace
+import base64
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 import hashlib
@@ -29,6 +31,7 @@ from fontagit_pipeline.audit_runner import (
 )
 from fontagit_pipeline.audit_http import FetchResult
 from fontagit_pipeline.audit_store import FindingDraft, InMemoryAuditStore
+from fontagit_pipeline.__main__ import main_audit_scan
 from fontagit_pipeline.config import AuditSettings
 
 
@@ -83,6 +86,13 @@ def _fetched(url: str) -> FetchResult:
 
 def _forbidden_fetch(_: str) -> FetchResult:
     raise AssertionError("dry-run must not request external URLs")
+
+
+def _legacy_audit_key(role: str) -> str:
+    payload = base64.urlsafe_b64encode(
+        json.dumps({"iss": "supabase", "ref": "prod-ref", "role": role}).encode()
+    ).decode().rstrip("=")
+    return f"e30.{payload}.signature"
 
 
 def test_pilot_is_deterministic_and_requires_unique_stable_slugs() -> None:
@@ -462,7 +472,9 @@ def test_scheduled_download_import_requires_distinct_runs_24_hours_apart() -> No
         import_observations(spoofed.canonical_bytes, spoofed.sha256, store)
 
 
-def test_scheduled_artifact_rejects_empty_open_schema_bad_hash_and_symlink(tmp_path: Path) -> None:
+def test_scheduled_artifact_rejects_empty_open_schema_bad_hash_and_symlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     """빈 실행, 알 수 없는 필드, 해시 불일치는 저장 전에 모두 막는다."""
     with pytest.raises(AuditGateError, match="empty artifact"):
         build_scheduled_artifact("download", [], run_id=uuid4())
@@ -496,6 +508,67 @@ def test_scheduled_artifact_rejects_empty_open_schema_bad_hash_and_symlink(tmp_p
     with pytest.raises(AuditGateError, match="safe regular file"):
         read_regular_file_once(symlink_path, max_bytes=8 * 1024 * 1024)
     assert store.write_calls == 0
+
+    sdk_calls = 0
+
+    def forbidden_sdk(*_: object, **__: object) -> object:
+        nonlocal sdk_calls
+        sdk_calls += 1
+        raise AssertionError("credential gate must run before SDK or fetch")
+
+    monkeypatch.setattr("supabase.create_client", forbidden_sdk)
+    monkeypatch.setattr("fontagit_pipeline.audit_runner.scan_scheduled_targets", forbidden_sdk)
+    service_key = _legacy_audit_key("service_role")
+    secret_key = "sb_secret_forbidden-test"
+    unsafe_settings = (
+        AuditSettings(
+            supabase_url="https://prod-ref.supabase.co",
+            supabase_anon_key="sb_publishable_public-test",
+        ),
+        AuditSettings(
+            supabase_url="https://attacker.example",
+            supabase_anon_key="sb_publishable_public-test",
+            supabase_prod_public_url="https://attacker.example",
+            supabase_prod_public_anon_key="sb_publishable_public-test",
+        ),
+        AuditSettings(
+            supabase_url="https://prod-ref.supabase.co",
+            supabase_anon_key=service_key,
+            supabase_prod_public_url="https://prod-ref.supabase.co",
+            supabase_prod_public_anon_key=service_key,
+            supabase_prod_public_allowlist="prod-ref",
+        ),
+        AuditSettings(
+            supabase_prod_public_url="https://prod-ref.supabase.co",
+            supabase_prod_public_anon_key=secret_key,
+            supabase_prod_public_allowlist="prod-ref",
+        ),
+    )
+    for settings in unsafe_settings:
+        monkeypatch.setattr(
+            "fontagit_pipeline.config.load_audit_settings", lambda settings=settings: settings
+        )
+        assert main_audit_scan(
+            Namespace(source="prod-public", kind="download", out=tmp_path)
+        ) == 3
+    assert sdk_calls == 0
+    assert service_key not in caplog.text
+    assert secret_key not in caplog.text
+    assert "service_role" not in caplog.text
+    assert AuditSettings(
+        supabase_prod_public_url="https://PROD-REF.supabase.co/",
+        supabase_prod_public_anon_key="sb_publishable_public-test",
+        supabase_prod_public_allowlist="prod-ref",
+    ).prod_public_read_credentials() == (
+        "https://prod-ref.supabase.co",
+        "sb_publishable_public-test",
+    )
+    anon_key = _legacy_audit_key("anon")
+    assert AuditSettings(
+        supabase_prod_public_url="https://prod-ref.supabase.co",
+        supabase_prod_public_anon_key=anon_key,
+        supabase_prod_public_allowlist="https://prod-ref.supabase.co",
+    ).prod_public_read_credentials()[1] == anon_key
 
 
 def test_scheduled_license_hash_change_creates_review_without_public_apply() -> None:

@@ -1,5 +1,8 @@
 """환경 설정 로드."""
 
+import base64
+import binascii
+import json
 from urllib.parse import urlparse
 
 from pydantic import field_validator
@@ -42,6 +45,9 @@ class AuditSettings(BaseSettings):
     supabase_dev_secret_key: str | None = None
     supabase_audit_dev_allowlist: str | None = None
     supabase_allowed_dev_origins: str | None = None
+    supabase_prod_public_url: str | None = None
+    supabase_prod_public_anon_key: str | None = None
+    supabase_prod_public_allowlist: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -77,6 +83,30 @@ class AuditSettings(BaseSettings):
                 )
         return url, key
 
+    def prod_public_read_credentials(self) -> tuple[str, str]:
+        """예약 scan에만 쓰는 prod 공개 origin과 public key를 반환한다.
+
+        일반 ``SUPABASE_URL``/``SUPABASE_ANON_KEY``로 fallback하지 않는다.
+        legacy JWT는 서명을 검증하는 척하지 않고 role이 anon인지 형식만
+        제한적으로 확인한다. 최종 인증은 Supabase가 수행한다.
+        """
+        url = _required_public_setting(self.supabase_prod_public_url)
+        key = _required_public_setting(self.supabase_prod_public_anon_key)
+        origin = _https_origin(url, "SUPABASE_PROD_PUBLIC_URL")
+        approved = _allowlist_items(self.supabase_prod_public_allowlist)
+        project_ref = _supabase_project_ref(origin)
+        if project_ref is not None:
+            if not approved or (project_ref not in approved and origin not in approved):
+                raise ValueError("prod public Supabase origin is not approved")
+        else:
+            allowed_origins = {
+                _https_origin(item, "SUPABASE_PROD_PUBLIC_ALLOWLIST") for item in approved
+            }
+            if not allowed_origins or origin not in allowed_origins:
+                raise ValueError("prod public Supabase origin is not approved")
+        _validate_public_anon_key(key)
+        return origin, key
+
 
 def load_settings() -> Settings:
     """환경변수와 .env 파일로부터 설정을 로드한다.
@@ -98,6 +128,12 @@ def load_audit_settings() -> AuditSettings:
 def _required_setting(value: str | None, name: str) -> str:
     if not value or not value.strip():
         raise ValueError(f"{name} is required for dev audit writes")
+    return value.strip()
+
+
+def _required_public_setting(value: str | None) -> str:
+    if not value or not value.strip():
+        raise ValueError("dedicated prod public audit setting is required")
     return value.strip()
 
 
@@ -135,3 +171,47 @@ def _supabase_project_ref(origin: str) -> str | None:
         return None
     ref = hostname.removesuffix(suffix)
     return ref if ref and "." not in ref else None
+
+
+def _validate_public_anon_key(key: str) -> None:
+    """공개 publishable key 또는 role=anon인 제한된 legacy JWT만 허용한다."""
+    if len(key) > 4096 or not key.isascii():
+        raise ValueError("prod public anon key format is invalid")
+    if key.startswith("sb_secret_"):
+        raise ValueError("prod public anon key format is invalid")
+    if key.startswith("sb_publishable_"):
+        suffix = key.removeprefix("sb_publishable_")
+        if suffix and len(suffix) <= 512 and all(
+            char.isalnum() or char in "-_" for char in suffix
+        ):
+            return
+        raise ValueError("prod public anon key format is invalid")
+
+    segments = key.split(".")
+    if len(segments) != 3 or any(not segment for segment in segments):
+        raise ValueError("prod public anon key format is invalid")
+    encoded_payload = segments[1]
+    if len(encoded_payload) > 2732:
+        raise ValueError("prod public anon key format is invalid")
+    try:
+        padding = "=" * (-len(encoded_payload) % 4)
+        payload_bytes = base64.b64decode(
+            encoded_payload + padding, altchars=b"-_", validate=True
+        )
+        if len(payload_bytes) > 2048:
+            raise ValueError
+        claims = json.loads(payload_bytes, object_pairs_hook=_closed_claims)
+    except (binascii.Error, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise ValueError("prod public anon key format is invalid") from exc
+    allowed_claims = {"iss", "ref", "role", "iat", "exp", "sub", "aud"}
+    if not isinstance(claims, dict) or not set(claims) <= allowed_claims:
+        raise ValueError("prod public anon key format is invalid")
+    if claims.get("role") != "anon":
+        raise ValueError("prod public anon key format is invalid")
+
+
+def _closed_claims(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    keys = [key for key, _ in pairs]
+    if len(keys) != len(set(keys)):
+        raise ValueError("duplicate JWT claim")
+    return dict(pairs)

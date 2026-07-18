@@ -519,13 +519,10 @@ def main_audit_scan(args: argparse.Namespace) -> int:
         return 2
     try:
         settings = load_audit_settings()
-        if not settings.supabase_url or not settings.supabase_anon_key:
-            raise AuditGateError("prod 공개 URL과 anon key가 필요합니다")
+        public_url, public_key = settings.prod_public_read_credentials()
         from supabase import create_client
 
-        public_schema = create_client(
-            settings.supabase_url, settings.supabase_anon_key
-        ).schema("fontagit")
+        public_schema = create_client(public_url, public_key).schema("fontagit")
         targets = load_prod_public_scheduled_targets(public_schema, args.kind)
         artifact = scan_scheduled_targets(args.kind, targets)
         digest = write_scheduled_artifact(artifact, args.out)
