@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -530,16 +531,25 @@ def main_audit_manifest_apply(args: argparse.Namespace) -> int:
     """
     import hashlib
 
-    from fontagit_pipeline.audit_manifest import ManifestError, verify_manifest_file
+    from fontagit_pipeline.audit_manifest import ManifestError, verify_manifest_bytes
     from fontagit_pipeline.config import load_audit_settings
 
     try:
-        manifest = verify_manifest_file(args.manifest, args.sha256)
-        digest = hashlib.sha256(args.manifest.read_bytes()).hexdigest()
+        manifest_bytes = args.manifest.read_bytes()
+        expected_hash = args.sha256.read_text(encoding="ascii")
+        manifest = verify_manifest_bytes(manifest_bytes, expected_hash)
+        digest = hashlib.sha256(manifest_bytes).hexdigest()
         if args.confirm_hash != digest:
             raise ManifestError("--confirm-hash must exactly match the full manifest SHA-256")
         settings = load_audit_settings()
         if args.target == "prod":
+            if os.environ.get("FONTAGIT_PROD_MANIFEST_ENABLED") != "true":
+                raise ManifestError("prod manifest requires FONTAGIT_PROD_MANIFEST_ENABLED=true")
+            approval_id = args.approval_id or os.environ.get("FONTAGIT_PROD_APPROVAL_ID")
+            if not approval_id or not approval_id.strip():
+                raise ManifestError("prod manifest requires --approval-id or FONTAGIT_PROD_APPROVAL_ID")
+            if args.approved_hash != digest:
+                raise ManifestError("--approved-hash must exactly match the full manifest SHA-256")
             if input("prod manifest를 적용합니다. 계속하려면 yes 입력: ").strip() != "yes":
                 logger.info("사용자 취소")
                 return 1
@@ -552,9 +562,9 @@ def main_audit_manifest_apply(args: argparse.Namespace) -> int:
         from supabase import create_client
 
         rpc_payload = {
-            "p_manifest_text": args.manifest.read_text(encoding="utf-8"),
+            "p_manifest_text": manifest_bytes.decode("utf-8"),
             "p_expected_sha256": digest,
-            "p_schema_version": str(int(manifest.schema_version)),
+            "p_schema_version": int(manifest.schema_version),
         }
         response = create_client(url, secret).schema("fontagit").rpc(
             "apply_font_audit_manifest",
@@ -717,6 +727,8 @@ if __name__ == "__main__":
     manifest_apply_parser.add_argument("--sha256", type=Path, required=True)
     manifest_apply_parser.add_argument("--target", choices=["dev", "prod"], required=True)
     manifest_apply_parser.add_argument("--confirm-hash", required=True)
+    manifest_apply_parser.add_argument("--approved-hash")
+    manifest_apply_parser.add_argument("--approval-id")
     manifest_apply_parser.set_defaults(func=main_audit_manifest_apply)
 
     args = parser.parse_args()

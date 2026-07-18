@@ -648,13 +648,9 @@ def write_manifest_bundle(bundle: ManifestBundle, out: Path) -> ManifestPaths:
     return paths
 
 
-def verify_manifest_file(path: Path, sha256_path: Path) -> FontAuditManifest:
-    """본문 해시를 먼저 확인한 뒤에만 JSON을 파싱하고 canonical 형식을 검사한다."""
-    try:
-        content = path.read_bytes()
-        expected = sha256_path.read_text(encoding="ascii").strip()
-    except OSError as exc:
-        raise ManifestError("manifest 또는 SHA-256 파일을 읽을 수 없습니다") from exc
+def verify_manifest_bytes(content: bytes, expected: str) -> FontAuditManifest:
+    """한 번 읽은 본문을 해시 확인한 뒤 파싱한다."""
+    expected = expected.strip()
     if _HASH.fullmatch(expected) is None:
         raise ManifestError("manifest SHA-256 형식이 올바르지 않습니다")
     if hashlib.sha256(content).hexdigest() != expected:
@@ -669,3 +665,13 @@ def verify_manifest_file(path: Path, sha256_path: Path) -> FontAuditManifest:
     if _canonical_bytes(manifest) != content:
         raise ManifestError("manifest JSON이 canonical 형식이 아닙니다")
     return manifest
+
+
+def verify_manifest_file(path: Path, sha256_path: Path) -> FontAuditManifest:
+    """파일을 읽고 동일 바이트 검증 함수에 전달한다."""
+    try:
+        content = path.read_bytes()
+        expected = sha256_path.read_text(encoding="ascii")
+    except OSError as exc:
+        raise ManifestError("manifest 또는 SHA-256 파일을 읽을 수 없습니다") from exc
+    return verify_manifest_bytes(content, expected)

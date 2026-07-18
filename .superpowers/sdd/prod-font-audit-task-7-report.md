@@ -39,6 +39,13 @@
 - 로컬 임시 PostgreSQL 17 포트 55438에서 0001~0018을 적용한 뒤 SQL `ALL PASS`: 정상 2건, 역방향 전체 복원, missing finding, snapshot UUID 내용 충돌, bootstrap duplicate 모두 부분 반영 0을 확인했다.
 - Python: focused `2 passed`, 전체 `184 passed`; scoped ruff/mypy 통과. 원격 dev/prod migration·RPC·데이터 쓰기는 실행하지 않았다.
 
+## 승인 게이트·SQL 테스트 후속 보강
+
+- missing finding 테스트가 자체 sentinel 예외까지 삼키던 문제를 고쳐, 예상 RPC 오류가 실제 발생해야만 통과한다.
+- bootstrap은 정상 2건 전량 적용과 `첫 entry 신규 + 둘째 기존 provider 충돌` 시 신규 0건을 별도 사례로 검증한다.
+- prod CLI는 전체 해시 2회 확인(`--confirm-hash`, `--approved-hash`), 승인 ID, `FONTAGIT_PROD_MANIFEST_ENABLED=true`, 대화형 `yes`를 모두 요구한다. manifest 파일은 한 번 읽은 동일 바이트로 해시·파싱·RPC 전송한다.
+- 로컬 PostgreSQL 17 포트 55437 SQL `ALL PASS`, focused `10 passed`, 전체 pipeline `184 passed`, scoped ruff/mypy 통과. 원격 DB와 네트워크는 사용하지 않았다.
+
 ## 재검토 2차 수정 (2026-07-18)
 
 - SQL RED: `reviewed_at=null`, `reviewed_by=[]`, orphan snapshot, 잘못된 top-level baseline SHA, bootstrap `matched` 불일치 문서를 추가했다. 기존 함수는 승인 메타데이터/정확 집합 검증 전에 다른 충돌로 진행하거나 잘못된 입력을 허용했다.

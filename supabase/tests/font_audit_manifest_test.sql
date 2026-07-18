@@ -79,9 +79,10 @@ $$;
 
 -- finding 하나라도 없거나 승인되지 않았거나, UUID 내용이 다르면 evidence/font/finding 어느 것도 부분 적용하지 않는다.
 do $$
-declare v jsonb; v_text text; v_hash text; v_before int; v_failed boolean := false;
+declare v jsonb; v_text text; v_hash text; v_before int; v_before_findings int; v_failed boolean := false;
 begin
   select count(*) into v_before from fontagit.font_source_snapshots;
+  select count(*) into v_before_findings from fontagit.font_audit_findings;
   v:=pg_temp.manifest('00000000-0000-0000-0000-000000001101'); v:=jsonb_set(v,'{evidence_bundle,findings}','[]'::jsonb); v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex');
   begin
     perform fontagit.apply_font_audit_manifest(v_text,v_hash,1);
@@ -94,15 +95,6 @@ begin
   v:=pg_temp.manifest('00000000-0000-0000-0000-000000001102'); v:=jsonb_set(v,'{evidence_bundle,snapshots,0,final_url}','"https://different.example"'::jsonb); v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex');
   begin perform fontagit.apply_font_audit_manifest(v_text,v_hash,1); raise exception 'snapshot collision should fail'; exception when others then if sqlerrm not like '%snapshot UUID content conflict%' then raise; end if; end;
   if (select count(*) from fontagit.font_source_snapshots)<>v_before or exists(select 1 from fontagit.fonts where download_url is not null or script_status<>'pending') then raise exception 'failed evidence manifest partially applied'; end if;
-end;
-$$;
-
--- 승인 메타·기준선·번들 집합의 형식 오류는 evidence/fonts에 손대기 전에 막는다.
-do $$
-declare v jsonb; v_text text; v_hash text; v_before_snapshots int; v_before_findings int; v_failed boolean;
-begin
-  select count(*) into v_before_snapshots from fontagit.font_source_snapshots;
-  select count(*) into v_before_findings from fontagit.font_audit_findings;
 
   v:=pg_temp.manifest('00000000-0000-0000-0000-000000001100');
   v:=jsonb_set(v,'{evidence_bundle,findings,0,reviewed_at}','null'::jsonb);
@@ -127,7 +119,7 @@ begin
   v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex'); v_failed:=false;
   begin perform fontagit.apply_font_audit_manifest(v_text,v_hash,1); exception when others then if sqlerrm not like '%baseline SHA%' then raise; end if; v_failed:=true; end;
   if not v_failed then raise exception 'invalid baseline was accepted'; end if;
-  if (select count(*) from fontagit.font_source_snapshots)<>v_before_snapshots or (select count(*) from fontagit.font_audit_findings)<>v_before_findings then raise exception 'invalid manifest wrote evidence'; end if;
+  if (select count(*) from fontagit.font_source_snapshots)<>v_before or (select count(*) from fontagit.font_audit_findings)<>v_before_findings then raise exception 'invalid manifest wrote evidence'; end if;
 end;
 $$;
 
