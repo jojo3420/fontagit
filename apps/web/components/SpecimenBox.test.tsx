@@ -25,6 +25,7 @@ const mockFont: Font = {
   aliases: [],
   status: "published",
   subsets: ["korean"],
+  sourceTier: "A",
 };
 
 describe("SpecimenBox", () => {

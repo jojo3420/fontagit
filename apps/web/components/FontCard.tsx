@@ -7,7 +7,7 @@ import styles from "./FontCard.module.css";
 
 /** 폰트 목록 카드(디자인 1f). 견본 + 폰트명 + 티어 배지 */
 export function FontCard({ font }: { font: Font }) {
-  const words = getSpecimenText(font.subsets, false).split(" ");
+  const words = getSpecimenText(font, false).split(" ");
   const line1 = words.slice(0, 2).join(" ");
   const line2 = words.slice(2, 4).join(" ");
 
