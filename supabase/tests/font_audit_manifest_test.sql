@@ -1,6 +1,6 @@
 -- 0018은 로컬 임시 PostgreSQL에서만 실행한다. 원격 DB에는 적용하지 않는다.
 begin;
-set local request.jwt.claim.role = 'service_role';
+set local request.jwt.claims = '{"role":"service_role"}';
 
 truncate fontagit.font_audit_findings, fontagit.font_source_snapshots,
   fontagit.font_audit_runs, fontagit.font_sources, fontagit.fonts cascade;
@@ -71,6 +71,33 @@ begin
   if fontagit.apply_font_audit_manifest(v_text,v_hash,1)<>2 then raise exception 'normal apply failed'; end if;
   if (select count(*) from fontagit.font_source_snapshots)<>2 or (select count(*) from fontagit.font_audit_findings where status='applied')<>2
      or not exists(select 1 from fontagit.fonts where slug='audit-two' and script_status='needs_review') then raise exception 'approved evidence did not apply'; end if;
+end;
+$$;
+
+-- 최신 PostgREST claims JSON만 있어도 service_role을 인식하고, 익명/손상 claims는 거부한다.
+do $$
+declare v text := '{"role":"anon"}'; v_failed boolean := false;
+begin
+  perform set_config('request.jwt.claims', v, true);
+  begin
+    perform fontagit.apply_font_source_bootstrap('{}', repeat('0', 64), 1);
+  exception when others then
+    if sqlerrm not like '%requires service_role%' then raise; end if;
+    v_failed := true;
+  end;
+  if not v_failed then raise exception 'anon claims were accepted'; end if;
+
+  perform set_config('request.jwt.claims', '{bad json', true);
+  v_failed := false;
+  begin
+    perform fontagit.apply_font_source_bootstrap('{}', repeat('0', 64), 1);
+  exception when others then
+    if sqlerrm not like '%requires service_role%' then raise; end if;
+    v_failed := true;
+  end;
+  if not v_failed then raise exception 'invalid claims were accepted'; end if;
+
+  perform set_config('request.jwt.claims', '{"role":"service_role"}', true);
 end;
 $$;
 

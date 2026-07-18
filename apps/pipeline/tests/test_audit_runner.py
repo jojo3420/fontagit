@@ -401,6 +401,7 @@ def test_dry_run_writes_artifacts_without_calling_store(tmp_path: Path) -> None:
         AuditSettings(
             supabase_dev_url="https://unapproved.supabase.co",
             supabase_dev_secret_key="not-logged",
+            supabase_prod_url="https://prod-ref.supabase.co",
         ).dev_write_credentials()
 
     with pytest.raises(AuditGateError, match="target count"):

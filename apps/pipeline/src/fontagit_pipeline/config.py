@@ -1,6 +1,5 @@
 """환경 설정 로드."""
 
-import hmac
 from urllib.parse import urlparse
 
 from pydantic import field_validator
@@ -42,6 +41,7 @@ class AuditSettings(BaseSettings):
     supabase_dev_url: str | None = None
     supabase_dev_secret_key: str | None = None
     supabase_audit_dev_allowlist: str | None = None
+    supabase_allowed_dev_origins: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -53,27 +53,28 @@ class AuditSettings(BaseSettings):
         """
         url = _required_setting(self.supabase_dev_url, "SUPABASE_DEV_URL")
         key = _required_setting(self.supabase_dev_secret_key, "SUPABASE_DEV_SECRET_KEY")
-        dev_ref = _supabase_project_ref(url)
-        if dev_ref is None:
-            raise ValueError("SUPABASE_DEV_URL must be a valid Supabase project URL")
-
-        approved = {
-            item.strip().rstrip("/")
-            for item in (self.supabase_audit_dev_allowlist or "").split(",")
-            if item.strip()
-        }
-        if not approved or (url.rstrip("/") not in approved and dev_ref not in approved):
-            raise ValueError("SUPABASE_AUDIT_DEV_ALLOWLIST must approve the dev URL or project ref")
-
         prod_url = _required_setting(self.supabase_prod_url, "SUPABASE_PROD_URL")
-        prod_key = _required_setting(self.supabase_prod_secret_key, "SUPABASE_PROD_SECRET_KEY")
-        prod_ref = _supabase_project_ref(prod_url)
-        if prod_ref is None:
-            raise ValueError("SUPABASE_PROD_URL must be a valid Supabase project URL")
-        if url.rstrip("/") == prod_url.rstrip("/") or dev_ref == prod_ref:
-            raise ValueError("dev and prod Supabase project refs must differ")
-        if hmac.compare_digest(key, prod_key):
-            raise ValueError("dev and prod service keys must differ")
+        dev_origin = _https_origin(url, "SUPABASE_DEV_URL")
+        prod_origin = _https_origin(prod_url, "SUPABASE_PROD_URL")
+        if dev_origin == prod_origin:
+            raise ValueError("dev and prod Supabase origins must differ")
+
+        dev_ref = _supabase_project_ref(dev_origin)
+        if dev_ref is not None:
+            approved = _allowlist_items(self.supabase_audit_dev_allowlist)
+            if not approved or (dev_ref not in approved and dev_origin not in approved):
+                raise ValueError(
+                    "SUPABASE_AUDIT_DEV_ALLOWLIST must approve the managed dev URL or project ref"
+                )
+        else:
+            allowed_origins = {
+                _https_origin(item, "SUPABASE_ALLOWED_DEV_ORIGINS")
+                for item in _allowlist_items(self.supabase_allowed_dev_origins)
+            }
+            if not allowed_origins or dev_origin not in allowed_origins:
+                raise ValueError(
+                    "SUPABASE_ALLOWED_DEV_ORIGINS must explicitly approve the self-hosted dev origin"
+                )
         return url, key
 
 
@@ -100,11 +101,37 @@ def _required_setting(value: str | None, name: str) -> str:
     return value.strip()
 
 
-def _supabase_project_ref(url: str) -> str | None:
+def _allowlist_items(value: str | None) -> set[str]:
+    return {item.strip().rstrip("/") for item in (value or "").split(",") if item.strip()}
+
+
+def _https_origin(url: str, setting_name: str) -> str:
+    """비밀키를 보낼 Supabase HTTPS origin을 정규화한다."""
     parsed = urlparse(url)
     hostname = (parsed.hostname or "").lower()
+    if (
+        parsed.scheme.lower() != "https"
+        or not hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.params
+        or parsed.query
+        or parsed.fragment
+        or parsed.path not in ("", "/")
+    ):
+        raise ValueError(f"{setting_name} must be a valid HTTPS origin")
+    try:
+        port = parsed.port or 443
+    except ValueError as exc:
+        raise ValueError(f"{setting_name} must be a valid HTTPS origin") from exc
+    host = f"[{hostname}]" if ":" in hostname else hostname
+    return f"https://{host}" if port == 443 else f"https://{host}:{port}"
+
+
+def _supabase_project_ref(origin: str) -> str | None:
+    hostname = (urlparse(origin).hostname or "").lower()
     suffix = ".supabase.co"
-    if parsed.scheme != "https" or not hostname.endswith(suffix):
+    if not hostname.endswith(suffix):
         return None
     ref = hostname.removesuffix(suffix)
     return ref if ref and "." not in ref else None

@@ -23,8 +23,22 @@ alter table fontagit.fonts add constraint fonts_license_verify_compat_chk check 
 
 create or replace function fontagit._audit_manifest_service_role()
 returns void language plpgsql security definer set search_path = '' as $$
+declare v_claims_text text; v_claims jsonb;
 begin
-  if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
+  v_claims_text := nullif(current_setting('request.jwt.claims', true), '');
+  if v_claims_text is null then
+    -- 구형 PostgREST만 사용하는 설치의 호환 경로다.
+    if coalesce(current_setting('request.jwt.claim.role', true), '') = 'service_role' then
+      return;
+    end if;
+    raise exception 'font audit manifest requires service_role';
+  end if;
+  begin
+    v_claims := v_claims_text::jsonb;
+  exception when others then
+    raise exception 'font audit manifest requires service_role';
+  end;
+  if jsonb_typeof(v_claims) <> 'object' or v_claims->>'role' <> 'service_role' then
     raise exception 'font audit manifest requires service_role';
   end if;
 end;
@@ -483,7 +497,8 @@ begin
   for v_entry in select value from jsonb_array_elements(v_manifest->'entries') loop
     insert into fontagit.font_sources(font_id,provider,provider_record_id,source_role,source_url)
     values((v_entry->>'font_id')::uuid,v_entry->>'provider',v_entry->>'provider_record_id',case when v_entry->>'provider'='google-fonts' then 'primary' else 'reference' end,v_entry->>'source_url');
-    get diagnostics v_count = row_count; v_count := v_count; -- row_count는 각 insert가 1임을 강제한다.
+    get diagnostics v_count = row_count;
+    if v_count <> 1 then raise exception 'bootstrap source insert failed'; end if;
   end loop;
   return jsonb_array_length(v_manifest->'entries');
 end;

@@ -74,3 +74,11 @@
 - 추가로 한 entry 안의 `evidence_ids`와 `finding_ids`는 각각 배열 길이와 distinct UUID 수가 같아야 한다. 중복 ID는 before/evidence import/font update 이전에 거부한다.
 - SQL은 동일 evidence UUID를 entry에 두 번 넣은 문서를 거부하고 snapshot·finding 수와 fonts 값이 변하지 않는지 확인했다.
 - 검증: 로컬 임시 PostgreSQL 17 migration + SQL `ALL PASS`; Python focused 2 passed, 전체 185 passed, scoped ruff/mypy 통과. 원격 dev/prod 적용은 하지 않았다.
+
+## Claude High H1~H3 수정 (2026-07-18)
+
+- RED: `test_config.py`의 managed dev 무-prod-secret·자체 호스팅 origin 사례가 기존 구현에서 각각 `SUPABASE_PROD_SECRET_KEY` 강제와 `.supabase.co` 전용 파싱 때문에 실패했다.
+- GREEN: service-role SQL 검사는 최신 `request.jwt.claims` JSON의 `role=service_role`을 우선 확인한다. JSON이 없을 때만 구형 `request.jwt.claim.role` 호환 경로를 쓴다. anon·손상 JSON은 모두 거부한다.
+- `dev_write_credentials()`는 prod URL만 받아 scheme/host/effective-port origin을 비교하고 prod secret을 요구·비교하지 않는다. managed dev는 기존 ref allowlist, 자체 호스팅 dev는 `SUPABASE_ALLOWED_DEV_ORIGINS`의 명시 origin allowlist를 요구한다.
+- bootstrap source insert는 `row_count <> 1`이면 예외로 중단한다.
+- 검증: focused config/manifest/main `17 passed`, 전체 pipeline `170 passed`, scoped ruff/mypy 통과. 로컬 PostgreSQL 17 포트 55439에 0018을 적용하고 SQL `ALL PASS`(JSON service_role 허용, anon·손상 claims 거부) 확인. 원격 DB·외부 요청·prod 적용은 하지 않았다.

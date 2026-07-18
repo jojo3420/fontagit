@@ -55,8 +55,8 @@ def test_settings_supabase_absent_ok(monkeypatch):
     assert settings.github_token is None
 
 
-def test_audit_settings_do_not_require_google_key(monkeypatch, tmp_path):
-    """감사 쓰기는 전용 dev 설정만 받고 prod와 같으면 차단한다."""
+def test_audit_settings_require_separate_managed_dev_origin_without_prod_secret(monkeypatch, tmp_path):
+    """managed dev는 승인 ref와 prod URL만으로 안전하게 쓸 수 있다."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("GOOGLE_FONTS_API_KEY", raising=False)
     monkeypatch.setenv("SUPABASE_URL", "https://prod-ref.supabase.co")
@@ -77,9 +77,9 @@ def test_audit_settings_do_not_require_google_key(monkeypatch, tmp_path):
     monkeypatch.setenv("SUPABASE_DEV_URL", "https://prod-ref.supabase.co")
     monkeypatch.setenv("SUPABASE_DEV_SECRET_KEY", "dev-key")
     monkeypatch.setenv("SUPABASE_PROD_URL", "https://prod-ref.supabase.co")
-    monkeypatch.setenv("SUPABASE_PROD_SECRET_KEY", "prod-key")
+    monkeypatch.delenv("SUPABASE_PROD_SECRET_KEY", raising=False)
     monkeypatch.setenv("SUPABASE_AUDIT_DEV_ALLOWLIST", "prod-ref,dev-ref")
-    with pytest.raises(ValueError, match="project"):
+    with pytest.raises(ValueError, match="origin"):
         AuditSettings(_env_file=None).dev_write_credentials()
 
     monkeypatch.setenv("SUPABASE_DEV_URL", "https://dev-ref.supabase.co")
@@ -88,3 +88,21 @@ def test_audit_settings_do_not_require_google_key(monkeypatch, tmp_path):
         "https://dev-ref.supabase.co",
         "dev-key",
     )
+
+
+def test_audit_settings_accepts_explicit_self_hosted_dev_origin() -> None:
+    """자체 호스팅 dev는 별도 origin allowlist가 있어야만 허용한다."""
+    settings = AuditSettings(
+        supabase_dev_url="https://10.0.0.7:8443",
+        supabase_dev_secret_key="dev-key",
+        supabase_prod_url="https://supabase.example.com",
+    )
+    with pytest.raises(ValueError, match="SUPABASE_ALLOWED_DEV_ORIGINS"):
+        settings.dev_write_credentials()
+
+    assert AuditSettings(
+        supabase_dev_url="https://10.0.0.7:8443/",
+        supabase_dev_secret_key="dev-key",
+        supabase_prod_url="https://supabase.example.com:443",
+        supabase_allowed_dev_origins="https://10.0.0.7:8443",
+    ).dev_write_credentials() == ("https://10.0.0.7:8443/", "dev-key")
