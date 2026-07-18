@@ -414,6 +414,7 @@ def main_audit_export_baseline(args: argparse.Namespace) -> int:
     """공개 anon API만 사용해 prod 기준선을 내보낸다."""
     from fontagit_pipeline.audit_bootstrap import (
         BootstrapError,
+        calculate_baseline_content_sha256,
         fetch_prod_public_rows,
         write_prod_baseline,
     )
@@ -427,12 +428,19 @@ def main_audit_export_baseline(args: argparse.Namespace) -> int:
         if not settings.supabase_url or not settings.supabase_anon_key:
             raise BootstrapError("SUPABASE_URL과 SUPABASE_ANON_KEY가 필요합니다")
         rows = fetch_prod_public_rows(settings.supabase_url, settings.supabase_anon_key)
-        digest = write_prod_baseline(rows, args.out)
+        baseline_content_sha256 = calculate_baseline_content_sha256(rows)
+        file_sha256 = write_prod_baseline(rows, args.out)
     except (BootstrapError, OSError, httpx.HTTPError) as exc:
         logger.error("prod 공개 기준선 내보내기 실패: %s", exc)
         return 3
 
-    logger.info("prod 공개 기준선 저장: %s (%d개, sha256=%s)", args.out, len(rows), digest)
+    logger.info(
+        "prod 공개 기준선 저장: %s (%d개, baseline_content_sha256=%s, file_sha256=%s)",
+        args.out,
+        len(rows),
+        baseline_content_sha256,
+        file_sha256,
+    )
     return 0
 
 
@@ -441,12 +449,13 @@ def main_audit_bootstrap(args: argparse.Namespace) -> int:
     from fontagit_pipeline.audit_bootstrap import (
         BootstrapError,
         build_bootstrap_manifest,
+        load_prod_baseline,
         load_snapshot_records,
         write_bootstrap_manifest,
     )
 
     try:
-        prod_rows = load_snapshot_records(args.prod_snapshot, "rows")
+        prod_rows = load_prod_baseline(args.prod_snapshot)
         tier_a = load_snapshot_records(Path("output") / "tier-a.json", "fonts")
         tier_b = load_snapshot_records(
             Path("output") / "tier-b-noonnu-seed.json", "records"
@@ -455,7 +464,7 @@ def main_audit_bootstrap(args: argparse.Namespace) -> int:
         total = result.matched + result.unmatched + result.conflicts
         if total != len(prod_rows):
             raise BootstrapError("bootstrap 결과 수가 prod 기준선과 일치하지 않습니다")
-        digest = write_bootstrap_manifest(result, args.out)
+        file_sha256 = write_bootstrap_manifest(result, args.out)
     except (BootstrapError, OSError) as exc:
         logger.error("안정 출처키 bootstrap 실패: %s", exc)
         return 3
@@ -466,7 +475,7 @@ def main_audit_bootstrap(args: argparse.Namespace) -> int:
         result.matched,
         result.unmatched,
         result.conflicts,
-        digest,
+        file_sha256,
     )
     return 0
 

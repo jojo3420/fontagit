@@ -4,9 +4,14 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
+
 from fontagit_pipeline.audit_bootstrap import (
+    BootstrapError,
     build_bootstrap_manifest,
+    load_prod_baseline,
     write_bootstrap_manifest,
+    write_prod_baseline,
 )
 
 INSTAGRAM_URL = "https://www.instagram.com/p/example/"
@@ -35,13 +40,11 @@ def prod_font(
 def tier_b_seed(
     page_id: str,
     name_ko: str,
-    slug: str,
     official_url: str,
 ) -> dict[str, object]:
     return {
         "name_ko": name_ko,
         "name_en": None,
-        "slug": slug,
         "official_url": official_url,
         "source_page": f"https://noonnu.cc/font_page/{page_id}",
     }
@@ -54,13 +57,19 @@ def test_tier_b_exact_match_builds_no_public_update_and_atomic_artifact(
     result = build_bootstrap_manifest(
         prod_rows=[prod_font("흰꼬리수리", "흰꼬리수리", INSTAGRAM_URL)],
         tier_a=[],
-        tier_b=[tier_b_seed("613", "흰꼬리수리", "흰꼬리수리", INSTAGRAM_URL)],
+        tier_b=[
+            {
+                **tier_b_seed("613", "흰꼬리수리", INSTAGRAM_URL),
+                "slug": "시드에-존재하지-않는-값",
+            }
+        ],
     )
 
     assert (result.matched, result.unmatched, result.conflicts) == (1, 0, 0)
     entry = result.entries[0]
     assert (entry.provider, entry.provider_record_id) == ("noonnu", "613")
     assert entry.public_updates == {}
+    assert entry.before["source_tier"] == "B"
     assert entry.before["foundry"] is None
 
     out = tmp_path / "nested" / "bootstrap.json"
@@ -76,13 +85,13 @@ def test_zero_or_multiple_candidates_are_review_only() -> None:
     """후보가 없거나 여럿이면 추측하지 않고 검수 대상으로 남긴다."""
     result = build_bootstrap_manifest(
         prod_rows=[
-            prod_font("same", "동일", INSTAGRAM_URL),
+            prod_font("동일", "동일", INSTAGRAM_URL),
             prod_font("missing", "없음", INSTAGRAM_URL),
         ],
         tier_a=[],
         tier_b=[
-            tier_b_seed("1", "동일", "same", INSTAGRAM_URL),
-            tier_b_seed("2", "동일", "same", INSTAGRAM_URL),
+            tier_b_seed("1", "동일", INSTAGRAM_URL),
+            tier_b_seed("2", "동일", INSTAGRAM_URL),
         ],
     )
 
@@ -101,7 +110,7 @@ def test_invalid_tier_b_source_page_is_never_used_as_provider_id() -> None:
         tier_a=[],
         tier_b=[
             {
-                **tier_b_seed("613/extra", "흰꼬리수리", "흰꼬리수리", INSTAGRAM_URL),
+                **tier_b_seed("613/extra", "흰꼬리수리", INSTAGRAM_URL),
                 "source_page": "https://noonnu.cc/font_page/613/extra",
             }
         ],
@@ -109,3 +118,98 @@ def test_invalid_tier_b_source_page_is_never_used_as_provider_id() -> None:
 
     assert (result.matched, result.unmatched, result.conflicts) == (0, 1, 0)
     assert result.review_rows[0]["reason"] == "invalid_provider_record_id"
+
+
+def test_prod_baseline_sorts_slug_before_hashing(tmp_path: Path) -> None:
+    """기준선은 DB 정렬 환경과 무관하게 slug 순서를 고정한다."""
+    rows = [
+        prod_font(f"font-{index:04d}", f"폰트 {index}", INSTAGRAM_URL)
+        for index in reversed(range(1240))
+    ]
+    out = tmp_path / "prod-baseline.json"
+
+    write_prod_baseline(rows, out)
+
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    slugs = [row["slug"] for row in payload["rows"]]
+    assert slugs == sorted(slugs)
+
+
+def test_non_null_foundry_is_review_only_even_when_source_matches() -> None:
+    """foundry가 이미 있으면 출처키 자동 연결 전 사람 검수를 거친다."""
+    row = prod_font("흰꼬리수리", "흰꼬리수리", INSTAGRAM_URL)
+    row["foundry"] = "네이버"
+
+    result = build_bootstrap_manifest(
+        prod_rows=[row],
+        tier_a=[],
+        tier_b=[tier_b_seed("613", "흰꼬리수리", INSTAGRAM_URL)],
+    )
+
+    assert (result.matched, result.unmatched, result.conflicts) == (0, 1, 0)
+    assert result.entries == []
+    assert result.review_rows[0]["reason"] == "foundry_precondition_not_null"
+
+
+def test_prod_baseline_requires_complete_sorted_hashed_snapshot(tmp_path: Path) -> None:
+    """부분·변조·정렬 오류 기준선은 bootstrap 전에 거부한다."""
+    rows = [
+        prod_font("a", "가", INSTAGRAM_URL),
+        prod_font("b", "나", INSTAGRAM_URL),
+    ]
+    baseline = tmp_path / "prod-baseline.json"
+    file_sha256 = write_prod_baseline(rows, baseline, expected_record_count=2)
+    payload = json.loads(baseline.read_text(encoding="utf-8"))
+
+    assert payload["baseline_content_sha256"]
+    assert baseline.with_suffix(".json.sha256").read_text(encoding="utf-8") == f"{file_sha256}\n"
+    assert load_prod_baseline(baseline, expected_record_count=2) == rows
+
+    payload["baseline_content_sha256"] = "0" * 64
+    changed_content = (json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    baseline.write_bytes(changed_content)
+    baseline.with_suffix(".json.sha256").write_text(
+        f"{hashlib.sha256(changed_content).hexdigest()}\n", encoding="ascii"
+    )
+    with pytest.raises(BootstrapError, match="baseline content SHA-256"):
+        load_prod_baseline(baseline, expected_record_count=2)
+
+    write_prod_baseline(rows, baseline, expected_record_count=2)
+    payload = json.loads(baseline.read_text(encoding="utf-8"))
+    payload["rows"] = list(reversed(rows))
+    baseline.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(BootstrapError, match="file SHA-256"):
+        load_prod_baseline(baseline, expected_record_count=2)
+
+
+def test_prod_baseline_rejects_partial_default_cli_contract(tmp_path: Path) -> None:
+    """기본 계약은 1,240건이므로 임의 1건 JSON을 허용하지 않는다."""
+    baseline = tmp_path / "partial.json"
+    write_prod_baseline(
+        [prod_font("only", "하나", INSTAGRAM_URL)],
+        baseline,
+        expected_record_count=1,
+    )
+
+    with pytest.raises(BootstrapError, match="expected=1240"):
+        load_prod_baseline(baseline)
+
+
+def test_prod_baseline_rejects_unknown_schema(tmp_path: Path) -> None:
+    """기준선 스키마 버전이 바뀌면 자동 bootstrap을 막는다."""
+    rows = [prod_font("only", "하나", INSTAGRAM_URL)]
+    baseline = tmp_path / "unknown-schema.json"
+    write_prod_baseline(rows, baseline, expected_record_count=1)
+    payload = json.loads(baseline.read_text(encoding="utf-8"))
+    payload["schema_version"] = 2
+    content = (
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    baseline.write_bytes(content)
+    baseline.with_suffix(".json.sha256").write_text(
+        f"{hashlib.sha256(content).hexdigest()}\n",
+        encoding="ascii",
+    )
+
+    with pytest.raises(BootstrapError, match="schema_version"):
+        load_prod_baseline(baseline, expected_record_count=1)

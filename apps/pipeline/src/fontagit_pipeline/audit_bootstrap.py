@@ -15,6 +15,7 @@ import httpx
 from fontagit_pipeline.noonnu_seed import derive_noonnu_slug
 
 _NOONNU_PAGE_ID = re.compile(r"^https://noonnu\.cc/font_page/([1-9][0-9]*)$")
+_CONTENT_RANGE = re.compile(r"^(?:[0-9]+-[0-9]+|\*)/([0-9]+)$")
 _EXPECTED_PROD_PUBLISHED_COUNT = 1240
 _PUBLIC_FONT_COLUMNS = (
     "id,slug,name_ko,name_en,foundry,source_tier,official_url,updated_at"
@@ -100,10 +101,7 @@ def _tier_b_identity(seed: Mapping[str, object]) -> tuple[str, str, str, str] | 
     if match is None:
         return None
 
-    stated_slug = _text(seed, "slug")
-    slug = stated_slug.strip() if stated_slug is not None and stated_slug.strip() else derive_noonnu_slug(
-        name_ko, _text(seed, "name_en")
-    )
+    slug = derive_noonnu_slug(name_ko, _text(seed, "name_en"))
     if not slug:
         return None
     return match.group(1), slug, _nfc(name_ko) or "", official_url
@@ -112,6 +110,7 @@ def _tier_b_identity(seed: Mapping[str, object]) -> tuple[str, str, str, str] | 
 def _before(row: Mapping[str, object]) -> dict[str, object]:
     """후속 RPC가 다시 검증할 현재값 precondition을 고정한다."""
     return {
+        "source_tier": row.get("source_tier"),
         "slug": row.get("slug"),
         "name_en": row.get("name_en"),
         "name_ko": row.get("name_ko"),
@@ -158,6 +157,10 @@ def build_bootstrap_manifest(
         if tier not in {"A", "B"} or slug is None or font_id is None:
             unmatched += 1
             review_rows.append(_review_row(row, "invalid_prod_precondition"))
+            continue
+        if row.get("foundry") is not None:
+            unmatched += 1
+            review_rows.append(_review_row(row, "foundry_precondition_not_null"))
             continue
 
         if tier == "A":
@@ -214,11 +217,8 @@ def build_bootstrap_manifest(
                 _required_text(seed, "name_ko") is not None
                 and _nfc(_required_text(seed, "name_ko")) == name_ko
                 and _required_text(seed, "official_url") == official_url
-                and (
-                    (_text(seed, "slug") or "").strip()
-                    or derive_noonnu_slug(
-                        _required_text(seed, "name_ko"), _text(seed, "name_en")
-                    )
+                and derive_noonnu_slug(
+                    _required_text(seed, "name_ko"), _text(seed, "name_en")
                 )
                 == slug
                 for seed in tier_b
@@ -306,6 +306,7 @@ def fetch_prod_public_rows(supabase_url: str, anon_key: str) -> list[dict[str, o
     rows: list[dict[str, object]] = []
     offset = 0
     page_size = 1000
+    exact_total: int | None = None
     with httpx.Client(timeout=20.0) as client:
         while True:
             response = client.get(
@@ -318,6 +319,15 @@ def fetch_prod_public_rows(supabase_url: str, anon_key: str) -> list[dict[str, o
                 },
             )
             response.raise_for_status()
+            content_range = response.headers.get("Content-Range", "")
+            count_match = _CONTENT_RANGE.fullmatch(content_range)
+            if count_match is None:
+                raise BootstrapError("prod 공개 API가 exact count를 반환하지 않았습니다")
+            page_total = int(count_match.group(1))
+            if exact_total is None:
+                exact_total = page_total
+            elif page_total != exact_total:
+                raise BootstrapError("prod 공개 API exact count가 페이지마다 다릅니다")
             page = response.json()
             if not isinstance(page, list) or not all(isinstance(row, dict) for row in page):
                 raise BootstrapError("prod 공개 API 응답 형식이 올바르지 않습니다")
@@ -325,35 +335,130 @@ def fetch_prod_public_rows(supabase_url: str, anon_key: str) -> list[dict[str, o
             if len(page) < page_size:
                 break
             offset += page_size
-    _validate_prod_rows(rows)
-    return rows
-
-
-def _validate_prod_rows(rows: Sequence[Mapping[str, object]]) -> None:
-    slugs = [_required_text(row, "slug") for row in rows]
-    if len(rows) != _EXPECTED_PROD_PUBLISHED_COUNT:
+    if exact_total != len(rows):
         raise BootstrapError(
-            f"prod published 기준선 수가 다릅니다: expected={_EXPECTED_PROD_PUBLISHED_COUNT}, actual={len(rows)}"
+            f"prod published exact count와 조회 수가 다릅니다: exact={exact_total}, rows={len(rows)}"
+        )
+    return _validated_sorted_prod_rows(rows)
+
+
+def _validate_prod_rows(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    expected_record_count: int = _EXPECTED_PROD_PUBLISHED_COUNT,
+    require_sorted: bool = False,
+) -> None:
+    slugs = [_required_text(row, "slug") for row in rows]
+    if len(rows) != expected_record_count:
+        raise BootstrapError(
+            f"prod published 기준선 수가 다릅니다: expected={expected_record_count}, actual={len(rows)}"
         )
     if any(slug is None for slug in slugs) or len(set(slugs)) != len(slugs):
         raise BootstrapError("prod 기준선 slug가 비어 있거나 중복됩니다")
     clean_slugs = [slug for slug in slugs if slug is not None]
-    if clean_slugs != sorted(clean_slugs):
+    if require_sorted and clean_slugs != sorted(clean_slugs):
         raise BootstrapError("prod 기준선이 slug 오름차순이 아닙니다")
 
 
-def write_prod_baseline(rows: Sequence[Mapping[str, object]], out: Path) -> str:
-    """검증된 공개 prod 기준선을 원자적으로 저장한다."""
-    _validate_prod_rows(rows)
-    baseline_payload: dict[str, object] = {
+def _validated_sorted_prod_rows(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    expected_record_count: int = _EXPECTED_PROD_PUBLISHED_COUNT,
+) -> list[dict[str, object]]:
+    """개수와 중복을 검증한 뒤 환경 독립적인 slug 순서로 고정한다."""
+    _validate_prod_rows(rows, expected_record_count=expected_record_count)
+    return sorted((dict(row) for row in rows), key=lambda row: str(row["slug"]))
+
+
+def _baseline_content_payload(rows: Sequence[Mapping[str, object]]) -> dict[str, object]:
+    return {
         "schema_version": 1,
         "record_count": len(rows),
         "rows": list(rows),
     }
-    baseline_digest = hashlib.sha256(_canonical_json(baseline_payload)).hexdigest()
-    payload = {**baseline_payload, "baseline_sha256": baseline_digest}
+
+
+def _sha256(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
+
+
+def calculate_baseline_content_sha256(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    expected_record_count: int = _EXPECTED_PROD_PUBLISHED_COUNT,
+) -> str:
+    """정렬·검증된 기준선 본문 해시를 계산한다."""
+    sorted_rows = _validated_sorted_prod_rows(
+        rows, expected_record_count=expected_record_count
+    )
+    return _sha256(_canonical_json(_baseline_content_payload(sorted_rows)))
+
+
+def write_prod_baseline(
+    rows: Sequence[Mapping[str, object]],
+    out: Path,
+    *,
+    expected_record_count: int = _EXPECTED_PROD_PUBLISHED_COUNT,
+) -> str:
+    """검증된 공개 prod 기준선을 저장하고 파일 전체 SHA-256을 반환한다.
+
+    JSON의 ``baseline_content_sha256``은 해시 필드를 제외한 본문 해시다.
+    반환값과 동반 ``.sha256``은 최종 JSON 파일 전체의 해시다.
+    """
+    sorted_rows = _validated_sorted_prod_rows(
+        rows, expected_record_count=expected_record_count
+    )
+    content_payload = _baseline_content_payload(sorted_rows)
+    payload = {
+        **content_payload,
+        "baseline_content_sha256": _sha256(_canonical_json(content_payload)),
+    }
     final_content = _canonical_json(payload)
-    final_digest = hashlib.sha256(final_content).hexdigest()
+    file_sha256 = _sha256(final_content)
     _atomic_write(out, final_content)
-    _atomic_write(out.with_suffix(f"{out.suffix}.sha256"), f"{final_digest}\n".encode("ascii"))
-    return final_digest
+    _atomic_write(out.with_suffix(f"{out.suffix}.sha256"), f"{file_sha256}\n".encode("ascii"))
+    return file_sha256
+
+
+def load_prod_baseline(
+    path: Path,
+    *,
+    expected_record_count: int = _EXPECTED_PROD_PUBLISHED_COUNT,
+) -> list[dict[str, object]]:
+    """완전성·본문 해시·파일 해시가 검증된 prod 기준선만 읽는다."""
+    try:
+        content = path.read_bytes()
+        payload = json.loads(content.decode("utf-8"))
+        sidecar_sha256 = path.with_suffix(f"{path.suffix}.sha256").read_text(
+            encoding="ascii"
+        ).strip()
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise BootstrapError(f"prod 기준선을 읽을 수 없습니다: {path}") from exc
+
+    if not isinstance(payload, dict):
+        raise BootstrapError("prod 기준선 JSON 객체가 올바르지 않습니다")
+    if payload.get("schema_version") != 1:
+        raise BootstrapError("prod 기준선 schema_version은 1이어야 합니다")
+    if not re.fullmatch(r"[0-9a-f]{64}", sidecar_sha256):
+        raise BootstrapError("prod 기준선 sidecar SHA-256 형식이 올바르지 않습니다")
+    if _sha256(content) != sidecar_sha256:
+        raise BootstrapError("prod 기준선 file SHA-256이 일치하지 않습니다")
+
+    rows = payload.get("rows")
+    record_count = payload.get("record_count")
+    content_sha256 = payload.get("baseline_content_sha256")
+    if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
+        raise BootstrapError("prod 기준선 rows 배열이 올바르지 않습니다")
+    if not isinstance(record_count, int) or record_count != len(rows):
+        raise BootstrapError("prod 기준선 record_count가 rows 길이와 일치하지 않습니다")
+    if not isinstance(content_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", content_sha256):
+        raise BootstrapError("prod 기준선 baseline_content_sha256 형식이 올바르지 않습니다")
+    if _sha256(_canonical_json(_baseline_content_payload(rows))) != content_sha256:
+        raise BootstrapError("prod 기준선 baseline content SHA-256이 일치하지 않습니다")
+
+    _validate_prod_rows(
+        rows,
+        expected_record_count=expected_record_count,
+        require_sorted=True,
+    )
+    return rows
