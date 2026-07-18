@@ -1,5 +1,7 @@
 import hashlib
 
+import pytest
+
 from fontagit_pipeline.audit_license import classify_license
 from fontagit_pipeline.audit_noonnu import NoonnuFontSnapshot
 
@@ -64,3 +66,87 @@ def test_llm_or_unapproved_custom_text_never_verifies_or_infers_permissions() ->
     assert decision.allow_commercial is None
     assert decision.allow_redistribute is None
     assert "라이선스 재확인 필요" in decision.summary
+
+
+def test_template_match_rejects_unapproved_or_discovery_registry_mapping() -> None:
+    """제작사 템플릿은 검증된 공식·공공 출처에만 쓸 수 있다."""
+    snapshot = _snapshot().model_copy(
+        update={
+            "license_id": None,
+            "license_version": None,
+            "template_selector": "#license",
+            "template_version": "1",
+        }
+    )
+    fingerprint = hashlib.sha256(snapshot.license_text.encode("utf-8")).hexdigest()
+    rules = {
+        "version": 1,
+        "standard_licenses": [],
+        "maker_templates": [
+            {
+                "domain": "fonts.example.org",
+                "selector": "#license",
+                "template_version": "1",
+                "fingerprint": fingerprint,
+                "permissions": {"allow_commercial": "allowed"},
+            }
+        ],
+    }
+
+    with pytest.raises(ValueError, match="approval evidence"):
+        classify_license(
+            snapshot,
+            registry={
+                "version": 1,
+                "entries": [
+                    {
+                        "maker": "제작사",
+                        "domain": "fonts.example.org",
+                        "roles": ["license"],
+                        "source_kind": "official",
+                    }
+                ],
+            },
+            rules=rules,
+        )
+
+    decision = classify_license(
+        snapshot,
+        registry={
+            "version": 1,
+            "entries": [
+                {
+                    "maker": "제작사",
+                    "domain": "fonts.example.org",
+                    "roles": ["license"],
+                    "source_kind": "discovery",
+                }
+            ],
+        },
+        rules=rules,
+    )
+    assert decision.status == "needs_review"
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        {"reviewed_by": "   ", "reviewed_at": "2026-07-18T00:00:00Z", "reviewed_permissions": {"allow_commercial": "allowed"}},
+        {"reviewed_by": "reviewer", "reviewed_at": "not-a-date", "reviewed_permissions": {"allow_commercial": "allowed"}},
+        {"reviewed_by": "reviewer", "reviewed_at": "2026-07-18T00:00:00Z", "reviewed_permissions": {}},
+    ],
+)
+def test_human_review_requires_identity_time_and_a_permission(
+    update: dict[str, object],
+) -> None:
+    """형식만 갖춘 사람 검수는 verified 판정을 만들 수 없다."""
+    snapshot = _snapshot().model_copy(update={"finding_status": "approved", **update})
+
+    decision = classify_license(
+        snapshot,
+        registry={"version": 1, "entries": []},
+        rules={"version": 1, "standard_licenses": [], "maker_templates": []},
+    )
+
+    assert decision.status == "needs_review"
+    assert decision.auto_applicable is False

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlparse
@@ -12,6 +13,7 @@ from urllib.parse import urlparse
 from pydantic import BaseModel, Field
 
 from fontagit_pipeline.audit_noonnu import NoonnuFontSnapshot
+from fontagit_pipeline.audit_policy import SourceRegistry
 
 
 Permission = Literal["allowed", "conditional", "denied"]
@@ -50,13 +52,21 @@ def classify_license(
     rules: Mapping[str, object] | str | Path,
 ) -> LicenseDecision:
     """표준·제작사 템플릿·사람 승인이 정확히 맞을 때만 verified를 반환한다."""
+    source_registry = _validated_registry(registry)
     payload = _load_rules(rules)
     if snapshot.extractor != "deterministic":
         return _needs_review(snapshot)
 
     reviewed = _reviewed_permissions(snapshot)
     if reviewed is not None:
-        return _verified(snapshot, reviewed, [], "human_review")
+        permissions, auto_applicable = reviewed
+        return _verified(
+            snapshot,
+            permissions,
+            [],
+            "human_review",
+            auto_applicable=auto_applicable,
+        )
 
     fingerprint = _fingerprint(snapshot.license_text)
     standard = _matching_standard(snapshot, payload, fingerprint)
@@ -68,7 +78,7 @@ def classify_license(
             "license_text",
         )
 
-    template = _matching_template(snapshot, registry, payload, fingerprint)
+    template = _matching_template(snapshot, source_registry, payload, fingerprint)
     if template is not None:
         return _verified(
             snapshot,
@@ -77,6 +87,15 @@ def classify_license(
             "license_text",
         )
     return _needs_review(snapshot)
+
+
+def _validated_registry(registry: object) -> SourceRegistry:
+    """템플릿 판정 전에 출처 승인 근거를 Pydantic으로 강제한다."""
+    if isinstance(registry, SourceRegistry):
+        return registry
+    if isinstance(registry, Mapping):
+        return SourceRegistry.model_validate(registry)
+    raise TypeError("registry must be a SourceRegistry or mapping")
 
 
 def _load_rules(rules: Mapping[str, object] | str | Path) -> Mapping[str, object]:
@@ -121,7 +140,7 @@ def _matching_standard(
 
 def _matching_template(
     snapshot: NoonnuFontSnapshot,
-    registry: object,
+    registry: SourceRegistry,
     rules: Mapping[str, object],
     fingerprint: str | None,
 ) -> Mapping[str, object] | None:
@@ -151,36 +170,43 @@ def _matching_template(
     return None
 
 
-def _is_approved_source(source_url: str, registry: object) -> bool:
-    classifier = getattr(registry, "classify", None)
-    if callable(classifier):
-        return classifier(source_url) in {"official", "public"}
-    if not isinstance(registry, Mapping):
-        return False
-    hostname = (urlparse(source_url).hostname or "").lower().rstrip(".")
-    entries = registry.get("entries")
-    if not isinstance(entries, list):
-        return False
-    for entry in entries:
-        if not isinstance(entry, Mapping):
-            continue
-        domain = entry.get("domain")
-        if not isinstance(domain, str):
-            continue
-        normalized_domain = domain.lower().rstrip(".")
-        if hostname == normalized_domain or hostname.endswith(f".{normalized_domain}"):
-            return entry.get("source_kind") in {"official", "public"}
-    return False
+def _is_approved_source(source_url: str, registry: SourceRegistry) -> bool:
+    return registry.classify(source_url) in {"official", "public"}
 
 
-def _reviewed_permissions(snapshot: NoonnuFontSnapshot) -> dict[str, str | None] | None:
+def _reviewed_permissions(
+    snapshot: NoonnuFontSnapshot,
+) -> tuple[dict[str, str | None], bool] | None:
+    """사람 검수의 작성자·시각·판정 근거가 모두 유효한지 확인한다."""
     if (
         snapshot.finding_status != "approved"
-        or not snapshot.reviewed_by
-        or not snapshot.reviewed_at
+        or not _nonempty_text(snapshot.reviewed_by)
+        or not _reviewed_at(snapshot.reviewed_at)
     ):
         return None
-    return _permission_values(snapshot.reviewed_permissions)
+    permissions = _permission_values(snapshot.reviewed_permissions)
+    has_permissions = any(value is not None for value in permissions.values())
+    if has_permissions:
+        return permissions, True
+    if _nonempty_text(snapshot.review_evidence_id):
+        return permissions, False
+    return None
+
+
+def _nonempty_text(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return None
+    return value.strip() or None
+
+
+def _reviewed_at(value: str | None) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else None
 
 
 def _permission_values(value: object) -> dict[str, str | None]:
@@ -207,12 +233,16 @@ def _verified(
     permissions: Mapping[str, str | None],
     restrictions: list[str],
     evidence_key: str,
+    *,
+    auto_applicable: bool = True,
 ) -> LicenseDecision:
     location = snapshot.evidence_locations.get(evidence_key, evidence_key)
     evidence = {field: location for field in _PERMISSION_FIELDS if permissions.get(field) is not None}
+    if not evidence and evidence_key == "human_review":
+        evidence[evidence_key] = snapshot.review_evidence_id or location
     return LicenseDecision(
         status="verified",
-        auto_applicable=True,
+        auto_applicable=auto_applicable,
         allow_commercial=permissions.get("allow_commercial"),  # type: ignore[arg-type]
         allow_modify=permissions.get("allow_modify"),  # type: ignore[arg-type]
         allow_redistribute=permissions.get("allow_redistribute"),  # type: ignore[arg-type]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Callable
 from typing import Literal
 from urllib.parse import urljoin, urlparse
 
@@ -47,6 +48,7 @@ class NoonnuFontSnapshot(BaseModel):
     reviewed_by: str | None = None
     reviewed_at: str | None = None
     reviewed_permissions: dict[str, str | None] = Field(default_factory=dict)
+    review_evidence_id: str | None = None
 
 
 def extract_noonnu_font(html: str, source_url: str) -> NoonnuFontSnapshot:
@@ -58,21 +60,29 @@ def extract_noonnu_font(html: str, source_url: str) -> NoonnuFontSnapshot:
     soup = BeautifulSoup(html, "html.parser")
     detail = soup.select_one("[data-font-detail]")
     if not isinstance(detail, Tag):
-        detail = soup.find("article")
+        detail = _fallback_detail_article(soup)
 
     raw_sha256 = hashlib.sha256(html.encode("utf-8")).hexdigest()
     if not isinstance(detail, Tag):
-        return NoonnuFontSnapshot(source_url=source_url, raw_sha256=raw_sha256)
+        raise ValueError("font detail article is missing or ambiguous")
 
     evidence: dict[str, str] = {}
-    name_ko = _text(detail.select_one("[data-font-name]")) or _heading_text(detail)
+    name_ko, name_selector = _field_text(
+        detail,
+        "[data-font-name]",
+        _heading_text,
+    )
     if name_ko:
-        evidence["name_ko"] = "[data-font-name]"
+        evidence["name_ko"] = name_selector
     name_en = _text(detail.select_one("[data-font-name-en]"))
-    foundry = _text(detail.select_one("[data-foundry]")) or _label_value(detail, "제작")
+    foundry, foundry_selector = _field_text(
+        detail,
+        "[data-foundry]",
+        lambda element: _label_value(element, "제작"),
+    )
     if foundry:
-        evidence["foundry"] = "[data-foundry]"
-    category = _text(detail.select_one("[data-category]")) or _label_value(detail, "분류")
+        evidence["foundry"] = foundry_selector
+    category = _text(detail.select_one("[data-category]")) or _label_value(detail, "분류")[0]
     tags = _texts(detail.select("[data-tags] li"))
     price = _text(detail.select_one("[data-price]"))
 
@@ -125,17 +135,59 @@ def _texts(elements: list[Tag]) -> list[str]:
     return [value for value in values if value is not None]
 
 
-def _heading_text(detail: Tag) -> str | None:
+def _field_text(
+    detail: Tag,
+    selector: str,
+    fallback: Callable[[Tag], tuple[str | None, str]],
+) -> tuple[str | None, str]:
+    selected = detail.select_one(selector)
+    value = _text(selected if isinstance(selected, Tag) else None)
+    if value:
+        return value, selector
+    fallback_value, fallback_selector = fallback(detail)
+    return fallback_value, fallback_selector
+
+
+def _heading_text(detail: Tag) -> tuple[str | None, str]:
     heading = detail.find(["h1", "h2"])
-    return _text(heading if isinstance(heading, Tag) else None)
+    if not isinstance(heading, Tag):
+        return None, "h1,h2"
+    return _text(heading), heading.name
 
 
-def _label_value(detail: Tag, label: str) -> str | None:
+def _label_value(detail: Tag, label: str) -> tuple[str | None, str]:
     label_node = detail.find(string=re.compile(rf"^\s*{re.escape(label)}\s*$"))
     if label_node is None or not isinstance(label_node.parent, Tag):
-        return None
+        return None, f"label:{label}"
     sibling = label_node.parent.find_next_sibling()
-    return _text(sibling if isinstance(sibling, Tag) else None)
+    if not isinstance(sibling, Tag):
+        return None, f"{label_node.parent.name} + *"
+    return _text(sibling), f"{label_node.parent.name} + {sibling.name}"
+
+
+def _fallback_detail_article(soup: BeautifulSoup) -> Tag | None:
+    candidates = [
+        article
+        for article in soup.find_all("article")
+        if isinstance(article, Tag) and _is_font_detail_article(article)
+    ]
+    if len(candidates) != 1:
+        return None
+    return candidates[0]
+
+
+def _is_font_detail_article(article: Tag) -> bool:
+    has_name = bool(article.select_one("[data-font-name]")) or bool(article.find("h1"))
+    if not has_name:
+        return False
+    signals = (
+        bool(article.select_one("[data-foundry]"))
+        or _label_value(article, "제작")[0] is not None,
+        bool(article.select_one("[data-download-cta][href]")),
+        bool(article.select_one("[data-license-body]")),
+        "@font-face" in article.get_text(),
+    )
+    return sum(signals) >= 2
 
 
 def _download_candidates(detail: Tag, source_url: str) -> list[str]:
@@ -182,7 +234,7 @@ def _font_face_metadata(detail: Tag, source_url: str) -> tuple[list[str], list[s
         for block in re.findall(r"@font-face\s*\{.*?\}", css, flags=re.DOTALL | re.IGNORECASE):
             blocks.append(block)
             for raw_url in re.findall(r"url\(\s*['\"]?([^'\")\s]+)", block):
-                candidate = _external_http_url(raw_url, source_url)
+                candidate = _font_file_url(raw_url, source_url)
                 if candidate and candidate not in files:
                     files.append(candidate)
             for raw_weight in re.findall(r"font-weight\s*:\s*(\d{3})", block, flags=re.IGNORECASE):
@@ -191,6 +243,15 @@ def _font_face_metadata(detail: Tag, source_url: str) -> tuple[list[str], list[s
             if style_match:
                 styles.add(style_match.group(1).lower())
     return blocks, files, sorted(weights), sorted(styles)
+
+
+def _font_file_url(raw_url: str, source_url: str) -> str | None:
+    candidate = _external_http_url(raw_url, source_url)
+    if candidate is None:
+        return None
+    if urlparse(candidate).path.lower().endswith((".woff", ".woff2", ".ttf", ".otf")):
+        return candidate
+    return None
 
 
 def _page_id(source_url: str) -> str | None:
