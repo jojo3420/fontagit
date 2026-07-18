@@ -79,11 +79,17 @@ $$;
 
 -- finding 하나라도 없거나 승인되지 않았거나, UUID 내용이 다르면 evidence/font/finding 어느 것도 부분 적용하지 않는다.
 do $$
-declare v jsonb; v_text text; v_hash text; v_before int;
+declare v jsonb; v_text text; v_hash text; v_before int; v_failed boolean := false;
 begin
   select count(*) into v_before from fontagit.font_source_snapshots;
   v:=pg_temp.manifest('00000000-0000-0000-0000-000000001101'); v:=jsonb_set(v,'{evidence_bundle,findings}','[]'::jsonb); v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex');
-  begin perform fontagit.apply_font_audit_manifest(v_text,v_hash,1); raise exception 'missing finding should fail'; exception when others then null; end;
+  begin
+    perform fontagit.apply_font_audit_manifest(v_text,v_hash,1);
+  exception when others then
+    if sqlerrm not like '%exact evidence set%' then raise; end if;
+    v_failed := true;
+  end;
+  if not v_failed then raise exception 'missing finding was accepted'; end if;
   if (select count(*) from fontagit.font_source_snapshots)<>v_before then raise exception 'missing finding wrote evidence'; end if;
   v:=pg_temp.manifest('00000000-0000-0000-0000-000000001102'); v:=jsonb_set(v,'{evidence_bundle,snapshots,0,final_url}','"https://different.example"'::jsonb); v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex');
   begin perform fontagit.apply_font_audit_manifest(v_text,v_hash,1); raise exception 'snapshot collision should fail'; exception when others then if sqlerrm not like '%snapshot UUID content conflict%' then raise; end if; end;
@@ -91,7 +97,41 @@ begin
 end;
 $$;
 
--- bootstrap도 unknown/duplicate provider key를 쓰기 전에 전부 거부한다.
+-- 승인 메타·기준선·번들 집합의 형식 오류는 evidence/fonts에 손대기 전에 막는다.
+do $$
+declare v jsonb; v_text text; v_hash text; v_before_snapshots int; v_before_findings int; v_failed boolean;
+begin
+  select count(*) into v_before_snapshots from fontagit.font_source_snapshots;
+  select count(*) into v_before_findings from fontagit.font_audit_findings;
+
+  v:=pg_temp.manifest('00000000-0000-0000-0000-000000001100');
+  v:=jsonb_set(v,'{evidence_bundle,findings,0,reviewed_at}','null'::jsonb);
+  v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex'); v_failed:=false;
+  begin perform fontagit.apply_font_audit_manifest(v_text,v_hash,1); exception when others then if sqlerrm not like '%approval metadata%' then raise; end if; v_failed:=true; end;
+  if not v_failed then raise exception 'null reviewed_at was accepted'; end if;
+
+  v:=pg_temp.manifest('00000000-0000-0000-0000-000000001100');
+  v:=jsonb_set(v,'{evidence_bundle,findings,0,reviewed_by}','["reviewer"]'::jsonb);
+  v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex'); v_failed:=false;
+  begin perform fontagit.apply_font_audit_manifest(v_text,v_hash,1); exception when others then if sqlerrm not like '%approval metadata%' then raise; end if; v_failed:=true; end;
+  if not v_failed then raise exception 'array reviewed_by was accepted'; end if;
+
+  v:=pg_temp.manifest('00000000-0000-0000-0000-000000001100');
+  v:=jsonb_set(v,'{evidence_bundle,snapshots}',(v#>'{evidence_bundle,snapshots}') || jsonb_build_array(jsonb_build_object(
+    'id','00000000-0000-0000-0000-000000001299','run_id','00000000-0000-0000-0000-000000001100','provider','noonnu','provider_record_id','1001','source_kind','official','document_kind','download','request_url','https://example.test/extra','final_url','https://example.test/extra','http_status',200,'raw_text',null,'raw_sha256',repeat('f',64),'normalized_sha256',repeat('e',64),'extracted','{}'::jsonb,'evidence_locations','{}'::jsonb,'extraction_rule_id',null,'parser_version','test-v1','collected_at','2026-07-18T00:00:00+00:00','source_key',jsonb_build_object('provider','noonnu','provider_record_id','1001'))));
+  v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex'); v_failed:=false;
+  begin perform fontagit.apply_font_audit_manifest(v_text,v_hash,1); exception when others then if sqlerrm not like '%exact evidence set%' then raise; end if; v_failed:=true; end;
+  if not v_failed then raise exception 'orphan snapshot was accepted'; end if;
+
+  v:=pg_temp.manifest('00000000-0000-0000-0000-000000001100'); v:=jsonb_set(v,'{baseline_sha256}','"ABC"'::jsonb);
+  v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex'); v_failed:=false;
+  begin perform fontagit.apply_font_audit_manifest(v_text,v_hash,1); exception when others then if sqlerrm not like '%baseline SHA%' then raise; end if; v_failed:=true; end;
+  if not v_failed then raise exception 'invalid baseline was accepted'; end if;
+  if (select count(*) from fontagit.font_source_snapshots)<>v_before_snapshots or (select count(*) from fontagit.font_audit_findings)<>v_before_findings then raise exception 'invalid manifest wrote evidence'; end if;
+end;
+$$;
+
+-- bootstrap 정상 2건은 공개 fonts를 바꾸지 않고 source key만 추가한다.
 insert into fontagit.fonts(id,slug,name_en,name_ko,category_ko,source_tier,official_url,status,license_verified,license_status) values
  ('00000000-0000-0000-0000-000000001003','bootstrap-one','Bootstrap One','연결 하나','고딕','B','https://example.test/three','draft',false,'pending'),
  ('00000000-0000-0000-0000-000000001004','bootstrap-two','Bootstrap Two','연결 둘','고딕','B','https://example.test/four','draft',false,'pending');
@@ -101,9 +141,39 @@ begin
   select jsonb_build_object('schema_version',1,'matched',2,'unmatched',0,'conflicts',0,'review_rows','[]'::jsonb,'entries',jsonb_agg(jsonb_build_object(
     'font_id',id,'slug',slug,'provider','noonnu','provider_record_id',case slug when 'bootstrap-one' then '2001' else '2002' end,'source_url','https://noonnu.cc/font_page/x',
     'before',jsonb_build_object('source_tier',source_tier,'slug',slug,'name_en',name_en,'name_ko',name_ko,'official_url',official_url,'foundry',foundry,'updated_at',updated_at),'public_updates','{}'::jsonb))) into v from fontagit.fonts where slug like 'bootstrap-%';
-  v:=jsonb_set(v,'{entries,1,provider_record_id}','"2001"'::jsonb); v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex');
-  begin perform fontagit.apply_font_source_bootstrap(v_text,v_hash,1); raise exception 'duplicate bootstrap should fail'; exception when others then if sqlerrm not like '%bootstrap duplicate key%' then raise; end if; end;
-  if exists(select 1 from fontagit.font_sources where provider_record_id in ('2001','2002')) then raise exception 'bootstrap duplicate partially wrote'; end if;
+  v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex');
+  if fontagit.apply_font_source_bootstrap(v_text,v_hash,1)<>2 then raise exception 'bootstrap normal apply failed'; end if;
+  if (select count(*) from fontagit.font_sources where provider='noonnu' and provider_record_id in ('2001','2002'))<>2
+     or exists(select 1 from fontagit.fonts where slug like 'bootstrap-%' and foundry is not null) then
+    raise exception 'bootstrap normal apply changed public data';
+  end if;
+  v:=jsonb_set(v,'{matched}','1'::jsonb); v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex');
+  begin perform fontagit.apply_font_source_bootstrap(v_text,v_hash,1); raise exception 'bootstrap count mismatch should fail'; exception when others then if sqlerrm not like '%bootstrap counts%' then raise; end if; end;
+end;
+$$;
+
+-- 첫 entry가 신규여도 두 번째 provider key가 기존 값과 충돌하면 신규 insert도 0건이다.
+insert into fontagit.fonts(id,slug,name_en,name_ko,category_ko,source_tier,official_url,status,license_verified,license_status) values
+ ('00000000-0000-0000-0000-000000001005','bootstrap-three','Bootstrap Three','연결 셋','고딕','B','https://example.test/five','draft',false,'pending'),
+ ('00000000-0000-0000-0000-000000001006','bootstrap-four','Bootstrap Four','연결 넷','고딕','B','https://example.test/six','draft',false,'pending');
+do $$
+declare v jsonb; v_text text; v_hash text; v_failed boolean := false;
+begin
+  select jsonb_build_object('schema_version',1,'matched',2,'unmatched',0,'conflicts',0,'review_rows','[]'::jsonb,'entries',jsonb_agg(jsonb_build_object(
+    'font_id',id,'slug',slug,'provider','noonnu','provider_record_id',case slug when 'bootstrap-three' then '2003' else '2001' end,'source_url','https://noonnu.cc/font_page/x',
+    'before',jsonb_build_object('source_tier',source_tier,'slug',slug,'name_en',name_en,'name_ko',name_ko,'official_url',official_url,'foundry',foundry,'updated_at',updated_at),'public_updates','{}'::jsonb) order by slug))
+  into v from fontagit.fonts where slug in ('bootstrap-three','bootstrap-four');
+  v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex');
+  begin
+    perform fontagit.apply_font_source_bootstrap(v_text,v_hash,1);
+  exception when others then
+    if sqlerrm not like '%provider key collision%' then raise; end if;
+    v_failed := true;
+  end;
+  if not v_failed then raise exception 'bootstrap existing provider collision was accepted'; end if;
+  if exists(select 1 from fontagit.font_sources where provider='noonnu' and provider_record_id='2003') then
+    raise exception 'bootstrap provider collision partially inserted first entry';
+  end if;
 end;
 $$;
 

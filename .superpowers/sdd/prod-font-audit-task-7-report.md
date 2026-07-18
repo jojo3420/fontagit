@@ -38,3 +38,10 @@
 - 0018은 before/after의 동일 allowlist 전 필드를 실제 DB 값과 비교하고, UUID 재사용 시 run/snapshot/finding의 저장 내용 충돌을 거부한다. bootstrap도 최상위·entry 키와 중복 key를 사전 거부한다.
 - 로컬 임시 PostgreSQL 17 포트 55438에서 0001~0018을 적용한 뒤 SQL `ALL PASS`: 정상 2건, 역방향 전체 복원, missing finding, snapshot UUID 내용 충돌, bootstrap duplicate 모두 부분 반영 0을 확인했다.
 - Python: focused `2 passed`, 전체 `184 passed`; scoped ruff/mypy 통과. 원격 dev/prod migration·RPC·데이터 쓰기는 실행하지 않았다.
+
+## 재검토 2차 수정 (2026-07-18)
+
+- SQL RED: `reviewed_at=null`, `reviewed_by=[]`, orphan snapshot, 잘못된 top-level baseline SHA, bootstrap `matched` 불일치 문서를 추가했다. 기존 함수는 승인 메타데이터/정확 집합 검증 전에 다른 충돌로 진행하거나 잘못된 입력을 허용했다.
+- GREEN: `reviewed_by`는 JSON string + 공백 제거 후 비어 있지 않음, `reviewed_at`은 timezone이 있는 JSON string과 안전한 timestamp cast를 요구한다. status도 JSON string `approved`만 허용한다.
+- entry가 가리키는 snapshot/finding ID 집합과 bundle 집합이 정확히 같아야 하며, top/run baseline SHA는 64자리 소문자 hex와 동일값을 요구한다. bootstrap은 non-negative 정수 집계와 `entries`·`review_rows` 수의 계약을 확인한다.
+- 로컬 임시 PostgreSQL 17에서 0018 재적용과 SQL `ALL PASS`를 확인했다. Python focused 2 passed, 전체 184 passed, scoped ruff/mypy 통과. 원격 dev/prod 적용은 하지 않았다.

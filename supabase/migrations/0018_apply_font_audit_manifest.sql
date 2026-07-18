@@ -43,6 +43,21 @@ begin
 end;
 $$;
 
+create or replace function fontagit._audit_manifest_approval_metadata_valid(p_finding jsonb)
+returns boolean language plpgsql immutable set search_path = '' as $$
+begin
+  if jsonb_typeof(p_finding->'status') <> 'string' or p_finding->>'status' <> 'approved'
+     or jsonb_typeof(p_finding->'reviewed_by') <> 'string' or btrim(p_finding->>'reviewed_by') = ''
+     or jsonb_typeof(p_finding->'reviewed_at') <> 'string'
+     or p_finding->>'reviewed_at' !~ '(Z|[+-][0-9]{2}:[0-9]{2})$' then
+    return false;
+  end if;
+  perform (p_finding->>'reviewed_at')::timestamptz;
+  return true;
+exception when others then return false;
+end;
+$$;
+
 -- 허용 필드의 실제 DB 값을 JSON null까지 보존해서 비교한다.
 create or replace function fontagit._audit_font_value(p_font_id uuid, p_key text)
 returns jsonb language sql stable security definer set search_path = '' as $$
@@ -159,6 +174,8 @@ begin
      or jsonb_array_length(v_manifest->'entries') not between 1 and 1240 then
     raise exception 'manifest entries must contain 1..1240 rows';
   end if;
+  if jsonb_typeof(v_manifest->'baseline_sha256') <> 'string'
+     or v_manifest->>'baseline_sha256' !~ '^[0-9a-f]{64}$' then raise exception 'baseline SHA-256 is invalid'; end if;
   if jsonb_typeof(v_manifest#>'{evidence_bundle,run}') <> 'object'
      or jsonb_typeof(v_manifest#>'{evidence_bundle,snapshots}') <> 'array'
      or jsonb_typeof(v_manifest#>'{evidence_bundle,findings}') <> 'array' then
@@ -170,6 +187,8 @@ begin
   perform fontagit._audit_manifest_exact_keys(v_run,
     array['id','stage','target_environment','target_count','success_count','verified_count','review_count','broken_count','parser_version','baseline_sha256','manifest_sha256','dry_run','status','started_at','finished_at'], 'run');
   if (v_run->>'id')::uuid <> (v_manifest->>'run_id')::uuid then raise exception 'run id mismatch'; end if;
+  if jsonb_typeof(v_run->'baseline_sha256') <> 'string'
+     or v_run->>'baseline_sha256' <> v_manifest->>'baseline_sha256' then raise exception 'baseline SHA-256 does not match run'; end if;
 
   if exists (select 1 from jsonb_array_elements(v_manifest->'entries') e
     group by e#>>'{source_key,provider}', e#>>'{source_key,provider_record_id}' having count(*) > 1) then
@@ -192,6 +211,20 @@ begin
       select jsonb_array_elements_text(e->'finding_ids') id from jsonb_array_elements(v_manifest->'entries') e
     ) q group by id having count(*) > 1
   ) then raise exception 'entry evidence IDs must be globally unique'; end if;
+
+  if exists(
+    (select jsonb_array_elements_text(e->'evidence_ids') from jsonb_array_elements(v_manifest->'entries') e)
+    except (select s->>'id' from jsonb_array_elements(v_manifest#>'{evidence_bundle,snapshots}') s)
+  ) or exists(
+    (select s->>'id' from jsonb_array_elements(v_manifest#>'{evidence_bundle,snapshots}') s)
+    except (select jsonb_array_elements_text(e->'evidence_ids') from jsonb_array_elements(v_manifest->'entries') e)
+  ) or exists(
+    (select jsonb_array_elements_text(e->'finding_ids') from jsonb_array_elements(v_manifest->'entries') e)
+    except (select f->>'id' from jsonb_array_elements(v_manifest#>'{evidence_bundle,findings}') f)
+  ) or exists(
+    (select f->>'id' from jsonb_array_elements(v_manifest#>'{evidence_bundle,findings}') f)
+    except (select jsonb_array_elements_text(e->'finding_ids') from jsonb_array_elements(v_manifest->'entries') e)
+  ) then raise exception 'entries must reference the exact evidence set'; end if;
 
   create temporary table if not exists pg_temp.font_audit_targets(
     font_id uuid primary key, entry jsonb not null
@@ -248,8 +281,10 @@ begin
 
     for v_finding in select f from jsonb_array_elements(v_manifest#>'{evidence_bundle,findings}') f
       where f->>'id' in (select jsonb_array_elements_text(v_entry->'finding_ids')) loop
-      if v_finding->>'status' <> 'approved' or nullif(v_finding->>'reviewed_by','') is null
-         or (v_finding->>'run_id')::uuid <> (v_manifest->>'run_id')::uuid
+      if not fontagit._audit_manifest_approval_metadata_valid(v_finding) then
+        raise exception 'approval metadata is invalid';
+      end if;
+      if (v_finding->>'run_id')::uuid <> (v_manifest->>'run_id')::uuid
          or v_finding#>>'{source_key,provider}' <> v_entry#>>'{source_key,provider}'
          or v_finding#>>'{source_key,provider_record_id}' <> v_entry#>>'{source_key,provider_record_id}'
          or not (v_entry->'after' ? (v_finding->>'field_name'))
@@ -314,6 +349,7 @@ begin
     perform fontagit._audit_manifest_exact_keys(v_finding,
       array['id','run_id','field_name','before_value','proposed_value','evidence_id','confidence','auto_applicable','review_reason','status','reviewed_by','reviewed_at','source_key'], 'finding');
     perform fontagit._audit_manifest_exact_keys(v_finding->'source_key', array['provider','provider_record_id'], 'finding.source_key');
+    if not fontagit._audit_manifest_approval_metadata_valid(v_finding) then raise exception 'approval metadata is invalid'; end if;
     select font_id into v_font_id from pg_temp.font_audit_targets where entry#>>'{source_key,provider}'=v_finding#>>'{source_key,provider}' and entry#>>'{source_key,provider_record_id}'=v_finding#>>'{source_key,provider_record_id}';
     if exists(select 1 from fontagit.font_audit_findings f where f.id=(v_finding->>'id')::uuid and (
       f.run_id is distinct from (v_finding->>'run_id')::uuid or f.font_id is distinct from v_font_id
@@ -390,6 +426,14 @@ begin
   perform fontagit._audit_manifest_exact_keys(v_manifest, array['schema_version','matched','unmatched','conflicts','entries','review_rows'], 'bootstrap manifest');
   if p_schema_version<>1 or (v_manifest->>'schema_version')::integer<>1 then raise exception 'unsupported manifest schema version'; end if;
   if jsonb_typeof(v_manifest->'entries')<>'array' or jsonb_array_length(v_manifest->'entries') not between 1 and 1240 then raise exception 'bootstrap entries must contain 1..1240 rows'; end if;
+  if jsonb_typeof(v_manifest->'matched')<>'number' or jsonb_typeof(v_manifest->'unmatched')<>'number' or jsonb_typeof(v_manifest->'conflicts')<>'number'
+     or v_manifest->>'matched' !~ '^[0-9]+$' or v_manifest->>'unmatched' !~ '^[0-9]+$' or v_manifest->>'conflicts' !~ '^[0-9]+$'
+     or jsonb_typeof(v_manifest->'review_rows')<>'array'
+     or (v_manifest->>'matched')::integer <> jsonb_array_length(v_manifest->'entries')
+     or (v_manifest->>'unmatched')::integer + (v_manifest->>'conflicts')::integer <> jsonb_array_length(v_manifest->'review_rows') then raise exception 'bootstrap counts or review rows are invalid'; end if;
+  for v_entry in select value from jsonb_array_elements(v_manifest->'review_rows') loop
+    perform fontagit._audit_manifest_exact_keys(v_entry, array['font_id','slug','source_tier','reason'], 'bootstrap review row');
+  end loop;
   if exists(select 1 from jsonb_array_elements(v_manifest->'entries') e group by e->>'font_id' having count(*)>1)
      or exists(select 1 from jsonb_array_elements(v_manifest->'entries') e group by e->>'provider',e->>'provider_record_id' having count(*)>1) then raise exception 'bootstrap duplicate key'; end if;
   for v_entry in select value from jsonb_array_elements(v_manifest->'entries') loop
