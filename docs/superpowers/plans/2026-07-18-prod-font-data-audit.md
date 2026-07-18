@@ -1070,7 +1070,7 @@ git commit -m "feat: apply font audit manifest atomically"
 - noonnu-review approve: finding approved만 설정
 - noonnu-publish: 쓰기 금지, manifest 생성 안내만 제공
 
-- [ ] **Step 1: 재오염 방지 회귀 테스트 수정**
+- [x] **Step 1: 재오염 방지 회귀 테스트 수정**
 
 ~~~python
 def test_enrich_never_updates_verified_font_fields(mock_schema):
@@ -1084,7 +1084,7 @@ def test_legacy_publish_confirm_is_rejected(mock_schema):
         publish_to_prod(mock_schema, PROD_URL, PROD_KEY, dry_run=False)
 ~~~
 
-- [ ] **Step 2: RED 확인**
+- [x] **Step 2: RED 확인**
 
 ~~~bash
 cd apps/pipeline
@@ -1094,13 +1094,13 @@ uv run pytest tests/test_noonnu_enrich.py \
 
 Expected: 기존 fonts update와 row-by-row prod upsert 때문에 실패.
 
-- [ ] **Step 3: 단일 writer 전환**
+- [x] **Step 3: 단일 writer 전환**
 
 noonnu_enrich.py의 _font_update와 fonts update를 제거하고 snapshot + finding만 쓴다. noonnu_review.py approve는 review_status가 아니라 font_audit_findings.status = approved, reviewed_by, reviewed_at만 바꾼다. noonnu_publish.py의 실제 upsert는 RuntimeError로 막고 dry-run은 대상 수·legacy 필드 소비자 경고만 출력한다.
 
 __main__.py의 noonnu-publish --confirm 도움말은 deprecated로 표시하고 실제 적용 명령은 font-audit-manifest apply로 안내한다.
 
-- [ ] **Step 4: GREEN과 전체 파이프라인 검사**
+- [x] **Step 4: GREEN과 전체 파이프라인 검사**
 
 ~~~bash
 cd apps/pipeline
@@ -1111,7 +1111,7 @@ uv run mypy src
 
 Expected: 전체 pipeline 테스트 PASS, ruff/mypy 오류 0.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ~~~bash
 git add apps/pipeline/src/fontagit_pipeline/noonnu_enrich.py \
