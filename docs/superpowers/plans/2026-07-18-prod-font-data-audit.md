@@ -617,7 +617,7 @@ git commit -m "feat: build stable font source bootstrap"
 - Produces: fetch_public_url(url, *, max_bytes=1048576, max_redirects=5) -> FetchResult
 - Produces: classify_download(observations) -> DownloadStatus
 
-- [ ] **Step 1: 핵심 3개 테스트 작성**
+- [x] **Step 1: 핵심 3개 테스트 작성**
 
 ~~~bash
 mkdir -p apps/pipeline/tests/fixtures/audit
@@ -644,7 +644,7 @@ def test_broken_requires_two_independent_observations():
     assert classify_download([first, second]) == "broken"
 ~~~
 
-- [ ] **Step 2: RED 확인**
+- [x] **Step 2: RED 확인**
 
 ~~~bash
 cd apps/pipeline
@@ -653,7 +653,7 @@ uv run pytest tests/test_audit_http.py -q
 
 Expected: audit_http 모듈이 없어 실패.
 
-- [ ] **Step 3: URL·DNS 방어 구현**
+- [x] **Step 3: URL·DNS 방어 구현**
 
 http/https만 허용하고 localhost, loopback, private, link-local, multicast, reserved, unspecified IP를 차단한다. A/AAAA 결과를 모두 검사한다. 요청은 shell=False인 subprocess 인자 배열로 curl을 실행하며, 허용 IP를 --resolve host:port:ip로 고정하고 원래 hostname의 TLS SNI·인증서 검증을 유지한다. 리다이렉트는 자동 추적하지 않고 Location을 읽어 매 단계 DNS를 다시 검사한다.
 
@@ -668,11 +668,11 @@ CURL_BASE = [
 ]
 ~~~
 
-- [ ] **Step 4: 상태 판정 구현**
+- [x] **Step 4: 상태 판정 구현**
 
 400·401·403·429, 5xx, timeout, 차단은 needs_review다. 2xx라도 폰트명·제작사·문서 역할 확인 전에는 verified가 아니다. 404·410은 서로 다른 run_id이며 observed_at 차이가 24시간 이상인 두 관찰만 broken이다.
 
-- [ ] **Step 5: GREEN과 정적 검사**
+- [x] **Step 5: GREEN과 정적 검사**
 
 ~~~bash
 cd apps/pipeline
@@ -683,7 +683,12 @@ uv run mypy src
 
 Expected: 3개 테스트 PASS, ruff/mypy 오류 0.
 
-- [ ] **Step 6: 커밋**
+실행 결과: 핵심 테스트 8건과 전체 pipeline 테스트 172건이 통과했고,
+범위 내 ruff/mypy도 통과했다. 전체 `mypy src`의 Noonnu 관련 7건은 기존
+기준선 오류다. 독립 보안 검토에서 발견된 curl 실패 코드·스트리밍 용량 제한
+문제를 보완했고 재검토 승인을 받았다.
+
+- [x] **Step 6: 커밋**
 
 ~~~bash
 git add apps/pipeline/src/fontagit_pipeline/audit_http.py \
