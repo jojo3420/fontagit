@@ -87,19 +87,25 @@ def test_zero_or_multiple_candidates_are_review_only() -> None:
         prod_rows=[
             prod_font("동일", "동일", INSTAGRAM_URL),
             prod_font("missing", "없음", INSTAGRAM_URL),
+            {
+                **prod_font("제작사-있음", "제작사 있음", INSTAGRAM_URL),
+                "foundry": "기존 제작사",
+            },
         ],
         tier_a=[],
         tier_b=[
             tier_b_seed("1", "동일", INSTAGRAM_URL),
             tier_b_seed("2", "동일", INSTAGRAM_URL),
+            tier_b_seed("3", "제작사 있음", INSTAGRAM_URL),
         ],
     )
 
-    assert (result.matched, result.unmatched, result.conflicts) == (0, 1, 1)
+    assert (result.matched, result.unmatched, result.conflicts) == (0, 2, 1)
     assert result.entries == []
     assert {row["reason"] for row in result.review_rows} == {
         "no_exact_candidate",
         "multiple_candidates",
+        "foundry_precondition_not_null",
     }
 
 
@@ -133,22 +139,6 @@ def test_prod_baseline_sorts_slug_before_hashing(tmp_path: Path) -> None:
     payload = json.loads(out.read_text(encoding="utf-8"))
     slugs = [row["slug"] for row in payload["rows"]]
     assert slugs == sorted(slugs)
-
-
-def test_non_null_foundry_is_review_only_even_when_source_matches() -> None:
-    """foundry가 이미 있으면 출처키 자동 연결 전 사람 검수를 거친다."""
-    row = prod_font("흰꼬리수리", "흰꼬리수리", INSTAGRAM_URL)
-    row["foundry"] = "네이버"
-
-    result = build_bootstrap_manifest(
-        prod_rows=[row],
-        tier_a=[],
-        tier_b=[tier_b_seed("613", "흰꼬리수리", INSTAGRAM_URL)],
-    )
-
-    assert (result.matched, result.unmatched, result.conflicts) == (0, 1, 0)
-    assert result.entries == []
-    assert result.review_rows[0]["reason"] == "foundry_precondition_not_null"
 
 
 def test_prod_baseline_requires_complete_sorted_hashed_snapshot(tmp_path: Path) -> None:
