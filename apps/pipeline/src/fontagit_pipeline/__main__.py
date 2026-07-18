@@ -410,6 +410,67 @@ def main_audit_policy_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def main_audit_export_baseline(args: argparse.Namespace) -> int:
+    """공개 anon API만 사용해 prod 기준선을 내보낸다."""
+    from fontagit_pipeline.audit_bootstrap import (
+        BootstrapError,
+        fetch_prod_public_rows,
+        write_prod_baseline,
+    )
+    from fontagit_pipeline.config import load_audit_settings
+
+    if args.source != "prod-public":
+        logger.error("허용되지 않은 기준선 출처입니다: %s", args.source)
+        return 2
+    try:
+        settings = load_audit_settings()
+        if not settings.supabase_url or not settings.supabase_anon_key:
+            raise BootstrapError("SUPABASE_URL과 SUPABASE_ANON_KEY가 필요합니다")
+        rows = fetch_prod_public_rows(settings.supabase_url, settings.supabase_anon_key)
+        digest = write_prod_baseline(rows, args.out)
+    except (BootstrapError, OSError, httpx.HTTPError) as exc:
+        logger.error("prod 공개 기준선 내보내기 실패: %s", exc)
+        return 3
+
+    logger.info("prod 공개 기준선 저장: %s (%d개, sha256=%s)", args.out, len(rows), digest)
+    return 0
+
+
+def main_audit_bootstrap(args: argparse.Namespace) -> int:
+    """고정 snapshot만 비교해 안정 출처키 manifest를 생성한다."""
+    from fontagit_pipeline.audit_bootstrap import (
+        BootstrapError,
+        build_bootstrap_manifest,
+        load_snapshot_records,
+        write_bootstrap_manifest,
+    )
+
+    try:
+        prod_rows = load_snapshot_records(args.prod_snapshot, "rows")
+        tier_a = load_snapshot_records(Path("output") / "tier-a.json", "fonts")
+        tier_b = load_snapshot_records(
+            Path("output") / "tier-b-noonnu-seed.json", "records"
+        )
+        result = build_bootstrap_manifest(prod_rows, tier_a, tier_b)
+        total = result.matched + result.unmatched + result.conflicts
+        if total != len(prod_rows):
+            raise BootstrapError("bootstrap 결과 수가 prod 기준선과 일치하지 않습니다")
+        digest = write_bootstrap_manifest(result, args.out)
+    except (BootstrapError, OSError) as exc:
+        logger.error("안정 출처키 bootstrap 실패: %s", exc)
+        return 3
+
+    logger.info(
+        "bootstrap 저장: %s (연결=%d, 미연결=%d, 충돌=%d, sha256=%s)",
+        args.out,
+        result.matched,
+        result.unmatched,
+        result.conflicts,
+        digest,
+    )
+    return 0
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="FontAgit 파이프라인",
@@ -498,6 +559,33 @@ if __name__ == "__main__":
         help="정책 점검 JSON 출력 경로",
     )
     policy_parser.set_defaults(func=main_audit_policy_check)
+
+    baseline_parser = subparsers.add_parser(
+        "font-audit-export-baseline",
+        help="prod 공개 API를 읽기 전용으로 조회해 기준선 JSON 생성",
+    )
+    baseline_parser.add_argument(
+        "--source",
+        choices=["prod-public"],
+        required=True,
+        help="읽기 전용 공개 prod 출처",
+    )
+    baseline_parser.add_argument(
+        "--out", type=Path, required=True, help="기준선 JSON 출력 경로"
+    )
+    baseline_parser.set_defaults(func=main_audit_export_baseline)
+
+    bootstrap_parser = subparsers.add_parser(
+        "font-audit-bootstrap",
+        help="고정 prod·Tier A·Tier B snapshot으로 안정 출처키 manifest 생성",
+    )
+    bootstrap_parser.add_argument(
+        "--prod-snapshot", type=Path, required=True, help="prod 공개 기준선 JSON 경로"
+    )
+    bootstrap_parser.add_argument(
+        "--out", type=Path, required=True, help="bootstrap JSON 출력 경로"
+    )
+    bootstrap_parser.set_defaults(func=main_audit_bootstrap)
 
     args = parser.parse_args()
 
