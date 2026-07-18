@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
@@ -136,6 +137,7 @@ def test_manifest_is_deterministic_reversible_and_hash_verified(tmp_path: Path) 
 
     paths = write_manifest_bundle(first, tmp_path)
     assert verify_manifest_file(paths.forward, paths.forward_sha256) == first.forward
+    assert verify_manifest_file(paths.reverse, paths.reverse_sha256) == first.reverse
     tampered = json.loads(paths.forward.read_text(encoding="utf-8"))
     tampered["entries"][0]["after"]["download_url"] = "https://evil.example/font.zip"
     paths.forward.write_text(json.dumps(tampered), encoding="utf-8")
@@ -143,7 +145,9 @@ def test_manifest_is_deterministic_reversible_and_hash_verified(tmp_path: Path) 
         verify_manifest_file(paths.forward, paths.forward_sha256)
 
 
-def test_manifest_rejects_unapproved_forbidden_or_stale_finding() -> None:
+def test_manifest_rejects_unapproved_forbidden_stale_or_unbound_evidence(
+    tmp_path: Path,
+) -> None:
     proposed = _finding("download_url", None, "https://clova.ai/font.zip")
     proposed["status"] = "proposed"
     forbidden = _finding("official_url", "https://instagram.com/wrong-old-link", "https://clova.ai")
@@ -156,3 +160,46 @@ def test_manifest_rejects_unapproved_forbidden_or_stale_finding() -> None:
     ):
         with pytest.raises(ManifestError, match=message):
             build_manifest(_run(), [finding], [_row()])
+
+    finding = _finding("download_url", None, "https://clova.ai/font.zip")
+    finding["reviewed_by"] = ["not-a-human"]
+    with pytest.raises(ManifestError, match="reviewed_by"):
+        build_manifest(_run(), [finding], [_row()])
+
+    wrong_font_row = deepcopy(_row())
+    wrong_font_row["evidence_snapshots"][0]["font_id"] = str(UUID(int=FONT_ID.int + 1))
+    with pytest.raises(ManifestError, match="snapshot font_id"):
+        build_manifest(
+            _run(), [_finding("download_url", None, "https://clova.ai/font.zip")], [wrong_font_row]
+        )
+
+    wrong_provider_row = deepcopy(_row())
+    wrong_provider_row["evidence_snapshots"][0]["provider_record_id"] = "999"
+    with pytest.raises(ManifestError, match="snapshot provider"):
+        build_manifest(
+            _run(), [_finding("download_url", None, "https://clova.ai/font.zip")], [wrong_provider_row]
+        )
+
+    duplicate_uuid_row = deepcopy(_row())
+    duplicate_uuid_row["evidence_snapshots"][0]["id"] = str(RUN_ID)
+    duplicate_uuid_finding = _finding("download_url", None, "https://clova.ai/font.zip")
+    duplicate_uuid_finding["evidence_id"] = str(RUN_ID)
+    with pytest.raises(ManifestError, match="globally unique"):
+        build_manifest(_run(), [duplicate_uuid_finding], [duplicate_uuid_row])
+
+    bundle = build_manifest(
+        _run(), [_finding("download_url", None, "https://clova.ai/font.zip")], [_row()]
+    )
+    paths = write_manifest_bundle(bundle, tmp_path)
+    malformed = json.loads(paths.forward.read_text(encoding="utf-8"))
+    malformed["entries"][0]["after"]["unexpected"] = "value"
+    paths.forward.write_text(
+        json.dumps(malformed, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    paths.forward_sha256.write_text(
+        __import__("hashlib").sha256(paths.forward.read_bytes()).hexdigest() + "\n",
+        encoding="ascii",
+    )
+    with pytest.raises(ManifestError, match="manifest JSON"):
+        verify_manifest_file(paths.forward, paths.forward_sha256)

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 
 _HASH = re.compile(r"^[0-9a-f]{64}$")
@@ -83,6 +83,29 @@ _PERMISSION_FIELDS = frozenset(
     }
 )
 _TEXT_ARRAY_FIELDS = frozenset({"tags", "variants", "subsets"})
+_RUN_KEYS = frozenset(
+    {
+        "id", "stage", "target_environment", "target_count", "success_count",
+        "verified_count", "review_count", "broken_count", "parser_version",
+        "baseline_sha256", "manifest_sha256", "dry_run", "status", "started_at",
+        "finished_at",
+    }
+)
+_SNAPSHOT_KEYS = frozenset(
+    {
+        "id", "run_id", "provider", "provider_record_id", "source_kind",
+        "document_kind", "request_url", "final_url", "http_status", "raw_text",
+        "raw_sha256", "normalized_sha256", "extracted", "evidence_locations",
+        "extraction_rule_id", "parser_version", "collected_at", "source_key",
+    }
+)
+_FINDING_KEYS = frozenset(
+    {
+        "id", "run_id", "field_name", "before_value", "proposed_value",
+        "evidence_id", "confidence", "auto_applicable", "review_reason", "status",
+        "reviewed_by", "reviewed_at", "source_key",
+    }
+)
 
 
 class ManifestError(ValueError):
@@ -122,6 +145,23 @@ class ManifestEntry(BaseModel):
     finding_ids: list[UUID]
     expected_updated_at: datetime
 
+    @model_validator(mode="after")
+    def validate_change_contract(self) -> ManifestEntry:
+        if not self.before or set(self.before) != set(self.after):
+            raise ValueError("before and after must contain the same non-empty fields")
+        for field_name, value in self.before.items():
+            if field_name not in _ALLOWED_FIELDS:
+                raise ValueError(f"field {field_name} is not allowed")
+            _validated_value(field_name, value)
+            _validated_value(field_name, self.after[field_name])
+        if len(set(self.evidence_ids)) != len(self.evidence_ids):
+            raise ValueError("evidence_ids must be unique")
+        if len(set(self.finding_ids)) != len(self.finding_ids):
+            raise ValueError("finding_ids must be unique")
+        if not self.evidence_ids or not self.finding_ids:
+            raise ValueError("entries require evidence_ids and finding_ids")
+        return self
+
 
 class EvidenceBundle(BaseModel):
     """동일 UUID로 이식할 실행·스냅샷·finding."""
@@ -143,6 +183,122 @@ class FontAuditManifest(BaseModel):
     rollback_mode: bool = False
     evidence_bundle: EvidenceBundle
     entries: list[ManifestEntry] = Field(min_length=1, max_length=1240)
+
+    @model_validator(mode="after")
+    def validate_evidence_contract(self) -> FontAuditManifest:
+        run = self.evidence_bundle.run
+        if set(run) != _RUN_KEYS:
+            raise ValueError("run has unknown or missing keys")
+        if _uuid(run.get("id"), "run.id") != self.run_id:
+            raise ValueError("run.id does not match manifest run_id")
+        if run.get("baseline_sha256") != self.baseline_sha256:
+            raise ValueError("run baseline_sha256 does not match manifest")
+        if not isinstance(run.get("target_count"), int) or isinstance(run.get("target_count"), bool):
+            raise ValueError("run target_count must be an integer")
+        parser_version = run.get("parser_version")
+        if not isinstance(parser_version, str) or not parser_version.strip():
+            raise ValueError("run parser_version must be text")
+
+        entries_by_key: dict[tuple[str, str], ManifestEntry] = {}
+        for entry in self.entries:
+            key = (entry.source_key.provider, entry.source_key.provider_record_id)
+            if key in entries_by_key:
+                raise ValueError("source_key is duplicated")
+            entries_by_key[key] = entry
+
+        snapshots: dict[UUID, dict[str, object]] = {}
+        globally_used_ids = {self.run_id}
+        for snapshot in self.evidence_bundle.snapshots:
+            if set(snapshot) != _SNAPSHOT_KEYS:
+                raise ValueError("snapshot has unknown or missing keys")
+            snapshot_id = _uuid(snapshot.get("id"), "snapshot.id")
+            if snapshot_id in globally_used_ids:
+                raise ValueError("run, snapshot, and finding UUIDs must be globally unique")
+            globally_used_ids.add(snapshot_id)
+            if _uuid(snapshot.get("run_id"), "snapshot.run_id") != self.run_id:
+                raise ValueError("snapshot run_id does not match manifest")
+            source_key = SourceKey.model_validate(snapshot.get("source_key"))
+            if (snapshot.get("provider"), snapshot.get("provider_record_id")) != (
+                source_key.provider,
+                source_key.provider_record_id,
+            ) or (source_key.provider, source_key.provider_record_id) not in entries_by_key:
+                raise ValueError("snapshot source key is not an entry source key")
+            for hash_name in ("raw_sha256", "normalized_sha256"):
+                if not isinstance(snapshot.get(hash_name), str) or _HASH.fullmatch(str(snapshot[hash_name])) is None:
+                    raise ValueError(f"snapshot {hash_name} must be SHA-256")
+            snapshots[snapshot_id] = snapshot
+
+        findings: dict[UUID, dict[str, object]] = {}
+        for finding in self.evidence_bundle.findings:
+            if set(finding) != _FINDING_KEYS:
+                raise ValueError("finding has unknown or missing keys")
+            finding_id = _uuid(finding.get("id"), "finding.id")
+            if finding_id in globally_used_ids:
+                raise ValueError("run, snapshot, and finding UUIDs must be globally unique")
+            globally_used_ids.add(finding_id)
+            if _uuid(finding.get("run_id"), "finding.run_id") != self.run_id:
+                raise ValueError("finding run_id does not match manifest")
+            if finding.get("status") != "approved":
+                raise ValueError("manifest finding must be approved")
+            reviewed_by = finding.get("reviewed_by")
+            if not isinstance(reviewed_by, str) or not reviewed_by.strip():
+                raise ValueError("finding reviewed_by must be non-empty text")
+            _datetime(finding.get("reviewed_at"), "finding.reviewed_at")
+            source_key = SourceKey.model_validate(finding.get("source_key"))
+            entry_for_finding = entries_by_key.get(
+                (source_key.provider, source_key.provider_record_id)
+            )
+            if entry_for_finding is None:
+                raise ValueError("finding source key is not an entry source key")
+            evidence_id = _uuid(finding.get("evidence_id"), "finding.evidence_id")
+            snapshot_for_finding = snapshots.get(evidence_id)
+            if (
+                snapshot_for_finding is None
+                or snapshot_for_finding.get("source_key") != source_key.model_dump(mode="json")
+            ):
+                raise ValueError("finding evidence does not belong to its source key")
+            field_name = finding.get("field_name")
+            if not isinstance(field_name, str) or field_name not in entry_for_finding.before:
+                raise ValueError("finding does not exactly authorize entry field")
+            expected_before = (
+                entry_for_finding.after[field_name]
+                if self.rollback_mode
+                else entry_for_finding.before[field_name]
+            )
+            expected_after = (
+                entry_for_finding.before[field_name]
+                if self.rollback_mode
+                else entry_for_finding.after[field_name]
+            )
+            if (
+                finding.get("before_value") != expected_before
+                or finding.get("proposed_value") != expected_after
+            ):
+                raise ValueError("finding does not exactly authorize entry field")
+            findings[finding_id] = finding
+
+        entry_evidence_ids = {item for entry in self.entries for item in entry.evidence_ids}
+        entry_finding_ids = {item for entry in self.entries for item in entry.finding_ids}
+        if entry_evidence_ids != set(snapshots) or entry_finding_ids != set(findings):
+            raise ValueError("entries must reference every and only bundled evidence")
+        for entry in self.entries:
+            authorized_fields = {str(findings[item]["field_name"]) for item in entry.finding_ids}
+            derived_fields = (
+                {"license_verified"}
+                if "license_status" in authorized_fields
+                and "license_verified" in entry.after
+                else set()
+            )
+            if set(entry.after) != authorized_fields | derived_fields:
+                raise ValueError("every changed field requires an approved finding")
+            for finding_id in entry.finding_ids:
+                finding = findings[finding_id]
+                if (
+                    finding["source_key"] != entry.source_key.model_dump(mode="json")
+                    or _uuid(finding["evidence_id"], "finding.evidence_id") not in entry.evidence_ids
+                ):
+                    raise ValueError("entry finding is not bound to its evidence")
+        return self
 
 
 @dataclass(frozen=True)
@@ -310,6 +466,7 @@ def build_manifest(
     rows_by_id: dict[UUID, Mapping[str, object]] = {}
     source_keys: set[tuple[str, str]] = set()
     snapshots_by_id: dict[UUID, tuple[Mapping[str, object], SourceKey]] = {}
+    globally_used_ids = {run_id}
     for row in current_rows:
         font_id = _uuid(row.get("id"), "current row id")
         if font_id in rows_by_id:
@@ -326,10 +483,18 @@ def build_manifest(
         for raw_snapshot in raw_snapshots:
             snapshot = _mapping(raw_snapshot, "snapshot")
             snapshot_id = _uuid(snapshot.get("id"), "snapshot.id")
-            if snapshot_id in snapshots_by_id:
-                raise ManifestError("snapshot id is duplicated")
+            if snapshot_id in globally_used_ids:
+                raise ManifestError("run, snapshot, and finding UUIDs must be globally unique")
+            globally_used_ids.add(snapshot_id)
             if _uuid(snapshot.get("run_id"), "snapshot.run_id") != run_id:
                 raise ManifestError("snapshot run_id does not match run")
+            if _uuid(snapshot.get("font_id"), "snapshot.font_id") != font_id:
+                raise ManifestError("snapshot font_id does not match current row")
+            if (
+                snapshot.get("provider") != key.provider
+                or snapshot.get("provider_record_id") != key.provider_record_id
+            ):
+                raise ManifestError("snapshot provider does not match current source key")
             snapshots_by_id[snapshot_id] = (snapshot, key)
 
     grouped: dict[UUID, list[dict[str, object]]] = defaultdict(list)
@@ -337,8 +502,12 @@ def build_manifest(
         finding = _mapping(raw_finding, "finding")
         if finding.get("status") != "approved":
             raise ManifestError("only approved findings may enter a manifest")
-        if not finding.get("reviewed_by") or finding.get("reviewed_at") is None:
-            raise ManifestError("approved finding requires reviewer and reviewed_at")
+        reviewed_by = finding.get("reviewed_by")
+        if not isinstance(reviewed_by, str) or not reviewed_by.strip():
+            raise ManifestError("approved finding reviewed_by must be non-empty text")
+        if finding.get("reviewed_at") is None:
+            raise ManifestError("approved finding requires reviewed_at")
+        _datetime(finding.get("reviewed_at"), "finding.reviewed_at")
         if _uuid(finding.get("run_id"), "finding.run_id") != run_id:
             raise ManifestError("finding run_id does not match run")
         field_name = finding.get("field_name")
@@ -350,6 +519,10 @@ def build_manifest(
         evidence_id = _uuid(finding.get("evidence_id"), "finding.evidence_id")
         if evidence_id not in snapshots_by_id:
             raise ManifestError("finding evidence snapshot is missing")
+        finding_id = _uuid(finding.get("id"), "finding.id")
+        if finding_id in globally_used_ids:
+            raise ManifestError("run, snapshot, and finding UUIDs must be globally unique")
+        globally_used_ids.add(finding_id)
         grouped[font_id].append(finding)
 
     if not grouped:

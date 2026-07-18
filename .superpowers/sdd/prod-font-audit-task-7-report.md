@@ -30,3 +30,11 @@
 
 - dev 원격 migration/RPC 검증은 dev 자격증명과 별도 승인 뒤 수행한다.
 - prod migration·manifest 적용은 사용자 명시 승인 뒤의 별도 작업이다.
+
+## 보안 재검토 수정 (2026-07-18)
+
+- RED: 중첩 `after`의 알 수 없는 필드와 배열 형태의 `reviewed_by`를 넣은 Python 계약 테스트가 기존 구현에서 실패했다. 기존 SQL 테스트도 finding이 빈 문서를 넣어 새 필수 근거 검증에서 실패했다.
+- GREEN: manifest의 run·entry·snapshot·finding을 폐쇄 스키마로 검증하고, 각 변경 필드를 같은 source key·snapshot·사람 승인 finding에 정확히 연결했다. 역방향은 원래 finding의 before/after를 반대로 대조한다.
+- 0018은 before/after의 동일 allowlist 전 필드를 실제 DB 값과 비교하고, UUID 재사용 시 run/snapshot/finding의 저장 내용 충돌을 거부한다. bootstrap도 최상위·entry 키와 중복 key를 사전 거부한다.
+- 로컬 임시 PostgreSQL 17 포트 55438에서 0001~0018을 적용한 뒤 SQL `ALL PASS`: 정상 2건, 역방향 전체 복원, missing finding, snapshot UUID 내용 충돌, bootstrap duplicate 모두 부분 반영 0을 확인했다.
+- Python: focused `2 passed`, 전체 `184 passed`; scoped ruff/mypy 통과. 원격 dev/prod migration·RPC·데이터 쓰기는 실행하지 않았다.
