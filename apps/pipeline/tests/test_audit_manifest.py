@@ -1,0 +1,158 @@
+"""승인된 폰트 감사 manifest의 핵심 안전 계약."""
+
+from __future__ import annotations
+
+import json
+from datetime import UTC, datetime
+from pathlib import Path
+from uuid import UUID
+
+import pytest
+
+from fontagit_pipeline.audit_manifest import (
+    ManifestError,
+    build_manifest,
+    verify_manifest_file,
+    write_manifest_bundle,
+)
+
+
+RUN_ID = UUID("00000000-0000-0000-0000-000000000701")
+FONT_ID = UUID("00000000-0000-0000-0000-000000000702")
+SNAPSHOT_ID = UUID("00000000-0000-0000-0000-000000000703")
+FINDING_ID = UUID("00000000-0000-0000-0000-000000000704")
+NOW = datetime(2026, 7, 18, 1, 2, 3, tzinfo=UTC)
+
+
+def _run() -> dict[str, object]:
+    return {
+        "id": str(RUN_ID),
+        "stage": "legal",
+        "target_environment": "dev",
+        "target_count": 1,
+        "success_count": 1,
+        "verified_count": 0,
+        "review_count": 1,
+        "broken_count": 0,
+        "parser_version": "audit-v1",
+        "baseline_sha256": "a" * 64,
+        "manifest_sha256": None,
+        "dry_run": False,
+        "status": "completed",
+        "started_at": NOW.isoformat(),
+        "finished_at": NOW.isoformat(),
+    }
+
+
+def _snapshot() -> dict[str, object]:
+    return {
+        "id": str(SNAPSHOT_ID),
+        "run_id": str(RUN_ID),
+        "font_id": str(FONT_ID),
+        "provider": "noonnu",
+        "provider_record_id": "613",
+        "source_kind": "official",
+        "document_kind": "download",
+        "request_url": "https://clova.ai/handwriting/list.html",
+        "final_url": "https://clova.ai/handwriting/list.html",
+        "http_status": 200,
+        "raw_text": "내부 원문은 정책 승인 전 내보내지 않는다.",
+        "raw_retention_allowed": False,
+        "raw_sha256": "b" * 64,
+        "normalized_sha256": "c" * 64,
+        "extracted": {"download_url": "https://clova.ai/font.zip"},
+        "evidence_locations": {"download_url": "a.download"},
+        "extraction_rule_id": "official-download-v1",
+        "parser_version": "audit-v1",
+        "collected_at": NOW.isoformat(),
+    }
+
+
+def _row() -> dict[str, object]:
+    return {
+        "id": str(FONT_ID),
+        "source_key": {"provider": "noonnu", "provider_record_id": "613"},
+        "slug": "흰꼬리수리",
+        "name_ko": "흰꼬리수리",
+        "name_en": None,
+        "foundry": None,
+        "official_url": "https://instagram.com/wrong-old-link",
+        "status": "published",
+        "updated_at": NOW.isoformat(),
+        "download_url": None,
+        "download_status": "pending",
+        "download_evidence_id": None,
+        "license_status": "pending",
+        "license_verified": True,
+        "evidence_snapshots": [_snapshot()],
+    }
+
+
+def _finding(field_name: str, before: object, proposed: object) -> dict[str, object]:
+    return {
+        "id": str(FINDING_ID if field_name == "download_url" else UUID(int=FINDING_ID.int + 1)),
+        "run_id": str(RUN_ID),
+        "font_id": str(FONT_ID),
+        "field_name": field_name,
+        "before_value": before,
+        "proposed_value": proposed,
+        "evidence_id": str(SNAPSHOT_ID),
+        "confidence": "official",
+        "auto_applicable": False,
+        "review_reason": "사람 검수 완료",
+        "status": "approved",
+        "reviewed_by": "reviewer",
+        "reviewed_at": NOW.isoformat(),
+    }
+
+
+def test_manifest_is_deterministic_reversible_and_hash_verified(tmp_path: Path) -> None:
+    findings = [
+        _finding("download_url", None, "https://clova.ai/font.zip"),
+        _finding("license_status", "pending", "needs_review"),
+    ]
+
+    first = build_manifest(_run(), findings, [_row()])
+    second = build_manifest(_run(), findings, [_row()])
+    entry = first.forward.entries[0]
+
+    assert entry.source_key.model_dump() == {
+        "provider": "noonnu",
+        "provider_record_id": "613",
+    }
+    assert entry.current.model_dump()["official_url"] == "https://instagram.com/wrong-old-link"
+    assert entry.after == {
+        "download_url": "https://clova.ai/font.zip",
+        "license_status": "needs_review",
+        "license_verified": False,
+    }
+    assert first.reverse.rollback_mode is True
+    assert first.reverse.entries[0].after == entry.before
+    assert first.forward.evidence_bundle.snapshots[0]["raw_text"] is None
+    assert first.forward.evidence_bundle.snapshots[0]["source_key"] == entry.source_key.model_dump()
+    assert first.forward_sha256 == second.forward_sha256
+    assert first.reverse_sha256 == second.reverse_sha256
+    assert first.forward_sha256 != first.reverse_sha256
+
+    paths = write_manifest_bundle(first, tmp_path)
+    assert verify_manifest_file(paths.forward, paths.forward_sha256) == first.forward
+    tampered = json.loads(paths.forward.read_text(encoding="utf-8"))
+    tampered["entries"][0]["after"]["download_url"] = "https://evil.example/font.zip"
+    paths.forward.write_text(json.dumps(tampered), encoding="utf-8")
+    with pytest.raises(ManifestError, match="SHA-256"):
+        verify_manifest_file(paths.forward, paths.forward_sha256)
+
+
+def test_manifest_rejects_unapproved_forbidden_or_stale_finding() -> None:
+    proposed = _finding("download_url", None, "https://clova.ai/font.zip")
+    proposed["status"] = "proposed"
+    forbidden = _finding("official_url", "https://instagram.com/wrong-old-link", "https://clova.ai")
+    stale = _finding("download_status", "verified", "needs_review")
+
+    for finding, message in (
+        (proposed, "approved"),
+        (forbidden, "field"),
+        (stale, "before"),
+    ):
+        with pytest.raises(ManifestError, match=message):
+            build_manifest(_run(), [finding], [_row()])

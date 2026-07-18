@@ -522,6 +522,54 @@ def main_audit_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def main_audit_manifest_apply(args: argparse.Namespace) -> int:
+    """검증된 manifest 하나만 전용 RPC로 적용한다.
+
+    prod는 파일 SHA 전체 일치와 대화형 yes를 모두 통과해야만 네트워크 경계를
+    넘는다. 이 함수는 이번 작업에서 호출하지 않는다.
+    """
+    import hashlib
+
+    from fontagit_pipeline.audit_manifest import ManifestError, verify_manifest_file
+    from fontagit_pipeline.config import load_audit_settings
+
+    try:
+        manifest = verify_manifest_file(args.manifest, args.sha256)
+        digest = hashlib.sha256(args.manifest.read_bytes()).hexdigest()
+        if args.confirm_hash != digest:
+            raise ManifestError("--confirm-hash must exactly match the full manifest SHA-256")
+        settings = load_audit_settings()
+        if args.target == "prod":
+            if input("prod manifest를 적용합니다. 계속하려면 yes 입력: ").strip() != "yes":
+                logger.info("사용자 취소")
+                return 1
+            if not settings.supabase_prod_url or not settings.supabase_prod_secret_key:
+                raise ValueError("SUPABASE_PROD_URL과 SUPABASE_PROD_SECRET_KEY가 필요합니다")
+            url, secret = settings.supabase_prod_url, settings.supabase_prod_secret_key
+        else:
+            url, secret = settings.dev_write_credentials()
+
+        from supabase import create_client
+
+        rpc_payload = {
+            "p_manifest_text": args.manifest.read_text(encoding="utf-8"),
+            "p_expected_sha256": digest,
+            "p_schema_version": str(int(manifest.schema_version)),
+        }
+        response = create_client(url, secret).schema("fontagit").rpc(
+            "apply_font_audit_manifest",
+            rpc_payload,
+        ).execute()
+        logger.info("감사 manifest 적용 완료: target=%s result=%s", args.target, response.data)
+        return 0
+    except (ManifestError, OSError, ValueError) as exc:
+        logger.error("감사 manifest 적용 중단: %s", exc)
+        return 3
+    except Exception as exc:  # 외부 DB 경계
+        logger.error("감사 manifest RPC 실패: %s", exc.__class__.__name__)
+        return 3
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="FontAgit 파이프라인",
@@ -658,6 +706,18 @@ if __name__ == "__main__":
         "--dry-run", action="store_true", help="DB 자격증명·DB 쓰기 없이 파일 산출물만 생성"
     )
     audit_run_parser.set_defaults(func=main_audit_run)
+
+    manifest_parser = subparsers.add_parser(
+        "font-audit-manifest",
+        help="검증된 감사 manifest 적용",
+    )
+    manifest_subparsers = manifest_parser.add_subparsers(dest="manifest_action", required=True)
+    manifest_apply_parser = manifest_subparsers.add_parser("apply")
+    manifest_apply_parser.add_argument("--manifest", type=Path, required=True)
+    manifest_apply_parser.add_argument("--sha256", type=Path, required=True)
+    manifest_apply_parser.add_argument("--target", choices=["dev", "prod"], required=True)
+    manifest_apply_parser.add_argument("--confirm-hash", required=True)
+    manifest_apply_parser.set_defaults(func=main_audit_manifest_apply)
 
     args = parser.parse_args()
 
