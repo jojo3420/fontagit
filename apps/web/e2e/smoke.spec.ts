@@ -120,7 +120,7 @@ test('mobile viewport shows compare tab in tab bar and hides header tool links',
 
   // Verify compare tab is visible with correct href
   await expect(tabBar.getByRole('link', { name: '비교' })).toBeVisible();
-  await expect(tabBar.getByRole('link', { name: '비교' })).toHaveAttribute('href', /^\/compare\/?$/);
+  await expect(tabBar.getByRole('link', { name: '비교' })).toHaveAttribute('href', /^\/#compare$/);
 
   // Verify header tool links (canvas and compare) are hidden on mobile
   const headerNav = page.getByRole('navigation').first();
@@ -145,5 +145,5 @@ test('header nav contains canvas and compare links (desktop)', async ({ page }) 
   await expect(nav.getByRole('link', { name: '캔버스' })).toBeVisible();
   await expect(nav.getByRole('link', { name: '캔버스' })).toHaveAttribute('href', /^\/playground\/?$/);
   await expect(nav.getByRole('link', { name: '비교' })).toBeVisible();
-  await expect(nav.getByRole('link', { name: '비교' })).toHaveAttribute('href', /^\/compare\/?$/);
+  await expect(nav.getByRole('link', { name: '비교' })).toHaveAttribute('href', /^\/#compare$/);
 });
