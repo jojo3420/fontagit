@@ -7,6 +7,7 @@ import hmac
 import json
 import os
 import stat
+import sys
 import tempfile
 import unicodedata
 from collections import defaultdict, deque
@@ -22,7 +23,12 @@ from fontagit_pipeline.audit_http import FetchError, FetchResult, classify_downl
 from fontagit_pipeline.audit_license import classify_license
 from fontagit_pipeline.audit_noonnu import NoonnuFontSnapshot, extract_noonnu_font
 from fontagit_pipeline.audit_policy import RegistryEntry, SourceRegistry
-from fontagit_pipeline.audit_store import AuditStore, FindingDraft, SnapshotDraft
+from fontagit_pipeline.audit_store import (
+    ApprovedFontFileCandidate,
+    AuditStore,
+    FindingDraft,
+    SnapshotDraft,
+)
 
 if TYPE_CHECKING:
     from fontagit_pipeline.audit_metadata import FontFileMetadata
@@ -91,7 +97,7 @@ class ScheduledObservation:
 
 @dataclass(frozen=True)
 class ScheduledArtifact:
-    """원문·헤더·자격증명을 담지 않는 예약 감사 산출물."""
+    """원문-헤더-자격증명을 담지 않는 예약 감사 산출물."""
 
     schema_version: int
     run_id: UUID
@@ -154,6 +160,9 @@ class FontTarget:
     foundry: str | None = None
     foundry_url: str | None = None
     download_url: str | None = None
+    download_source_kind: str | None = None
+    download_status: str = "pending"
+    download_evidence_id: str | None = None
     license_source_url: str | None = None
     category_ko: str | None = None
     tags: tuple[str, ...] = ()
@@ -171,7 +180,7 @@ class CandidateUrl:
     """문서 역할과 일치 여부를 확인할 수 있는 URL 후보.
 
     후보의 ``source`` 표시는 우선순위 힌트일 뿐이다. official/public은
-    반드시 승인 레지스트리의 도메인·제작사·역할과 다시 일치해야 한다.
+    반드시 승인 레지스트리의 도메인-제작사-역할과 다시 일치해야 한다.
     """
 
     url: str
@@ -184,7 +193,7 @@ class CandidateUrl:
     dry_run_status: str | None = None
 
 
-AuditFetcher = Callable[[str], FetchResult]
+AuditFetcher = Callable[..., FetchResult]
 
 
 @dataclass(frozen=True)
@@ -392,10 +401,30 @@ def run_metadata_audit(
             finding_ids.append(_save_finding(store, run_id, finding, dry_run=True))
             needs_review += 1
             continue
+        if not sys.platform.startswith("linux"):
+            needs_review += 1
+            errors.append(f"{target.slug}: unsupported_platform")
+            finding = FindingDraft(
+                font_id=target.font_id,
+                field_name="script_status",
+                before_value=target.script_status,
+                proposed_value="needs_review",
+                evidence_id=None,
+                confidence="unverified",
+                review_reason="metadata execution requires Linux isolation",
+            )
+            finding_ids.append(_save_finding(store, run_id, finding, dry_run=False))
+            continue
         try:
+            approved_files = store.approved_font_file_candidates(
+                target.font_id,
+                target.provider,
+                target.provider_record_id,
+            )
             evidence, metadata = _collect_metadata_evidence(
                 target,
                 source_registry,
+                approved_files=approved_files,
                 fetcher=fetcher,
                 font_fetcher=effective_font_fetcher,
             )
@@ -488,6 +517,7 @@ def _collect_metadata_evidence(
     target: FontTarget,
     registry: SourceRegistry,
     *,
+    approved_files: Sequence[ApprovedFontFileCandidate],
     fetcher: AuditFetcher,
     font_fetcher: AuditFetcher,
 ) -> tuple[SnapshotDraft, FontFileMetadata]:
@@ -499,26 +529,15 @@ def _collect_metadata_evidence(
         merge_font_metadata,
     )
 
-    approved: list[tuple[int, str, CandidateUrl]] = []
-    for candidate in _all_candidates(target):
-        priority, candidate_source_kind = _candidate_priority(candidate, registry, target)
-        if (
-            candidate.document_role == "download"
-            and priority <= 1
-            and candidate_source_kind in {"official", "public"}
-            and _candidate_matches_target(candidate, target)
-        ):
-            approved.append((priority, candidate_source_kind, candidate))
-    approved.sort(key=lambda item: (item[0], item[2].url))
-
     source_kind: str
     source_page: str
     file_urls: list[str]
     partial_file = False
-    if approved:
-        _, source_kind, candidate = approved[0]
-        source_page = candidate.url
-        file_urls = [candidate.url]
+    if approved_files:
+        approved_candidate = approved_files[0]
+        source_kind = approved_candidate.source_kind
+        source_page = approved_candidate.request_url
+        file_urls = [approved_candidate.url]
     elif _is_noonnu_reference(target):
         page = fetcher(target.reference_url)
         parsed = _parse_candidate(
@@ -543,15 +562,32 @@ def _collect_metadata_evidence(
         )
         partial_file = unicode_blocks > len(file_urls)
     else:
-        # discovery URL이나 legacy URL을 다운로드 후보로 승격하지 않는다.
-        raise AuditInputError("approved font file candidate is missing")
+        # 기존 DB URL은 승인 finding이 아니므로 레지스트리의 제작사-역할이
+        # 다시 일치할 때만 마지막 fallback으로 사용한다.
+        existing: list[tuple[str, CandidateUrl]] = []
+        for candidate in target.candidates:
+            entry = _approved_registry_entry(candidate, registry, target)
+            if (
+                candidate.source == "existing"
+                and candidate.document_role == "download"
+                and entry is not None
+                and _candidate_matches_target(candidate, target)
+            ):
+                existing.append((entry.source_kind, candidate))
+        existing.sort(key=lambda item: ({"official": 0, "public": 1}[item[0]], item[1].url))
+        if not existing:
+            # discovery URL이나 역할 없는 legacy URL은 파일 후보로 승격하지 않는다.
+            raise AuditInputError("approved font file candidate is missing")
+        source_kind, existing_candidate = existing[0]
+        source_page = existing_candidate.url
+        file_urls = [existing_candidate.url]
 
     fetched_files: list[FetchResult] = []
     metadata_files: list[FontFileMetadata] = []
     for file_url in file_urls:
         query = parse_qs(urlparse(file_url).query, keep_blank_values=True)
         partial_file = partial_file or "text" in {key.casefold() for key in query}
-        fetched = font_fetcher(file_url)
+        fetched = font_fetcher(file_url, max_bytes=MAX_FONT_FILE_BYTES)
         if fetched.status < 200 or fetched.status >= 300:
             raise AuditInputError("font file response is not successful")
         if not fetched.content or len(fetched.content) > MAX_FONT_FILE_BYTES:
@@ -635,24 +671,74 @@ def load_bootstrap_targets(path: Path) -> list[FontTarget]:
         if not isinstance(before, Mapping):
             raise AuditInputError("bootstrap entry before가 올바르지 않습니다")
         current = entry.get("current")
-        if current is not None and not isinstance(current, Mapping):
+        if not isinstance(current, Mapping):
             raise AuditInputError("bootstrap entry current가 올바르지 않습니다")
-        values = {**before, **current} if isinstance(current, Mapping) else before
+        if set(before) != set(current) or set(current) != {
+            "slug",
+            "name_ko",
+            "name_en",
+            "foundry",
+            "source_tier",
+            "official_url",
+            "foundry_url",
+            "download_url",
+            "license_source_url",
+            "category_ko",
+            "tags",
+            "weights",
+            "variants",
+            "subsets",
+            "script_status",
+            "script_checked_at",
+            "script_evidence_id",
+            "download_source_kind",
+            "download_status",
+            "download_evidence_id",
+            "status",
+            "updated_at",
+        }:
+            raise AuditInputError("bootstrap current 필드 계약이 올바르지 않습니다")
+        values = current
         try:
             name_ko = _optional(values, "name_ko")
             foundry = _optional(values, "foundry")
             # bootstrap의 before.official_url은 이전 적재값이라는 증거다.
             # 역할을 알 수 없으므로 현재 URL이나 자동 적용 후보로 승격하지 않는다.
             legacy_url = _optional(before, "official_url")
-            legacy_candidates = (
-                CandidateUrl(
-                    url=legacy_url,
-                    document_role="metadata",
-                    source="existing-db",
-                    name_ko=_optional(before, "name_ko"),
-                    maker=_optional(before, "foundry"),
-                ),
-            ) if legacy_url else ()
+            current_download = _optional(values, "download_url")
+            download_source_kind = _optional(values, "download_source_kind")
+            download_status = _required(values, "download_status")
+            download_evidence_id = _optional(values, "download_evidence_id")
+            current_download_is_verified = (
+                current_download is not None
+                and download_source_kind in {"official", "public"}
+                and download_status == "verified"
+                and download_evidence_id is not None
+            )
+            legacy_candidates = tuple(
+                candidate
+                for candidate in (
+                    CandidateUrl(
+                        url=legacy_url or "",
+                        document_role="metadata",
+                        source="existing-db",
+                        name_ko=_optional(before, "name_ko"),
+                        maker=_optional(before, "foundry"),
+                    )
+                    if legacy_url
+                    else None,
+                    CandidateUrl(
+                        url=current_download or "",
+                        document_role="download",
+                        source="existing",
+                        name_ko=name_ko,
+                        maker=foundry,
+                    )
+                    if current_download_is_verified
+                    else None,
+                )
+                if candidate is not None
+            )
             targets.append(
                 FontTarget(
                     font_id=UUID(_required(entry, "font_id")),
@@ -665,14 +751,17 @@ def load_bootstrap_targets(path: Path) -> list[FontTarget]:
                     reference_url=_required(entry, "source_url"),
                     foundry=foundry,
                     foundry_url=_optional(values, "foundry_url"),
-                    download_url=_optional(values, "download_url"),
+                    download_url=current_download,
+                    download_source_kind=download_source_kind,
+                    download_status=download_status,
+                    download_evidence_id=download_evidence_id,
                     license_source_url=_optional(values, "license_source_url"),
-                    category_ko=_optional(values, "category_ko"),
+                    category_ko=_required(values, "category_ko"),
                     tags=_string_tuple(values.get("tags"), "tags"),
                     weights=_integer_tuple(values.get("weights"), "weights"),
                     variants=_string_tuple(values.get("variants"), "variants"),
                     subsets=_string_tuple(values.get("subsets"), "subsets"),
-                    script_status=_optional(values, "script_status") or "pending",
+                    script_status=_required(values, "script_status"),
                     script_checked_at=_optional(values, "script_checked_at"),
                     script_evidence_id=_optional(values, "script_evidence_id"),
                     candidates=legacy_candidates,
@@ -1106,7 +1195,7 @@ def _canonical_json(value: Mapping[str, object]) -> bytes:
 
 
 def write_audit_artifacts(report: AuditReport, out: Path) -> str:
-    """감사 보고서를 JSON·Markdown과 SHA-256으로 원자 저장한다."""
+    """감사 보고서를 JSON-Markdown과 SHA-256으로 원자 저장한다."""
     payload = report.as_dict()
     content = (json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
     digest = hashlib.sha256(content).hexdigest()
@@ -1499,7 +1588,7 @@ def _candidate_outcome(
         }
         if fetched.status in {404, 410}:
             return classify_download([*candidate.observations, observation])
-        # URL 응답만으로는 대상 폰트 파일·문서 일치를 증명할 수 없다.
+        # URL 응답만으로는 대상 폰트 파일-문서 일치를 증명할 수 없다.
         return "verified" if _parsed_identity_matches(parsed, candidate) else "needs_review"
     if candidate.document_role == "license":
         if candidate.source not in {"official", "public"} or not _parsed_identity_matches(parsed, candidate):
@@ -1632,7 +1721,7 @@ def _choose_candidate(
     role: str,
     registry: SourceRegistry,
 ) -> CandidateUrl | None:
-    """승인 제작사·공공기관·눈누 CTA·기존 주소 순으로 하나만 고른다."""
+    """승인 제작사-공공기관-눈누 CTA-기존 주소 순으로 하나만 고른다."""
     role_candidates = [item for item in candidates if item.document_role == role]
     valid = [item for item in role_candidates if _candidate_matches_target(item, target)]
     valid.sort(key=lambda item: _candidate_priority(item, registry, target))
@@ -1650,6 +1739,8 @@ def _candidate_priority(
     if candidate.source == "discovery":
         return 4, "discovery"
     entry = _approved_registry_entry(candidate, registry, target)
+    if candidate.source == "existing" and entry is not None:
+        return 3, entry.source_kind
     if entry is not None and entry.source_kind == "official":
         return 0, "official"
     if entry is not None and entry.source_kind == "public":
@@ -1660,8 +1751,6 @@ def _candidate_priority(
         and _is_noonnu_reference(target)
     ):
         return 2, "noonnu"
-    if candidate.source == "existing" and entry is not None:
-        return 3, entry.source_kind
     return 4, "discovery"
 
 
@@ -1704,7 +1793,7 @@ def _is_noonnu_url(url: str) -> bool:
 
 
 def _discovered_identity_matches(target: FontTarget, parsed: NoonnuFontSnapshot | None) -> bool:
-    """눈누 이름·제작사가 DB 대상과 일치할 때만 외부 CTA를 후보로 남긴다."""
+    """눈누 이름-제작사가 DB 대상과 일치할 때만 외부 CTA를 후보로 남긴다."""
     if parsed is None or not target.name_ko:
         return False
     if _normalize_text(parsed.name_ko) != _normalize_text(target.name_ko):
@@ -1737,13 +1826,17 @@ def _required(row: Mapping[str, object], key: str) -> str:
 
 
 def _optional(row: Mapping[str, object], key: str) -> str | None:
-    value = row.get(key)
-    return value if isinstance(value, str) and value.strip() else None
+    if key not in row:
+        raise ValueError(key)
+    value = row[key]
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(key)
+    return value
 
 
 def _integer_tuple(value: object, field_name: str) -> tuple[int, ...]:
-    if value is None:
-        return ()
     if not isinstance(value, list) or any(
         isinstance(item, bool) or not isinstance(item, int) for item in value
     ):
@@ -1752,8 +1845,6 @@ def _integer_tuple(value: object, field_name: str) -> tuple[int, ...]:
 
 
 def _string_tuple(value: object, field_name: str) -> tuple[str, ...]:
-    if value is None:
-        return ()
     if not isinstance(value, list) or any(
         not isinstance(item, str) or not item.strip() for item in value
     ):

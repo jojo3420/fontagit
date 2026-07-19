@@ -18,9 +18,33 @@ _NOONNU_PAGE_ID = re.compile(r"^https://noonnu\.cc/font_page/([1-9][0-9]*)$")
 _CONTENT_RANGE = re.compile(r"^(?:[0-9]+-[0-9]+|\*)/([0-9]+)$")
 _EXPECTED_PROD_PUBLISHED_COUNT = 1240
 _EXPECTED_PROD_TIER_COUNTS: Mapping[str, int] = {"A": 130, "B": 1110}
-_PUBLIC_FONT_COLUMNS = (
-    "id,slug,name_ko,name_en,foundry,source_tier,official_url,updated_at"
+_PUBLIC_FONT_FIELDS = (
+    "id",
+    "slug",
+    "name_ko",
+    "name_en",
+    "foundry",
+    "source_tier",
+    "official_url",
+    "foundry_url",
+    "download_url",
+    "license_source_url",
+    "category_ko",
+    "tags",
+    "weights",
+    "variants",
+    "subsets",
+    "script_status",
+    "script_checked_at",
+    "script_evidence_id",
+    "download_source_kind",
+    "download_status",
+    "download_evidence_id",
+    "status",
+    "updated_at",
 )
+_PUBLIC_FONT_COLUMNS = ",".join(_PUBLIC_FONT_FIELDS)
+_CURRENT_FIELDS = tuple(field for field in _PUBLIC_FONT_FIELDS if field != "id")
 
 
 class BootstrapError(ValueError):
@@ -37,6 +61,7 @@ class BootstrapEntry:
     provider_record_id: str
     source_url: str
     before: dict[str, object]
+    current: dict[str, object]
     public_updates: dict[str, object]
 
     def as_dict(self) -> dict[str, object]:
@@ -47,6 +72,7 @@ class BootstrapEntry:
             "provider_record_id": self.provider_record_id,
             "source_url": self.source_url,
             "before": self.before,
+            "current": self.current,
             "public_updates": self.public_updates,
         }
 
@@ -110,15 +136,68 @@ def _tier_b_identity(seed: Mapping[str, object]) -> tuple[str, str, str, str] | 
 
 def _before(row: Mapping[str, object]) -> dict[str, object]:
     """후속 RPC가 다시 검증할 현재값 precondition을 고정한다."""
-    return {
-        "source_tier": row.get("source_tier"),
-        "slug": row.get("slug"),
-        "name_en": row.get("name_en"),
-        "name_ko": row.get("name_ko"),
-        "official_url": row.get("official_url"),
-        "foundry": row.get("foundry"),
-        "updated_at": row.get("updated_at"),
+    return {field: row[field] for field in _CURRENT_FIELDS}
+
+
+def _validate_public_row_contract(row: Mapping[str, object]) -> None:
+    """공개 export가 누락·추가·기본값 보정 없는 정확한 DB 행인지 확인한다."""
+    if set(row) != set(_PUBLIC_FONT_FIELDS):
+        raise BootstrapError("prod row columns가 공개 감사 계약과 다릅니다")
+    required_text = {
+        "id",
+        "slug",
+        "name_en",
+        "source_tier",
+        "official_url",
+        "category_ko",
+        "script_status",
+        "download_status",
+        "status",
+        "updated_at",
     }
+    nullable_text = {
+        "name_ko",
+        "foundry",
+        "foundry_url",
+        "download_url",
+        "license_source_url",
+        "script_checked_at",
+        "script_evidence_id",
+        "download_source_kind",
+        "download_evidence_id",
+    }
+    for field in required_text:
+        value = row[field]
+        if not isinstance(value, str) or not value.strip():
+            raise BootstrapError(f"prod row {field} 타입이 올바르지 않습니다")
+    for field in nullable_text:
+        value = row[field]
+        if value is not None and (not isinstance(value, str) or not value.strip()):
+            raise BootstrapError(f"prod row {field} nullable 타입이 올바르지 않습니다")
+    if row["status"] != "published":
+        raise BootstrapError("prod row status는 published여야 합니다")
+    if row["script_status"] not in {"pending", "verified", "needs_review"}:
+        raise BootstrapError("prod row script_status 값이 올바르지 않습니다")
+    if row["download_status"] not in {
+        "pending",
+        "verified",
+        "needs_review",
+        "broken",
+    }:
+        raise BootstrapError("prod row download_status 값이 올바르지 않습니다")
+    if row["download_source_kind"] not in {None, "official", "public"}:
+        raise BootstrapError("prod row download_source_kind 값이 올바르지 않습니다")
+    for field in ("tags", "variants", "subsets"):
+        value = row[field]
+        if not isinstance(value, list) or any(
+            not isinstance(item, str) or not item.strip() for item in value
+        ):
+            raise BootstrapError(f"prod row {field} 배열 타입이 올바르지 않습니다")
+    weights = row["weights"]
+    if not isinstance(weights, list) or any(
+        isinstance(item, bool) or not isinstance(item, int) for item in weights
+    ):
+        raise BootstrapError("prod row weights 배열 타입이 올바르지 않습니다")
 
 
 def _review_row(row: Mapping[str, object], reason: str) -> dict[str, object]:
@@ -152,6 +231,7 @@ def build_bootstrap_manifest(
     ]
 
     for row in prod_rows:
+        _validate_public_row_contract(row)
         tier = _text(row, "source_tier")
         slug = _required_text(row, "slug")
         font_id = _required_text(row, "id")
@@ -185,6 +265,7 @@ def build_bootstrap_manifest(
                         provider_record_id=name_en,
                         source_url=official_url or "",
                         before=_before(row),
+                        current=_before(row),
                         public_updates={},
                     )
                 )
@@ -210,6 +291,7 @@ def build_bootstrap_manifest(
                         provider_record_id=identity[0],
                         source_url=_required_text(seed, "source_page") or "",
                         before=_before(row),
+                        current=_before(row),
                         public_updates={},
                     )
                 )
@@ -351,6 +433,8 @@ def _validate_prod_rows(
     expected_tier_counts: Mapping[str, int] | None = _EXPECTED_PROD_TIER_COUNTS,
     require_sorted: bool = False,
 ) -> None:
+    for row in rows:
+        _validate_public_row_contract(row)
     slugs = [_required_text(row, "slug") for row in rows]
     if len(rows) != expected_record_count:
         raise BootstrapError(

@@ -32,7 +32,7 @@ from fontagit_pipeline.audit_runner import (
 )
 from fontagit_pipeline.audit_metadata import BASIC_LATIN, FontFileMetadata
 from fontagit_pipeline.audit_http import FetchResult
-from fontagit_pipeline.audit_store import FindingDraft, InMemoryAuditStore
+from fontagit_pipeline.audit_store import FindingDraft, InMemoryAuditStore, SnapshotDraft
 from fontagit_pipeline.__main__ import main_audit_scan
 from fontagit_pipeline.config import AuditSettings
 
@@ -321,19 +321,8 @@ def test_dry_run_writes_artifacts_without_calling_store(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
-    legacy_target = load_bootstrap_targets(legacy_manifest)[0]
-    assert (
-        legacy_target.foundry_url,
-        legacy_target.download_url,
-        legacy_target.license_source_url,
-    ) == (
-        "https://legacy.example/",
-        "https://legacy.example/file",
-        "https://legacy.example/license",
-    )
-    assert {(item.document_role, item.url, item.source) for item in legacy_target.candidates} == {
-        ("metadata", "https://legacy.example/download", "existing-db"),
-    }
+    with pytest.raises(AuditInputError, match="current"):
+        load_bootstrap_targets(legacy_manifest)
 
     raw = b"observed source bytes"
     snapshot = _fetched_snapshot(
@@ -480,8 +469,80 @@ def test_metadata_findings_keep_current_values_and_saved_evidence(
         ),
     )
     store = InMemoryAuditStore()
+    official_run = store.start_run(
+        stage="legal", target_count=1, baseline_sha256="a" * 64, dry_run=False
+    )
+    official_evidence = store.save_snapshot(
+        official_run,
+        SnapshotDraft(
+            font_id=target.font_id,
+            provider=target.provider,
+            provider_record_id=target.provider_record_id,
+            source_kind="official",
+            document_kind="download",
+            request_url="https://clova.ai/download-page",
+            final_url="https://clova.ai/download-page",
+            extracted={"download_url": "https://clova.ai/approved.woff2"},
+            evidence_locations={"download_url": "a.download"},
+            raw_sha256="1" * 64,
+            normalized_sha256="2" * 64,
+        ),
+    )
+    official_finding = store.save_finding(
+        official_run,
+        FindingDraft(
+            font_id=target.font_id,
+            field_name="download_url",
+            before_value=None,
+            proposed_value="https://clova.ai/approved.woff2",
+            evidence_id=official_evidence,
+            confidence="official",
+            review_reason="approved legal download",
+        ),
+    )
+    store.approve_finding(official_finding)
+
+    public_run = store.start_run(
+        stage="legal", target_count=1, baseline_sha256="b" * 64, dry_run=False
+    )
+    public_evidence = store.save_snapshot(
+        public_run,
+        SnapshotDraft(
+            font_id=target.font_id,
+            provider=target.provider,
+            provider_record_id=target.provider_record_id,
+            source_kind="public",
+            document_kind="download",
+            request_url="https://public.example/download-page",
+            final_url="https://public.example/download-page",
+            extracted={"download_url": "https://public.example/approved.woff2"},
+            evidence_locations={"download_url": "a.download"},
+            raw_sha256="3" * 64,
+            normalized_sha256="4" * 64,
+        ),
+    )
+    public_finding = store.save_finding(
+        public_run,
+        FindingDraft(
+            font_id=target.font_id,
+            field_name="download_url",
+            before_value=None,
+            proposed_value="https://public.example/approved.woff2",
+            evidence_id=public_evidence,
+            confidence="public",
+            review_reason="approved legal download",
+        ),
+    )
+    store.approve_finding(public_finding)
+    fetched_urls: list[str] = []
+
+    def font_fetch(url: str, max_bytes: int = 32 * 1024 * 1024) -> FetchResult:
+        fetched_urls.append(url)
+        return _fetched(url)
+
+    monkeypatch.setattr("fontagit_pipeline.audit_runner.sys.platform", "linux")
     report = run_metadata_audit(
-        [target], store, registry, fetcher=_fetched, font_fetcher=_fetched
+        [target], store, registry, fetcher=_forbidden_fetch, font_fetcher=font_fetch
     )
 
     drafts = [store.finding_draft(item) for item in report.finding_ids]
@@ -496,6 +557,27 @@ def test_metadata_findings_keep_current_values_and_saved_evidence(
         "script_checked_at",
         "script_evidence_id",
     }
+    assert fetched_urls == ["https://clova.ai/approved.woff2"]
+
+
+def test_metadata_runner_non_linux_never_fetches(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Linux 격리가 없으면 runner도 네트워크-파싱 전에 needs_review로 닫힌다."""
+    monkeypatch.setattr("fontagit_pipeline.audit_runner.sys.platform", "darwin")
+    store = InMemoryAuditStore()
+
+    report = run_metadata_audit(
+        [_targets()[0]],
+        store,
+        {"version": 1, "entries": []},
+        fetcher=_forbidden_fetch,
+        font_fetcher=_forbidden_fetch,
+    )
+
+    assert report.needs_review_count == 1
+    assert report.errors == ["흰꼬리수리: unsupported_platform"]
+    assert store.finding_draft(report.finding_ids[0]).review_reason == (
+        "metadata execution requires Linux isolation"
+    )
 
 
 def test_scheduled_download_import_requires_distinct_runs_24_hours_apart() -> None:

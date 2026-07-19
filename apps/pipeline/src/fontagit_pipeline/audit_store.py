@@ -48,6 +48,17 @@ class FindingDraft:
     auto_applicable: bool = False
 
 
+@dataclass(frozen=True)
+class ApprovedFontFileCandidate:
+    """사람이 승인한 legal download finding과 그 원본 증거의 결합."""
+
+    url: str
+    source_kind: str
+    request_url: str
+    evidence_id: UUID
+    run_id: UUID
+
+
 class AuditStore(Protocol):
     """DB와 dry-run 저장소가 공유하는 작은 감사 저장 계약."""
 
@@ -67,6 +78,13 @@ class AuditStore(Protocol):
     def save_finding(self, run_id: UUID, finding: FindingDraft) -> UUID: ...
 
     def complete_run(self, run_id: UUID, report: Mapping[str, object]) -> None: ...
+
+    def approved_font_file_candidates(
+        self,
+        font_id: UUID,
+        provider: str,
+        provider_record_id: str,
+    ) -> list[ApprovedFontFileCandidate]: ...
 
     def scheduled_run_status(
         self, run_id: UUID, *, kind: str, artifact_sha256: str
@@ -98,12 +116,14 @@ class InMemoryAuditStore:
         self.fail_on_write = fail_on_write
         self.write_calls = 0
         self._snapshots: dict[tuple[str, ...], UUID] = {}
+        self._snapshot_drafts: dict[UUID, tuple[UUID, SnapshotDraft]] = {}
         self._observations: dict[tuple[UUID, str, str], UUID] = {}
         self._observation_rows: dict[tuple[UUID, str, str], dict[str, object]] = {}
         self._findings: dict[tuple[UUID, UUID, str], UUID] = {}
         self._finding_ids: set[UUID] = set()
         self._finding_drafts: dict[UUID, FindingDraft] = {}
-        self._applied: set[UUID] = set()
+        self._finding_runs: dict[UUID, UUID] = {}
+        self._finding_status: dict[UUID, str] = {}
         self._runs: dict[UUID, dict[str, object]] = {}
 
     @property
@@ -118,11 +138,21 @@ class InMemoryAuditStore:
         """테스트에서 적용 완료된 finding을 불변 상태로 전환한다."""
         if finding_id not in self._finding_ids:
             raise ValueError("unknown finding")
-        self._applied.add(finding_id)
+        self._finding_status[finding_id] = "applied"
+
+    def approve_finding(self, finding_id: UUID) -> None:
+        """테스트 저장소에서도 DB와 같은 approved 상태만 후보로 연다."""
+        if finding_id not in self._finding_ids:
+            raise ValueError("unknown finding")
+        self._finding_status[finding_id] = "approved"
 
     def finding_draft(self, finding_id: UUID) -> FindingDraft:
         """테스트용: 저장된 finding이 같은 run 안에서 바뀌지 않았는지 읽는다."""
         return self._finding_drafts[finding_id]
+
+    def snapshot_draft(self, snapshot_id: UUID) -> tuple[UUID, SnapshotDraft]:
+        """테스트용: 저장된 snapshot과 run 결합을 확인한다."""
+        return self._snapshot_drafts[snapshot_id]
 
     def _write(self) -> None:
         self.write_calls += 1
@@ -159,7 +189,9 @@ class InMemoryAuditStore:
             snapshot.document_kind,
             snapshot.normalized_sha256,
         )
-        return self._snapshots.setdefault(key, uuid4())
+        snapshot_id = self._snapshots.setdefault(key, uuid4())
+        self._snapshot_drafts.setdefault(snapshot_id, (run_id, snapshot))
+        return snapshot_id
 
     def save_observation(self, run_id: UUID, observation: Mapping[str, object]) -> UUID:
         self._write()
@@ -184,11 +216,58 @@ class InMemoryAuditStore:
         self._findings[key] = finding_id
         self._finding_ids.add(finding_id)
         self._finding_drafts[finding_id] = finding
+        self._finding_runs[finding_id] = run_id
+        self._finding_status[finding_id] = "proposed"
         return finding_id
 
     def complete_run(self, run_id: UUID, report: Mapping[str, object]) -> None:
         self._write()
         self._runs[run_id] = {**self._runs[run_id], "status": "completed", "report": dict(report)}
+
+    def approved_font_file_candidates(
+        self,
+        font_id: UUID,
+        provider: str,
+        provider_record_id: str,
+    ) -> list[ApprovedFontFileCandidate]:
+        candidates: list[ApprovedFontFileCandidate] = []
+        for finding_id, finding in self._finding_drafts.items():
+            if (
+                self._finding_status.get(finding_id) != "approved"
+                or finding.font_id != font_id
+                or finding.field_name != "download_url"
+                or not isinstance(finding.proposed_value, str)
+                or finding.evidence_id is None
+            ):
+                continue
+            stored = self._snapshot_drafts.get(finding.evidence_id)
+            if stored is None:
+                continue
+            snapshot_run, snapshot = stored
+            finding_run = self._finding_runs[finding_id]
+            if (
+                snapshot_run != finding_run
+                or snapshot.font_id != font_id
+                or snapshot.provider != provider
+                or snapshot.provider_record_id != provider_record_id
+                or snapshot.document_kind != "download"
+                or snapshot.source_kind not in {"official", "public"}
+                or snapshot.extracted.get("download_url") != finding.proposed_value
+            ):
+                continue
+            candidates.append(
+                ApprovedFontFileCandidate(
+                    url=finding.proposed_value,
+                    source_kind=snapshot.source_kind,
+                    request_url=snapshot.request_url,
+                    evidence_id=finding.evidence_id,
+                    run_id=finding_run,
+                )
+            )
+        candidates.sort(
+            key=lambda item: ({"official": 0, "public": 1}[item.source_kind], item.url)
+        )
+        return candidates
 
     def scheduled_run_status(
         self, run_id: UUID, *, kind: str, artifact_sha256: str
@@ -412,6 +491,93 @@ class SupabaseAuditStore:
                 "finished_at": datetime.now(UTC).isoformat(),
             }
         ).eq("id", str(run_id)).execute()
+
+    def approved_font_file_candidates(
+        self,
+        font_id: UUID,
+        provider: str,
+        provider_record_id: str,
+    ) -> list[ApprovedFontFileCandidate]:
+        """approved legal finding과 같은 run/font의 공식 증거만 결합한다."""
+        findings = (
+            self._schema.table("font_audit_findings")
+            .select("run_id,font_id,proposed_value,evidence_id,status")
+            .eq("font_id", str(font_id))
+            .eq("field_name", "download_url")
+            .eq("status", "approved")
+            .execute()
+            .data
+        )
+        if not isinstance(findings, list) or not all(
+            isinstance(item, Mapping) for item in findings
+        ):
+            raise RuntimeError("승인 download finding 조회 결과가 올바르지 않습니다")
+        candidates: list[ApprovedFontFileCandidate] = []
+        for finding in findings:
+            run_text = finding.get("run_id")
+            evidence_text = finding.get("evidence_id")
+            proposed = finding.get("proposed_value")
+            if (
+                finding.get("status") != "approved"
+                or finding.get("font_id") != str(font_id)
+                or not all(
+                    isinstance(value, str)
+                    for value in (run_text, evidence_text, proposed)
+                )
+            ):
+                continue
+            snapshots = (
+                self._schema.table("font_source_snapshots")
+                .select(
+                    "id,run_id,font_id,provider,provider_record_id,source_kind,"
+                    "document_kind,request_url,extracted"
+                )
+                .eq("id", evidence_text)
+                .eq("run_id", run_text)
+                .eq("font_id", str(font_id))
+                .eq("provider", provider)
+                .eq("provider_record_id", provider_record_id)
+                .limit(1)
+                .execute()
+                .data
+            )
+            if not isinstance(snapshots, list) or len(snapshots) != 1:
+                continue
+            snapshot = snapshots[0]
+            if not isinstance(snapshot, Mapping):
+                continue
+            extracted = snapshot.get("extracted")
+            source_kind = snapshot.get("source_kind")
+            request_url = snapshot.get("request_url")
+            if (
+                snapshot.get("id") != evidence_text
+                or snapshot.get("run_id") != run_text
+                or snapshot.get("font_id") != str(font_id)
+                or snapshot.get("provider") != provider
+                or snapshot.get("provider_record_id") != provider_record_id
+                or source_kind not in {"official", "public"}
+                or snapshot.get("document_kind") != "download"
+                or not isinstance(extracted, Mapping)
+                or extracted.get("download_url") != proposed
+                or not isinstance(request_url, str)
+            ):
+                continue
+            try:
+                candidates.append(
+                    ApprovedFontFileCandidate(
+                        url=proposed,
+                        source_kind=str(source_kind),
+                        request_url=request_url,
+                        evidence_id=UUID(evidence_text),
+                        run_id=UUID(run_text),
+                    )
+                )
+            except ValueError:
+                continue
+        candidates.sort(
+            key=lambda item: ({"official": 0, "public": 1}[item.source_kind], item.url)
+        )
+        return candidates
 
     def scheduled_run_status(
         self, run_id: UUID, *, kind: str, artifact_sha256: str

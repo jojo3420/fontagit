@@ -27,6 +27,7 @@ const mockFont = (overrides: Partial<Font> = {}): Font => ({
   officialUrl: "https://example.com",
   aliases: [],
   status: "published",
+  subsets: ["korean"],
   ...overrides,
 });
 
@@ -38,9 +39,13 @@ describe("filterFonts", () => {
       mockFont({ category: "고딕", tier: "free" }),
     ];
 
-    const result = filterFonts(fonts, new Set(["장식"]), new Set(["free"]));
+    const withSources = fonts.map((font, index) => ({
+      ...font,
+      sourceTier: index === 0 ? "A" as const : "B" as const,
+    }));
+    const result = filterFonts(withSources, new Set(["장식"]), new Set(["free"]), new Set(["A"]));
 
-    expect(result).toEqual([fonts[0]]);
+    expect(result).toEqual([withSources[0]]);
   });
 
   it("같은 종류의 여러 선택은 OR 조건으로 처리한다", () => {
@@ -76,11 +81,12 @@ describe("sortFonts", () => {
 describe("parseFilterQuery", () => {
   it("분류, 가격, 정렬 조건을 함께 읽는다", () => {
     const result = parseFilterQuery(
-      new URLSearchParams("category=장식,명조&tier=free&sort=recent"),
+      new URLSearchParams("category=장식,명조&tier=free&source=A,B&sort=recent"),
     );
 
     expect(result.categories).toEqual(new Set(["장식", "명조"]));
     expect(result.tiers).toEqual(new Set(["free"]));
+    expect(result.sourceTiers).toEqual(new Set(["A", "B"]));
     expect(result.sort).toBe("recent");
   });
 
@@ -95,11 +101,12 @@ describe("parseFilterQuery", () => {
 
 describe("buildFilterQuery", () => {
   it("선택된 조건만 URL 쿼리로 만든다", () => {
-    const query = buildFilterQuery(new Set(["장식"]), new Set(["free"]), "recent");
+    const query = buildFilterQuery(new Set(["장식"]), new Set(["free"]), "recent", new Set(["B"]));
     const params = new URLSearchParams(query);
 
     expect(params.get("category")).toBe("장식");
     expect(params.get("tier")).toBe("free");
+    expect(params.get("source")).toBe("B");
     expect(params.get("sort")).toBe("recent");
   });
 

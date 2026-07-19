@@ -481,6 +481,8 @@ def main_audit_run(args: argparse.Namespace) -> int:
         targets = load_bootstrap_targets(args.bootstrap)
         selected = select_pilot(targets, size=args.limit, require_slugs=args.require_slug)
         registry = load_source_registry()
+        if args.stage == "metadata" and not args.dry_run and not sys.platform.startswith("linux"):
+            raise AuditGateError("metadata execution requires Linux isolation")
         if args.dry_run:
             dry_store = InMemoryAuditStore()
             if args.stage == "metadata":

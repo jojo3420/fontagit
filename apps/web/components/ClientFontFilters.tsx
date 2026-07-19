@@ -1,12 +1,17 @@
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
-import type { Font } from "@/types/font";
+import type { Font, SourceTier } from "@/types/font";
 import { parseFilterQuery, buildFilterQuery } from "@/lib/filters";
 import styles from "./FontFilters.module.css";
 
 const CATEGORIES = ["고딕", "명조", "손글씨", "장식"] as const;
 const PRICES = ["무료", "유료"] as const;
+const SOURCES: { key: SourceTier; label: string }[] = [
+  { key: "A", label: "Google Fonts" },
+  { key: "B", label: "눈누 수집" },
+  { key: "C", label: "직접 등록" },
+];
 
 interface ClientFontFiltersProps {
   fonts: Font[];
@@ -15,7 +20,7 @@ interface ClientFontFiltersProps {
 export function ClientFontFilters({ fonts }: ClientFontFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { categories, tiers, sort } = parseFilterQuery(searchParams);
+  const { categories, tiers, sourceTiers, sort } = parseFilterQuery(searchParams);
 
   // 카테고리별 개수 계산
   const categoryCount = new Map<string, number>();
@@ -31,7 +36,7 @@ export function ClientFontFilters({ fonts }: ClientFontFiltersProps) {
       newCategories.delete(category);
     }
 
-    const query = buildFilterQuery(newCategories, tiers, sort);
+    const query = buildFilterQuery(newCategories, tiers, sort, sourceTiers);
     router.push(`?${query}`);
   };
 
@@ -43,8 +48,15 @@ export function ClientFontFilters({ fonts }: ClientFontFiltersProps) {
       newTiers.delete(tier);
     }
 
-    const query = buildFilterQuery(categories, newTiers, sort);
+    const query = buildFilterQuery(categories, newTiers, sort, sourceTiers);
     router.push(`?${query}`);
+  };
+
+  const handleSourceChange = (source: SourceTier, checked: boolean) => {
+    const nextSources = new Set(sourceTiers);
+    if (checked) nextSources.add(source);
+    else nextSources.delete(source);
+    router.push(`?${buildFilterQuery(categories, tiers, sort, nextSources)}`);
   };
 
   return (
@@ -78,6 +90,25 @@ export function ClientFontFilters({ fonts }: ClientFontFiltersProps) {
                 onChange={(e) => handleTierChange(tierKey, e.target.checked)}
               />
               {p}
+            </label>
+          );
+        })}
+      </section>
+      <section className={styles.section}>
+        <h2 className={styles.title}>출처</h2>
+        {SOURCES.map(({ key, label }) => {
+          const count = fonts.filter((font) => font.sourceTier === key).length;
+          return (
+            <label key={key} className={styles.check}>
+              <input
+                type="checkbox"
+                name="source"
+                value={key}
+                checked={sourceTiers.has(key)}
+                onChange={(event) => handleSourceChange(key, event.target.checked)}
+              />
+              <span>{label}</span>
+              <span className={styles.optionCount}>{count}</span>
             </label>
           );
         })}

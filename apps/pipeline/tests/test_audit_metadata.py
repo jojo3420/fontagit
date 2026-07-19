@@ -2,6 +2,9 @@
 
 import hashlib
 from pathlib import Path
+import sys
+
+import pytest
 from uuid import uuid4
 
 from fontTools.fontBuilder import FontBuilder
@@ -149,6 +152,7 @@ def test_page_file_family_conflict_requires_review() -> None:
     assert all(item.auto_applicable is False for item in findings)
 
 
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="untrusted parsing requires Linux")
 def test_inspect_uses_full_sha_and_os2_italic_bit(tmp_path: Path) -> None:
     path = tmp_path / "italic.ttf"
     _font(path, italic=True)
@@ -160,6 +164,7 @@ def test_inspect_uses_full_sha_and_os2_italic_bit(tmp_path: Path) -> None:
     assert metadata.inspection_status == "parsed"
 
 
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="untrusted parsing requires Linux")
 def test_collection_is_never_verified_as_one_face(tmp_path: Path) -> None:
     first_path = tmp_path / "first.ttf"
     second_path = tmp_path / "second.ttf"
@@ -175,3 +180,53 @@ def test_collection_is_never_verified_as_one_face(tmp_path: Path) -> None:
 
     assert metadata.face_conflict is True
     assert metadata.inspection_status == "needs_review"
+
+
+def test_worker_start_failure_is_review_and_leaves_no_private_temp(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """worker 시작 전 실패도 예외나 임시 파일 누수 없이 검수로 닫힌다."""
+    path = tmp_path / "font.ttf"
+    _font(path)
+
+    class FakeConnection:
+        def close(self) -> None:
+            pass
+
+    class FakeProcess:
+        def start(self) -> None:
+            raise RuntimeError("spawn failed")
+
+    class FakeContext:
+        def Pipe(self, *, duplex: bool) -> tuple[FakeConnection, FakeConnection]:
+            assert duplex is False
+            return FakeConnection(), FakeConnection()
+
+        def Process(self, **_: object) -> FakeProcess:
+            return FakeProcess()
+
+    monkeypatch.setattr("fontagit_pipeline.audit_metadata.sys.platform", "linux")
+    monkeypatch.setattr(
+        "fontagit_pipeline.audit_metadata.multiprocessing.get_context",
+        lambda _method: FakeContext(),
+    )
+    monkeypatch.setattr("fontagit_pipeline.audit_metadata.tempfile.tempdir", str(tmp_path))
+
+    metadata = inspect_font_metadata(path)
+
+    assert metadata.inspection_status == "needs_review"
+    assert metadata.error_kind == "parse_failed"
+    assert list(tmp_path.glob("fontagit-private-font-*")) == []
+
+
+def test_non_linux_font_parsing_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "font.ttf"
+    _font(path)
+    monkeypatch.setattr("fontagit_pipeline.audit_metadata.sys.platform", "darwin")
+
+    metadata = inspect_font_metadata(path)
+
+    assert metadata.inspection_status == "needs_review"
+    assert metadata.error_kind == "unsupported_platform"

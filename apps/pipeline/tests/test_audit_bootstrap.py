@@ -2,7 +2,10 @@
 
 import hashlib
 import json
+from dataclasses import asdict
+from datetime import UTC, datetime
 from pathlib import Path
+from uuid import NAMESPACE_URL, uuid5
 
 import pytest
 
@@ -13,6 +16,11 @@ from fontagit_pipeline.audit_bootstrap import (
     write_bootstrap_manifest,
     write_prod_baseline,
 )
+from fontagit_pipeline.audit_http import FetchResult
+from fontagit_pipeline.audit_manifest import build_manifest
+from fontagit_pipeline.audit_metadata import BASIC_LATIN, FontFileMetadata
+from fontagit_pipeline.audit_runner import load_bootstrap_targets, run_metadata_audit
+from fontagit_pipeline.audit_store import InMemoryAuditStore
 
 INSTAGRAM_URL = "https://www.instagram.com/p/example/"
 
@@ -26,13 +34,28 @@ def prod_font(
     name_en: str = "",
 ) -> dict[str, object]:
     return {
-        "id": f"font-{slug}",
+        "id": str(uuid5(NAMESPACE_URL, f"fontagit-test:{slug}")),
         "slug": slug,
         "name_ko": name_ko,
         "name_en": name_en or slug,
         "source_tier": source_tier,
         "official_url": official_url,
         "foundry": None,
+        "foundry_url": None,
+        "download_url": None,
+        "license_source_url": None,
+        "category_ko": "고딕",
+        "tags": ["본문"],
+        "weights": [400],
+        "variants": ["regular"],
+        "subsets": ["korean"],
+        "script_status": "pending",
+        "script_checked_at": None,
+        "script_evidence_id": None,
+        "download_source_kind": None,
+        "download_status": "pending",
+        "download_evidence_id": None,
+        "status": "published",
         "updated_at": "2026-07-18T00:00:00+00:00",
     }
 
@@ -71,6 +94,9 @@ def test_tier_b_exact_match_builds_no_public_update_and_atomic_artifact(
     assert entry.public_updates == {}
     assert entry.before["source_tier"] == "B"
     assert entry.before["foundry"] is None
+    assert entry.current["weights"] == [400]
+    assert entry.current["subsets"] == ["korean"]
+    assert entry.current["download_status"] == "pending"
 
     out = tmp_path / "nested" / "bootstrap.json"
     digest = write_bootstrap_manifest(result, out)
@@ -164,7 +190,7 @@ def test_prod_baseline_sorts_slug_before_hashing(tmp_path: Path) -> None:
 
 
 def test_prod_baseline_requires_complete_sorted_hashed_snapshot(tmp_path: Path) -> None:
-    """부분·변조·정렬 오류 기준선은 bootstrap 전에 거부한다."""
+    """부분-변조-정렬 오류 기준선은 bootstrap 전에 거부한다."""
     rows = [
         prod_font("a", "가", INSTAGRAM_URL),
         prod_font("b", "나", INSTAGRAM_URL),
@@ -263,3 +289,142 @@ def test_prod_baseline_rejects_unknown_schema(tmp_path: Path) -> None:
             expected_record_count=1,
             expected_tier_counts=None,
         )
+
+
+def test_prod_contract_rejects_missing_or_wrong_typed_current_values(tmp_path: Path) -> None:
+    """감사 current 값은 누락이나 기본값 대체 없이 DB 타입 그대로여야 한다."""
+    missing = prod_font("missing", "누락", INSTAGRAM_URL)
+    missing.pop("weights")
+    with pytest.raises(BootstrapError, match="columns"):
+        write_prod_baseline(
+            [missing],
+            tmp_path / "missing.json",
+            expected_record_count=1,
+            expected_tier_counts=None,
+        )
+
+    wrong_type = prod_font("wrong-type", "타입 오류", INSTAGRAM_URL)
+    wrong_type["weights"] = [True]
+    with pytest.raises(BootstrapError, match="weights"):
+        write_prod_baseline(
+            [wrong_type],
+            tmp_path / "wrong-type.json",
+            expected_record_count=1,
+            expected_tier_counts=None,
+        )
+
+
+def test_bootstrap_current_flows_to_metadata_and_accepted_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """export current가 metadata before와 승인 manifest까지 같은 값으로 이어진다."""
+    row = prod_font("흰꼬리수리", "흰꼬리수리", INSTAGRAM_URL)
+    baseline = tmp_path / "baseline.json"
+    write_prod_baseline(
+        [row], baseline, expected_record_count=1, expected_tier_counts=None
+    )
+    loaded_rows = load_prod_baseline(
+        baseline, expected_record_count=1, expected_tier_counts=None
+    )
+    result = build_bootstrap_manifest(
+        loaded_rows,
+        [],
+        [tier_b_seed("613", "흰꼬리수리", INSTAGRAM_URL)],
+    )
+    bootstrap = tmp_path / "bootstrap.json"
+    write_bootstrap_manifest(result, bootstrap)
+    target = load_bootstrap_targets(bootstrap)[0]
+    assert (target.weights, target.subsets, target.script_status) == (
+        (400,),
+        ("korean",),
+        "pending",
+    )
+
+    fixture = Path(__file__).parent / "fixtures" / "audit" / "noonnu-white-tailed-eagle.html"
+
+    def page_fetch(url: str) -> FetchResult:
+        content = fixture.read_bytes()
+        return FetchResult(200, url, content, hashlib.sha256(content).hexdigest(), 0)
+
+    def font_fetch(url: str, max_bytes: int = 32 * 1024 * 1024) -> FetchResult:
+        content = b"synthetic-font-fixture"
+        return FetchResult(200, url, content, hashlib.sha256(content).hexdigest(), 0)
+
+    monkeypatch.setattr("fontagit_pipeline.audit_runner.sys.platform", "linux")
+    monkeypatch.setattr(
+        "fontagit_pipeline.audit_metadata.inspect_font_metadata",
+        lambda _path: FontFileMetadata(
+            families=("흰꼬리수리",),
+            weight=700,
+            italic=False,
+            codepoints=frozenset(BASIC_LATIN),
+            file_sha256="f" * 64,
+        ),
+    )
+    store = InMemoryAuditStore()
+    report = run_metadata_audit(
+        [target],
+        store,
+        {"version": 1, "entries": []},
+        fetcher=page_fetch,
+        font_fetcher=font_fetch,
+    )
+    finding_id = next(
+        item
+        for item in report.finding_ids
+        if store.finding_draft(item).field_name == "script_status"
+    )
+    finding = store.finding_draft(finding_id)
+    assert finding.before_value == row["script_status"]
+    assert finding.evidence_id is not None
+    snapshot_run, snapshot = store.snapshot_draft(finding.evidence_id)
+    assert snapshot_run == report.run_id
+
+    now = datetime(2026, 7, 18, tzinfo=UTC).isoformat()
+    snapshot_row = {
+        **asdict(snapshot),
+        "id": str(finding.evidence_id),
+        "run_id": str(report.run_id),
+        "font_id": str(target.font_id),
+        "collected_at": (snapshot.collected_at or datetime(2026, 7, 18, tzinfo=UTC)).isoformat(),
+        "raw_retention_allowed": False,
+    }
+    current_row = {
+        **row,
+        "source_key": {
+            "provider": target.provider,
+            "provider_record_id": target.provider_record_id,
+        },
+        "evidence_snapshots": [snapshot_row],
+    }
+    approved_finding = {
+        **asdict(finding),
+        "id": str(finding_id),
+        "run_id": str(report.run_id),
+        "font_id": str(target.font_id),
+        "evidence_id": str(finding.evidence_id),
+        "status": "approved",
+        "reviewed_by": "reviewer",
+        "reviewed_at": now,
+    }
+    run_row = {
+        "id": str(report.run_id),
+        "stage": "metadata",
+        "target_environment": "dev",
+        "target_count": 1,
+        "success_count": 1,
+        "verified_count": report.verified_count,
+        "review_count": report.needs_review_count,
+        "broken_count": 0,
+        "parser_version": "audit-runner-v1",
+        "baseline_sha256": "a" * 64,
+        "manifest_sha256": None,
+        "dry_run": False,
+        "status": "completed",
+        "started_at": now,
+        "finished_at": now,
+    }
+
+    bundle = build_manifest(run_row, [approved_finding], [current_row])
+
+    assert bundle.forward.entries[0].before["script_status"] == row["script_status"]

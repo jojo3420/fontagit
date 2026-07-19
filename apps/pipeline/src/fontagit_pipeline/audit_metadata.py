@@ -156,7 +156,7 @@ def inspect_font_metadata(
     """격리 프로세스에서 폰트를 읽고 timeout 시 강제로 종료한다."""
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0 or timeout_seconds > 30:
         raise ValueError("font parse timeout is outside the permitted range")
-    if os.name == "nt":
+    if not sys.platform.startswith("linux"):
         return _review_metadata("unsupported_platform")
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
@@ -216,15 +216,20 @@ def inspect_font_metadata(
         return _review_metadata("unreadable")
 
     assert private_path is not None
-    context = multiprocessing.get_context("spawn")
-    parent, child = context.Pipe(duplex=False)
-    process = context.Process(
-        target=_inspect_worker,
-        args=(child, os.fspath(private_path), font_format, timeout_seconds),
-        daemon=True,
-    )
+    parent: Any | None = None
+    child: Any | None = None
+    process: Any | None = None
+    started = False
     try:
+        context = multiprocessing.get_context("spawn")
+        parent, child = context.Pipe(duplex=False)
+        process = context.Process(
+            target=_inspect_worker,
+            args=(child, os.fspath(private_path), font_format, timeout_seconds),
+            daemon=True,
+        )
         process.start()
+        started = True
         child.close()
         if not parent.poll(timeout_seconds):
             return _review_metadata("parse_timeout", digest=digest, font_format=font_format)
@@ -232,9 +237,12 @@ def inspect_font_metadata(
     except (EOFError, OSError, RuntimeError):
         return _review_metadata("parse_failed", digest=digest, font_format=font_format)
     finally:
-        child.close()
-        parent.close()
-        _stop_worker(process)
+        if child is not None:
+            child.close()
+        if parent is not None:
+            parent.close()
+        if started and process is not None:
+            _stop_worker(process)
         private_path.unlink(missing_ok=True)
     if not isinstance(result, dict) or result.get("status") != "parsed":
         error_kind = (

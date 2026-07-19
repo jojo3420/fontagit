@@ -9,6 +9,24 @@ export type Commercial = "yes" | "conditional" | "no";
 export type LicenseWebfont = "included" | "separate" | "no";
 export type LicenseRedistribution = "yes" | "no";
 export type TrendChange = "up" | "down" | "hold" | "new";
+export type AuditPermission = "allowed" | "conditional" | "denied" | "unknown";
+export type AuditStatus = "pending" | "verified" | "needs_review" | "broken";
+export type ScriptStatus = "pending" | "verified" | "needs_review";
+
+export interface FontLicenseAudit {
+  status: AuditStatus;
+  sourceMode: "audit" | "legacy";
+  summary: string | null;
+  sourceUrl: string | null;
+  sourceKind: "official" | "public" | null;
+  checkedAt: string | null;
+  commercial: AuditPermission;
+  modify: AuditPermission;
+  redistribute: AuditPermission;
+  embedding: AuditPermission;
+  fontSale: AuditPermission;
+  attribution: "required" | "recommended" | "not_required" | "unknown";
+}
 
 export interface License {
   commercial: Commercial;
@@ -31,7 +49,14 @@ export interface Font {
   availableWeights: number[]; // 단일 굵기 폰트는 [400]
   moves: number;
   license: License;
+  /** 이전 데이터 호환용 주소. 신규 화면은 아래 감사 필드를 우선한다. */
   officialUrl: string;
+  downloadUrl?: string | null;
+  foundryUrl?: string | null;
+  legacyOfficialUrl?: string | null;
+  downloadStatus?: AuditStatus;
+  licenseAudit?: FontLicenseAudit;
+  scriptStatus?: ScriptStatus;
   aliases: string[];
   freeAlternatives?: string[]; // 실제 slug, 최대 3
   priceFrom?: number;
