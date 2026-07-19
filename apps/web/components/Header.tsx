@@ -16,7 +16,7 @@ export function Header() {
         <Link href="/fonts">폰트</Link>
         <Link href="/trends">트렌드</Link>
         <Link href="/playground" className={styles.toolLink}>캔버스</Link>
-        <Link href="/compare" className={styles.toolLink}>비교</Link>
+        <Link href="/#compare" className={styles.toolLink}>비교</Link>
         <Link href="/collections">컬렉션</Link>
         <Link href="/submit">등록</Link>
       </nav>

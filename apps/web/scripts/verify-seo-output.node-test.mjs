@@ -10,7 +10,6 @@ const requiredUrls = [
   "https://fontagit.com/fonts/",
   "https://fontagit.com/collections/",
   "https://fontagit.com/trends/",
-  "https://fontagit.com/compare/",
   "https://fontagit.com/playground/",
   "https://fontagit.com/about/",
 ];
@@ -60,7 +59,7 @@ test("사이트맵과 색인 가능한 HTML canonical 집합이 정확히 같으
   const outputDir = createOutputFixture();
   try {
     assert.deepEqual(validateSeoBuildOutput(outputDir), {
-      urlCount: 9,
+      urlCount: 8,
       fontCount: 1,
       collectionCount: 1,
     });

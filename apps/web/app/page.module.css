@@ -2,6 +2,10 @@
 .grid { max-width: 1180px; margin: 0 auto; width: 100%; padding: var(--pad-page); display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 48px; align-items: start; }
 .container { max-width: 1180px; margin: 0 auto; }
 .adSection { padding: 24px var(--pad-page); }
+.compareSection { padding: 48px var(--pad-page); scroll-margin-top: 64px; }
+.comparePlaceholder { min-height: 480px; background: var(--surface-2); }
 @media (max-width: 900px) {
   .grid { grid-template-columns: 1fr; gap: 28px; }
+  .compareSection { padding: 28px var(--pad-page); }
+  .comparePlaceholder { min-height: 320px; }
 }

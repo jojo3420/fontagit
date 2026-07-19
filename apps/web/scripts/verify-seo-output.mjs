@@ -9,7 +9,6 @@ const REQUIRED_URLS = [
   `${EXPECTED_ORIGIN}/fonts/`,
   `${EXPECTED_ORIGIN}/collections/`,
   `${EXPECTED_ORIGIN}/trends/`,
-  `${EXPECTED_ORIGIN}/compare/`,
   `${EXPECTED_ORIGIN}/playground/`,
   `${EXPECTED_ORIGIN}/about/`,
 ];
