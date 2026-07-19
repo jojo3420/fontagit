@@ -11,16 +11,15 @@ vi.mock("@/lib/data", () => ({
 }));
 
 describe("sitemap", () => {
-  it("검색 노출 대상 정적 라우트 7개를 포함한다", async () => {
+  it("검색 노출 대상 정적 라우트 6개를 포함한다", async () => {
     const entries = await sitemap();
     const urls = entries.map((e) => e.url);
 
-    expect(urls.slice(0, 7)).toEqual([
+    expect(urls.slice(0, 6)).toEqual([
       "https://fontagit.com/",
       "https://fontagit.com/fonts/",
       "https://fontagit.com/collections/",
       "https://fontagit.com/trends/",
-      "https://fontagit.com/compare/",
       "https://fontagit.com/playground/",
       "https://fontagit.com/about/",
     ]);
