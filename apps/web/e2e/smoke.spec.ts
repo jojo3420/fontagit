@@ -95,6 +95,12 @@ test('compare anchor works from another page', async ({ page }) => {
   await expect(page.getByLabel('비교 문장 입력')).toBeVisible();
 });
 
+test('compare anchor works via direct URL', async ({ page }) => {
+  await page.goto('/#compare', { waitUntil: 'networkidle' });
+  await page.locator('#compare').scrollIntoViewIfNeeded();
+  await expect(page.getByLabel('비교 문장 입력')).toBeVisible();
+});
+
 test('header collections link navigates without 404', async ({ page }) => {
   await page.goto('/', { waitUntil: 'networkidle' });
   await page.getByRole('navigation').getByRole('link', { name: '컬렉션' }).click();
