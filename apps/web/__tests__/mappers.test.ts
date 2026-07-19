@@ -3,6 +3,99 @@ import { rowToFont, rowToCollection } from "@/lib/db/mappers";
 import { FontRow, CollectionRow } from "@/lib/db/types";
 
 describe("rowToFont", () => {
+  it("검증된 감사 필드를 기존 주소보다 우선한다", () => {
+    const row = {
+      id: "audit-1",
+      slug: "verified-font",
+      name_en: "Verified Font",
+      name_ko: "검증 폰트",
+      foundry: "제작사",
+      source_tier: "B",
+      category_ko: "고딕",
+      weights: [400],
+      is_commercial_free: true,
+      license_type: "무료 라이선스",
+      official_url: "https://legacy.example/font",
+      last_modified: "2026-07-01T00:00:00Z",
+      status: "published",
+      subsets: ["korean"],
+      foundry_url: "https://maker.example/font",
+      download_url: "https://maker.example/font.zip",
+      license_source_url: "https://maker.example/license",
+      license_summary: "상업적 사용은 허용되며 폰트 자체 판매는 금지됩니다.",
+      license_source_kind: "official",
+      download_status: "verified",
+      license_status: "verified",
+      license_checked_at: "2026-07-18T00:00:00Z",
+      allow_commercial: "allowed",
+      allow_modify: null,
+      allow_redistribute: null,
+      allow_embedding: "allowed",
+      allow_font_sale: "denied",
+      attribution_requirement: null,
+      script_status: "verified",
+    } satisfies FontRow;
+
+    const font = rowToFont(row, []);
+
+    expect(font.downloadUrl).toBe("https://maker.example/font.zip");
+    expect(font.licenseAudit!.status).toBe("verified");
+    expect(font.licenseAudit!.redistribute).toBe("unknown");
+    expect(font.foundryUrl).toBe("https://maker.example/font");
+  });
+
+  it("재확인 상태에서는 기존 공식 주소를 다운로드 주소로 쓰지 않는다", () => {
+    const row = {
+      id: "audit-2",
+      slug: "review-font",
+      name_en: "Review Font",
+      name_ko: "재확인 폰트",
+      foundry: null,
+      source_tier: "B",
+      category_ko: "손글씨",
+      weights: [400],
+      is_commercial_free: true,
+      license_type: null,
+      official_url: "https://instagram.com/legacy-font",
+      last_modified: null,
+      status: "published",
+      subsets: [],
+      download_status: "needs_review",
+      license_status: "needs_review",
+      script_status: "needs_review",
+    } satisfies FontRow;
+
+    const font = rowToFont(row, []);
+
+    expect(font.downloadUrl).toBeNull();
+    expect(font.legacyOfficialUrl).toBeNull();
+    expect(font.licenseAudit!.status).toBe("needs_review");
+  });
+
+  it("감사 근거가 없는 이전 데이터는 호환 주소를 보존한다", () => {
+    const row = {
+      id: "legacy-1",
+      slug: "legacy-font",
+      name_en: "Legacy Font",
+      name_ko: "이전 폰트",
+      foundry: null,
+      source_tier: "A",
+      category_ko: "명조",
+      weights: [400],
+      is_commercial_free: true,
+      license_type: "OFL",
+      official_url: "https://legacy.example/download",
+      last_modified: "2026-07-01T00:00:00Z",
+      status: "published",
+      subsets: ["latin"],
+    } satisfies FontRow;
+
+    const font = rowToFont(row, []);
+
+    expect(font.licenseAudit!.sourceMode).toBe("legacy");
+    expect(font.legacyOfficialUrl).toBe("https://legacy.example/download");
+  });
+
   it("should map tier to 'free' when is_commercial_free is true", () => {
     const row: FontRow = {
       id: "1",

@@ -69,7 +69,7 @@ export function CompareBoard() {
                 className={styles.sample}
                 style={{ fontFamily: family }}
               >
-                {getSpecimenText(f.subsets, true)}
+                {getSpecimenText(f, true)}
               </div>
             </div>
           );

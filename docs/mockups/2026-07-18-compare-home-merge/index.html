@@ -1,0 +1,259 @@
+<title>#54 /compare 홈 통합 미리보기</title>
+<style>
+  :root {
+    --bg: #FAFAF8; --ink: #1A1A1A; --sub: #6B6B6B; --sub-2: #9A9A96;
+    --border: #E6E6E2; --surface: #FFFFFF; --surface-2: #F4F4F0;
+    --point: #2C5545; --point-weak: rgba(44, 85, 69, .1); --on-point: #FFFFFF;
+    --warn: #B4863C; --down: #B4564B;
+    --radius-card: 12px; --pad-page: 40px;
+  }
+  :root[data-theme="dark"] {
+    --bg: #16171A; --ink: #EDEDEA; --sub: #B9BCBD; --sub-2: #8A8E90;
+    --border: #2A2C30; --surface: #1D1F22; --surface-2: #202226;
+    --point: #7FC2A2; --point-weak: rgba(127, 194, 162, .14); --on-point: #16171A;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16171A; --ink: #EDEDEA; --sub: #B9BCBD; --sub-2: #8A8E90;
+      --border: #2A2C30; --surface: #1D1F22; --surface-2: #202226;
+      --point: #7FC2A2; --point-weak: rgba(127, 194, 162, .14); --on-point: #16171A;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard Variable", Helvetica, Arial, sans-serif;
+    line-height: 1.6; font-size: 15px;
+  }
+  .doc-note {
+    max-width: 1180px; margin: 24px auto 0; padding: 16px var(--pad-page);
+    color: var(--sub); font-size: 13px;
+  }
+  .doc-note b { color: var(--ink); }
+
+  /* --- 사이트 프레임 재현 --- */
+  .frame {
+    max-width: 1180px; margin: 12px auto 0; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
+  }
+  .header {
+    display: flex; align-items: center; gap: 20px;
+    padding: 14px 24px; border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: var(--surface); z-index: 5;
+  }
+  .wordmark { font-weight: 800; font-size: 19px; letter-spacing: -.02em; }
+  .wordmark .a { color: var(--point); }
+  .nav { display: flex; gap: 16px; font-size: 14px; color: var(--sub); flex: 1; }
+  .nav a { color: var(--sub); }
+  .nav a.tool { color: var(--point); font-weight: 600; }
+  .nav a.here { position: relative; }
+  .nav a.here::after {
+    content: "/#compare"; position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
+    font-size: 9px; background: var(--warn); color: #fff; padding: 1px 5px; border-radius: 6px; white-space: nowrap;
+  }
+  .actions { display: flex; gap: 10px; align-items: center; color: var(--sub-2); font-size: 13px; }
+
+  /* --- 홈 그리드 --- */
+  .grid {
+    display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 40px;
+    padding: 36px var(--pad-page); align-items: start;
+  }
+  .hero h1 { font-size: 34px; letter-spacing: -.03em; margin: 0 0 10px; line-height: 1.2; }
+  .hero p { color: var(--sub); margin: 0 0 20px; max-width: 46ch; }
+  .heroBox {
+    height: 150px; border-radius: var(--radius-card); border: 1px dashed var(--border);
+    background: var(--surface-2); display: flex; align-items: center; justify-content: center;
+    color: var(--sub-2); font-size: 13px;
+  }
+  .rank {
+    border: 1px solid var(--border); border-radius: var(--radius-card); padding: 18px;
+    background: var(--surface);
+  }
+  .rank h3 { margin: 0 0 14px; font-size: 15px; }
+  .rankRow { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--border); font-size: 14px; }
+  .rankRow:first-of-type { border-top: none; }
+  .rankNum { color: var(--point); font-weight: 800; width: 18px; }
+  .rankUp { color: var(--point); font-size: 12px; margin-left: auto; }
+
+  /* --- [신규] 비교 섹션 --- */
+  .compare {
+    scroll-margin-top: 64px;
+    padding: 32px var(--pad-page); border-top: 1px solid var(--border);
+    background: var(--surface);
+    position: relative;
+  }
+  .newTag {
+    position: absolute; top: -1px; left: var(--pad-page);
+    background: var(--point); color: var(--on-point); font-size: 11px; font-weight: 700;
+    padding: 3px 9px; border-radius: 0 0 8px 8px;
+  }
+  .compareHead { display: flex; align-items: baseline; gap: 12px; margin: 14px 0 14px; flex-wrap: wrap; }
+  .compareHead h2 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
+  .compareHead .sub { font-size: 13px; color: var(--sub); }
+  .inputRow {
+    display: flex; align-items: center; gap: 12px; height: 50px; padding: 0 18px;
+    background: var(--surface); border: 1.5px solid var(--point); border-radius: 12px;
+    max-width: 640px; margin-bottom: 22px;
+  }
+  .inputRow .lbl { font-size: 12px; color: var(--sub-2); }
+  .inputRow .val { font-size: 16px; font-weight: 500; }
+  .board { display: grid; grid-template-columns: 1fr 1fr 1fr; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .col { padding: 24px 22px; border-right: 1px solid var(--border); }
+  .col:last-child { border-right: none; }
+  .colHead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; gap: 8px; }
+  .chip { font-size: 11px; font-weight: 700; color: var(--point); background: var(--point-weak); padding: 2px 8px; border-radius: 20px; }
+  .sel { border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; font-size: 12px; font-weight: 700; color: var(--ink); background: var(--bg); }
+  .specimen { font-size: 44px; line-height: 1.3; word-break: break-all; }
+  .s1 { font-weight: 800; }
+  .s2 { font-family: Georgia, "Times New Roman", serif; }
+  .s3 { font-weight: 300; letter-spacing: .02em; }
+  .sample { font-size: 13px; line-height: 1.8; color: var(--sub); margin-top: 16px; }
+
+  .ad {
+    margin: 20px var(--pad-page) 32px; height: 90px; border-radius: var(--radius-card);
+    border: 1px dashed var(--border); background: var(--surface-2);
+    display: flex; align-items: center; justify-content: center; color: var(--sub-2); font-size: 12px;
+  }
+
+  /* 검토 핀 */
+  .pin {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%; background: var(--warn); color: #fff;
+    font-size: 11px; font-weight: 800; vertical-align: middle; margin-left: 6px;
+  }
+
+  /* 검토 포인트 카드 */
+  .review { max-width: 1180px; margin: 28px auto 60px; padding: 0 var(--pad-page); }
+  .review h2 { font-size: 18px; margin: 0 0 4px; }
+  .review .lead { color: var(--sub); font-size: 13px; margin: 0 0 18px; }
+  .rcard {
+    display: grid; grid-template-columns: 28px 1fr; gap: 14px; padding: 16px 0;
+    border-top: 1px solid var(--border);
+  }
+  .rnum {
+    width: 26px; height: 26px; border-radius: 50%; background: var(--warn); color: #fff;
+    font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center;
+  }
+  .rcard h3 { margin: 0 0 4px; font-size: 15px; }
+  .rcard p { margin: 0; color: var(--sub); font-size: 13.5px; }
+  .rcard .rec { color: var(--point); font-weight: 600; }
+
+  .toggle {
+    position: fixed; top: 14px; right: 16px; z-index: 20;
+    background: var(--surface); border: 1px solid var(--border); color: var(--ink);
+    border-radius: 20px; padding: 6px 14px; font-size: 12px; cursor: pointer; font-weight: 600;
+  }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; gap: 24px; } }
+  @media (max-width: 720px) { .board { grid-template-columns: 1fr; } .col { border-right: none; border-bottom: 1px solid var(--border); } }
+</style>
+
+<button class="toggle" onclick="document.documentElement.setAttribute('data-theme', document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark')">라이트/다크 전환</button>
+
+<div class="doc-note">
+  <b>#54 /compare 제거 → 홈 통합 미리보기.</b> 확정 3건: 비교 기능을 메인 홈("/")에 섹션으로 통합 · /compare 라우트 완전 제거(404) · "비교" 네비 링크를 홈 앵커(<b>/#compare</b>)로 변경. 아래는 통합 후 홈 화면 재현(기존 디자인 토큰 적용)이며, 주황 번호는 구현 전 짚어야 할 검토 포인트입니다.
+</div>
+
+<div class="frame">
+  <div class="header">
+    <span class="wordmark">Font<span class="a">A</span>git</span>
+    <nav class="nav">
+      <a>폰트</a><a>트렌드</a>
+      <a class="tool">캔버스</a>
+      <a class="tool here">비교</a>
+      <a>컬렉션</a><a>등록</a>
+    </nav>
+    <div class="actions">테마 · 검색</div>
+  </div>
+
+  <div class="grid">
+    <div class="hero">
+      <h1>글자에 진심인 사람들을 위한 폰트 아지트</h1>
+      <p>트렌드부터 무료 상업용까지, 한글 폰트를 한곳에서 비교하고 발견하세요.</p>
+      <div class="heroBox">Hero 검색/추천 영역 (기존)</div>
+    </div>
+    <div class="rank">
+      <h3>이번 주 인기 폰트</h3>
+      <div class="rankRow"><span class="rankNum">1</span> 프리텐다드 <span class="rankUp">▲ 2</span></div>
+      <div class="rankRow"><span class="rankNum">2</span> 고운바탕 <span class="rankUp">▲ 1</span></div>
+      <div class="rankRow"><span class="rankNum">3</span> 검은고딕 <span class="rankUp">— 0</span></div>
+      <div class="rankRow"><span class="rankNum">4</span> 프리젠테이션 <span class="rankUp">▲ 5</span></div>
+      <div class="rankRow"><span class="rankNum">5</span> 나눔스퀘어 <span class="rankUp">▼ 1</span></div>
+    </div>
+  </div>
+
+  <section class="compare" id="compare">
+    <span class="newTag">신규 · 통합 섹션</span>
+    <div class="compareHead">
+      <h2>폰트 비교<span class="pin">1</span><span class="pin">2</span></h2>
+      <span class="sub">무료 상업용 폰트를 나란히 놓고 같은 문장으로 비교합니다</span>
+    </div>
+    <div class="inputRow">
+      <span class="lbl">비교 문장</span>
+      <span class="val">아지트</span>
+    </div>
+    <div class="board">
+      <div class="col">
+        <div class="colHead"><span class="chip">무료</span><span class="sel">프리텐다드 ▾</span></div>
+        <div class="specimen s1">아지트</div>
+        <div class="sample">다람쥐 헌 쳇바퀴에 타고파. 0123456789</div>
+      </div>
+      <div class="col">
+        <div class="colHead"><span class="chip">무료</span><span class="sel">고운바탕 ▾</span></div>
+        <div class="specimen s2">아지트</div>
+        <div class="sample">다람쥐 헌 쳇바퀴에 타고파. 0123456789</div>
+      </div>
+      <div class="col">
+        <div class="colHead"><span class="chip">무료</span><span class="sel">검은고딕 ▾</span></div>
+        <div class="specimen s3">아지트</div>
+        <div class="sample">다람쥐 헌 쳇바퀴에 타고파. 0123456789</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="ad">하단 광고 (AdFit) — 기존</div>
+</div>
+
+<div class="review">
+  <h2>구현 전 검토 포인트 (역제안)</h2>
+  <p class="lead">설계 조사 중 발견한, 확정 3건만으로는 안 풀리는 논점입니다. 구현 계획에 반영 여부를 정해야 합니다.</p>
+
+  <div class="rcard">
+    <div class="rnum">1</div>
+    <div>
+      <h3>홈 성능(CWV) 회귀 위험</h3>
+      <p><code>CompareBoard</code>는 클라이언트 컴포넌트("use client")로 무료 폰트 3종 웹폰트를 실시간 렌더합니다. #25에서 홈 LCP 2.1s로 통과했는데, 이 무게가 홈에 얹히면 회귀할 수 있습니다. <span class="rec">권장: 뷰포트 진입 시 지연 렌더(lazy) 또는 dynamic import로 초기 로드에서 분리.</span></p>
+    </div>
+  </div>
+
+  <div class="rcard">
+    <div class="rnum">2</div>
+    <div>
+      <h3>비교 섹션 위치 · 홈 길이</h3>
+      <p>Hero+주간랭킹+비교+광고로 홈 스크롤이 길어집니다. 비교 섹션을 주간랭킹 아래·광고 위 full-width로 두는 안이 기본이나, 접기/축약 형태도 선택지입니다. <span class="rec">권장: 지금 배치(콘텐츠 우선, 광고 최하단) 유지.</span></p>
+    </div>
+  </div>
+
+  <div class="rcard">
+    <div class="rnum">3</div>
+    <div>
+      <h3>모바일 탭바 "홈 vs 비교" 중복</h3>
+      <p>모바일 탭바의 "홈"과 "비교"가 둘 다 홈으로 갑니다(<code>usePathname</code>은 해시를 무시 → 비교 탭 활성표시 불가 + 목적지 중복). <span class="rec">권장: 데스크톱 헤더는 /#compare 앵커 유지, 모바일 탭바에서는 "비교" 탭 제거.</span></p>
+    </div>
+  </div>
+
+  <div class="rcard">
+    <div class="rnum">4</div>
+    <div>
+      <h3>앵커 스크롤 가림 + 크로스 페이지 이동</h3>
+      <p>sticky 헤더가 <code>#compare</code> 섹션 상단을 가리지 않도록 <code>scroll-margin-top</code>이 필요합니다. 또 /fonts 등 타 페이지에서 /#compare 클릭 시 "홈 로드 후 앵커 스크롤"이 되는지 이 Next.js(정적 export) 문서로 확인해야 합니다. <span class="rec">권장: scroll-margin 적용 + 구현 시 문서 확인.</span></p>
+    </div>
+  </div>
+
+  <div class="rcard">
+    <div class="rnum">5</div>
+    <div>
+      <h3>404 안내 페이지 활용</h3>
+      <p><code>not-found.tsx</code>가 이미 존재합니다. /compare 제거 후 옛 링크로 들어온 방문자에게 "비교는 홈으로 이동했습니다 → 홈 바로가기"를 안내하면 맨 404보다 이탈이 줍니다. <span class="rec">권장: not-found에 홈/비교 안내 링크 추가(소폭).</span></p>
+    </div>
+  </div>
+</div>

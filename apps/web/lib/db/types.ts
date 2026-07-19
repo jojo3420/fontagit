@@ -1,4 +1,4 @@
-import type { SourceTier } from "@/types/font";
+import type { AuditStatus, ScriptStatus, SourceTier } from "@/types/font";
 
 export interface FontRow {
   id: string;
@@ -13,8 +13,29 @@ export interface FontRow {
   license_type: string | null;
   official_url: string | null;
   last_modified: string | null;
-  status: "draft" | "published" | "archived" | "hold" | "discontinued";
-  subsets: string[];
+  status?: "draft" | "published" | "archived" | "hold" | "discontinued";
+  subsets?: string[];
+  foundry_url?: string | null;
+  download_url?: string | null;
+  license_source_url?: string | null;
+  license_summary?: string | null;
+  download_source_kind?: "official" | "public" | null;
+  license_source_kind?: "official" | "public" | null;
+  download_status?: AuditStatus;
+  license_status?: Exclude<AuditStatus, "broken">;
+  download_checked_at?: string | null;
+  license_checked_at?: string | null;
+  allow_commercial?: "allowed" | "conditional" | "denied" | null;
+  allow_modify?: "allowed" | "conditional" | "denied" | null;
+  allow_redistribute?: "allowed" | "conditional" | "denied" | null;
+  allow_embedding?: "allowed" | "conditional" | "denied" | null;
+  allow_font_sale?: "allowed" | "conditional" | "denied" | null;
+  attribution_requirement?: "required" | "recommended" | "not_required" | null;
+  download_evidence_id?: string | null;
+  license_evidence_id?: string | null;
+  script_status?: ScriptStatus;
+  script_checked_at?: string | null;
+  script_evidence_id?: string | null;
 }
 
 export interface AliasRow {

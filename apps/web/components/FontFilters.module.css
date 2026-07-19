@@ -1,7 +1,7 @@
 .sidebar {
   width: 220px;
-  padding: 16px;
-  border-right: 1px solid #e0e0e0;
+  padding: 16px 20px 16px 0;
+  border-right: 1px solid var(--border);
 }
 
 .section {
@@ -12,21 +12,25 @@
   font-size: 14px;
   font-weight: 600;
   margin-bottom: 12px;
-  color: #333;
+  color: var(--ink);
 }
 
 .check {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   font-size: 13px;
-  margin-bottom: 8px;
+  min-height: 40px;
   cursor: pointer;
+  color: var(--sub);
 }
 
 .check input[type="checkbox"] {
   cursor: pointer;
+  accent-color: var(--point);
 }
+
+.optionCount { margin-left: auto; color: var(--sub); font-variant-numeric: tabular-nums; }
 
 .chips {
   display: flex;

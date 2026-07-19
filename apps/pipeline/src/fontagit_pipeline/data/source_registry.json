@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "maker": "네이버",
+      "domain": "clova.ai",
+      "roles": ["download"],
+      "source_kind": "discovery",
+      "approved_by": null,
+      "approved_at": null,
+      "evidence_snapshot_id": null
+    }
+  ]
+}

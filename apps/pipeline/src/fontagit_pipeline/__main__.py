@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -258,26 +259,41 @@ def main_noonnu_review(args: argparse.Namespace) -> int:
         action = args.action
 
         if action == "list":
-            proposals = list_pending(schema)
-            logger.info("검수 대기: %d건", len(proposals))
-            for p in proposals:
+            findings = list_pending(schema)
+            logger.info("검수 대기: %d건", len(findings))
+            for finding in findings:
                 logger.info(
-                    "  - %s (%s): %s",
-                    p.get("slug"),
-                    p.get("proposed_license_type"),
-                    p.get("source_url"),
+                    "  - finding=%s font=%s field=%s",
+                    finding.get("id"),
+                    finding.get("font_id"),
+                    finding.get("field_name"),
                 )
             return 0
 
         elif action == "approve":
-            approve(schema, args.slug, note=args.note)
+            if not args.finding_id or not args.reviewed_by:
+                logger.error("approve는 --finding-id와 --reviewed-by가 필수입니다")
+                return 1
+            approve(
+                schema,
+                args.finding_id,
+                reviewed_by=args.reviewed_by,
+                note=args.note,
+            )
             return 0
 
         elif action == "reject":
-            if not args.note:
-                logger.error("--note는 필수입니다")
+            if not args.finding_id or not args.reviewed_by or not args.note:
+                logger.error(
+                    "reject는 --finding-id, --reviewed-by, --note가 필수입니다"
+                )
                 return 1
-            reject(schema, args.slug, note=args.note)
+            reject(
+                schema,
+                args.finding_id,
+                reviewed_by=args.reviewed_by,
+                note=args.note,
+            )
             return 0
 
         elif action == "audit-sample":
@@ -333,49 +349,15 @@ def main_noonnu_publish(args: argparse.Namespace) -> int:
         logger.error("Dev Supabase 설정이 필요합니다.")
         return 2
 
-    # prod 접속 설정 (필수)
-    if not settings.supabase_prod_url or not settings.supabase_prod_secret_key:
-        logger.error(
-            "Prod Supabase 설정이 필요합니다 "
-            "(SUPABASE_PROD_URL, SUPABASE_PROD_SECRET_KEY)."
-        )
-        return 2
-
     try:
         # Dev 스키마 접속
         dev_client = create_client(settings.supabase_url, settings.supabase_secret_key)
         dev_schema = dev_client.schema("fontagit")
-
-        # prod 환경 오염 방지: dev URL로 prod 쓰기 금지
-        if settings.supabase_prod_url == settings.supabase_url:
-            logger.error(
-                "prod URL이 dev URL과 동일합니다. 설정을 확인하세요."
-            )
-            return 2
-
-        # dry_run 여부 결정
         dry_run = not getattr(args, "confirm", False)
-
-        if not dry_run:
-            # 실제 쓰기를 위한 대화형 확인
-            total_rows, _ = publish_to_prod(
-                dev_schema,
-                settings.supabase_prod_url,
-                settings.supabase_prod_secret_key,
-                dry_run=True,
-            )
-            confirm_input = input(
-                f"prod에 {total_rows}건 발행합니다. 계속하려면 'yes' 입력: "
-            )
-            if confirm_input.strip() != "yes":
-                logger.info("사용자 취소")
-                return 1
-
-        # 실행
         total, written = publish_to_prod(
             dev_schema,
-            settings.supabase_prod_url,
-            settings.supabase_prod_secret_key,
+            settings.supabase_prod_url or "",
+            settings.supabase_prod_secret_key or "",
             dry_run=dry_run,
         )
         logger.info("완료: 대상 %d개, 쓰기 %d개", total, written)
@@ -383,6 +365,279 @@ def main_noonnu_publish(args: argparse.Namespace) -> int:
 
     except Exception as exc:
         logger.error("발행 실패: %s", exc)
+        return 3
+
+
+def main_audit_policy_check(args: argparse.Namespace) -> int:
+    """사람 승인 전 수집 정책 점검 문서를 만든다."""
+    from fontagit_pipeline.audit_policy import write_policy_check
+    from fontagit_pipeline.config import load_audit_settings
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    try:
+        load_audit_settings()
+        policy = write_policy_check(args.out)
+    except (OSError, ValueError) as exc:
+        logger.error("감사 정책 파일 생성 실패: %s", exc)
+        return 3
+
+    logger.info(
+        "정책 점검 파일 생성: %s (robots=%s, terms=%s, crawl=%s, raw=%s)",
+        args.out,
+        policy.robots_sha256,
+        policy.terms_sha256,
+        policy.crawl_allowed,
+        policy.raw_retention_allowed,
+    )
+    return 0
+
+
+def main_audit_export_baseline(args: argparse.Namespace) -> int:
+    """공개 anon API만 사용해 prod 기준선을 내보낸다."""
+    from fontagit_pipeline.audit_bootstrap import (
+        BootstrapError,
+        calculate_baseline_content_sha256,
+        fetch_prod_public_rows,
+        write_prod_baseline,
+    )
+    from fontagit_pipeline.config import load_audit_settings
+
+    if args.source != "prod-public":
+        logger.error("허용되지 않은 기준선 출처입니다: %s", args.source)
+        return 2
+    try:
+        settings = load_audit_settings()
+        if not settings.supabase_url or not settings.supabase_anon_key:
+            raise BootstrapError("SUPABASE_URL과 SUPABASE_ANON_KEY가 필요합니다")
+        rows = fetch_prod_public_rows(settings.supabase_url, settings.supabase_anon_key)
+        baseline_content_sha256 = calculate_baseline_content_sha256(rows)
+        file_sha256 = write_prod_baseline(rows, args.out)
+    except (BootstrapError, OSError, httpx.HTTPError) as exc:
+        logger.error("prod 공개 기준선 내보내기 실패: %s", exc)
+        return 3
+
+    logger.info(
+        "prod 공개 기준선 저장: %s (%d개, baseline_content_sha256=%s, file_sha256=%s)",
+        args.out,
+        len(rows),
+        baseline_content_sha256,
+        file_sha256,
+    )
+    return 0
+
+
+def main_audit_bootstrap(args: argparse.Namespace) -> int:
+    """고정 snapshot만 비교해 안정 출처키 manifest를 생성한다."""
+    from fontagit_pipeline.audit_bootstrap import (
+        BootstrapError,
+        build_bootstrap_manifest,
+        load_prod_baseline,
+        load_snapshot_records,
+        write_bootstrap_manifest,
+    )
+
+    try:
+        prod_rows = load_prod_baseline(args.prod_snapshot)
+        tier_a = load_snapshot_records(Path("output") / "tier-a.json", "fonts")
+        tier_b = load_snapshot_records(
+            Path("output") / "tier-b-noonnu-seed.json", "records"
+        )
+        result = build_bootstrap_manifest(prod_rows, tier_a, tier_b)
+        total = result.matched + result.unmatched + result.conflicts
+        if total != len(prod_rows):
+            raise BootstrapError("bootstrap 결과 수가 prod 기준선과 일치하지 않습니다")
+        file_sha256 = write_bootstrap_manifest(result, args.out)
+    except (BootstrapError, OSError) as exc:
+        logger.error("안정 출처키 bootstrap 실패: %s", exc)
+        return 3
+
+    logger.info(
+        "bootstrap 저장: %s (연결=%d, 미연결=%d, 충돌=%d, sha256=%s)",
+        args.out,
+        result.matched,
+        result.unmatched,
+        result.conflicts,
+        file_sha256,
+    )
+    return 0
+
+
+def main_audit_run(args: argparse.Namespace) -> int:
+    """법적·메타데이터 감사 파일럿과 보고서를 만든다."""
+    from fontagit_pipeline.audit_license import _load_rules
+    from fontagit_pipeline.audit_policy import load_source_registry
+    from fontagit_pipeline.audit_runner import (
+        AuditGateError,
+        load_bootstrap_targets,
+        run_legal_audit,
+        run_metadata_audit,
+        select_pilot,
+        write_audit_artifacts,
+    )
+    from fontagit_pipeline.audit_store import InMemoryAuditStore, SupabaseAuditStore
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    try:
+        targets = load_bootstrap_targets(args.bootstrap)
+        selected = select_pilot(targets, size=args.limit, require_slugs=args.require_slug)
+        registry = load_source_registry()
+        if args.stage == "metadata" and not args.dry_run and not sys.platform.startswith("linux"):
+            raise AuditGateError("metadata execution requires Linux isolation")
+        if args.dry_run:
+            dry_store = InMemoryAuditStore()
+            if args.stage == "metadata":
+                report = run_metadata_audit(selected, dry_store, registry, dry_run=True)
+            else:
+                rules = _load_rules(Path(__file__).with_name("data") / "license_rules.json")
+                report = run_legal_audit(selected, dry_store, registry, rules, dry_run=True)
+        else:
+            from fontagit_pipeline.config import load_audit_settings
+
+            settings = load_audit_settings()
+            dev_url, dev_secret_key = settings.dev_write_credentials()
+            dev_store = SupabaseAuditStore.from_dev_credentials(
+                dev_url, dev_secret_key
+            )
+            if args.stage == "metadata":
+                report = run_metadata_audit(selected, dev_store, registry)
+            else:
+                rules = _load_rules(Path(__file__).with_name("data") / "license_rules.json")
+                report = run_legal_audit(selected, dev_store, registry, rules)
+        digest = write_audit_artifacts(report, args.out)
+        report.assert_safe()
+    except (AuditGateError, OSError, ValueError) as exc:
+        logger.error("감사 파일럿 중단: %s", exc)
+        return 3
+
+    logger.info("감사 파일럿 보고서 저장: %s (sha256=%s)", args.out, digest)
+    return 0
+
+
+def main_audit_scan(args: argparse.Namespace) -> int:
+    """공개 prod RLS와 안전한 HTTP 경계만 사용해 예약 관찰을 만든다."""
+    from fontagit_pipeline.audit_runner import (
+        AuditGateError,
+        load_prod_public_scheduled_targets,
+        scan_scheduled_targets,
+        write_scheduled_artifact,
+    )
+    from fontagit_pipeline.config import load_audit_settings
+
+    if args.source != "prod-public":
+        logger.error("허용되지 않은 예약 감사 출처입니다")
+        return 2
+    try:
+        settings = load_audit_settings()
+        public_url, public_key = settings.prod_public_read_credentials()
+        from supabase import create_client
+
+        public_schema = create_client(public_url, public_key).schema("fontagit")
+        targets = load_prod_public_scheduled_targets(public_schema, args.kind)
+        artifact = scan_scheduled_targets(args.kind, targets)
+        digest = write_scheduled_artifact(artifact, args.out)
+    except (AuditGateError, OSError, ValueError) as exc:
+        logger.error("예약 감사 scan 중단: %s", exc)
+        return 3
+    except Exception as exc:  # 공개 API/외부 HTTP 경계
+        logger.error("예약 감사 scan 실패: %s", exc.__class__.__name__)
+        return 3
+    logger.info(
+        "예약 감사 artifact 저장: kind=%s targets=%d sha256=%s",
+        args.kind,
+        artifact.target_count,
+        digest,
+    )
+    return 0
+
+
+def main_audit_import(args: argparse.Namespace) -> int:
+    """고정 artifact를 검증해 dev append-only 감사 테이블에만 넣는다."""
+    from fontagit_pipeline.audit_runner import (
+        AuditGateError,
+        import_observations,
+        read_regular_file_once,
+    )
+    from fontagit_pipeline.audit_store import SupabaseAuditStore
+    from fontagit_pipeline.config import load_audit_settings
+
+    try:
+        artifact_bytes = read_regular_file_once(args.artifact, max_bytes=8 * 1024 * 1024)
+        sha_bytes = read_regular_file_once(args.sha256, max_bytes=128)
+        expected_sha256 = sha_bytes.decode("ascii")
+        settings = load_audit_settings()
+        dev_url, dev_key = settings.dev_write_credentials()
+        store = SupabaseAuditStore.from_dev_credentials(dev_url, dev_key)
+        result = import_observations(artifact_bytes, expected_sha256, store)
+    except (AuditGateError, OSError, UnicodeError, ValueError) as exc:
+        logger.error("예약 감사 import 중단: %s", exc)
+        return 3
+    except Exception as exc:  # dev DB 경계; 자격증명은 기록하지 않는다.
+        logger.error("예약 감사 import 실패: %s", exc.__class__.__name__)
+        return 3
+    logger.info(
+        "예약 감사 import 완료: status=%s observations=%d findings=%d applied=%d",
+        result.status,
+        result.observation_count,
+        result.finding_count,
+        result.applied_count,
+    )
+    return 0
+
+
+def main_audit_manifest_apply(args: argparse.Namespace) -> int:
+    """검증된 manifest 하나만 전용 RPC로 적용한다.
+
+    prod는 파일 SHA 전체 일치와 대화형 yes를 모두 통과해야만 네트워크 경계를
+    넘는다. 이 함수는 이번 작업에서 호출하지 않는다.
+    """
+    import hashlib
+
+    from fontagit_pipeline.audit_manifest import ManifestError, verify_manifest_bytes
+    from fontagit_pipeline.config import load_audit_settings
+
+    try:
+        manifest_bytes = args.manifest.read_bytes()
+        expected_hash = args.sha256.read_text(encoding="ascii")
+        manifest = verify_manifest_bytes(manifest_bytes, expected_hash)
+        digest = hashlib.sha256(manifest_bytes).hexdigest()
+        if args.confirm_hash != digest:
+            raise ManifestError("--confirm-hash must exactly match the full manifest SHA-256")
+        settings = load_audit_settings()
+        if args.target == "prod":
+            if os.environ.get("FONTAGIT_PROD_MANIFEST_ENABLED") != "true":
+                raise ManifestError("prod manifest requires FONTAGIT_PROD_MANIFEST_ENABLED=true")
+            approval_id = args.approval_id or os.environ.get("FONTAGIT_PROD_APPROVAL_ID")
+            if not approval_id or not approval_id.strip():
+                raise ManifestError("prod manifest requires --approval-id or FONTAGIT_PROD_APPROVAL_ID")
+            if args.approved_hash != digest:
+                raise ManifestError("--approved-hash must exactly match the full manifest SHA-256")
+            if input("prod manifest를 적용합니다. 계속하려면 yes 입력: ").strip() != "yes":
+                logger.info("사용자 취소")
+                return 1
+            if not settings.supabase_prod_url or not settings.supabase_prod_secret_key:
+                raise ValueError("SUPABASE_PROD_URL과 SUPABASE_PROD_SECRET_KEY가 필요합니다")
+            url, secret = settings.supabase_prod_url, settings.supabase_prod_secret_key
+        else:
+            url, secret = settings.dev_write_credentials()
+
+        from supabase import create_client
+
+        rpc_payload = {
+            "p_manifest_text": manifest_bytes.decode("utf-8"),
+            "p_expected_sha256": digest,
+            "p_schema_version": int(manifest.schema_version),
+        }
+        response = create_client(url, secret).schema("fontagit").rpc(
+            "apply_font_audit_manifest",
+            rpc_payload,
+        ).execute()
+        logger.info("감사 manifest 적용 완료: target=%s result=%s", args.target, response.data)
+        return 0
+    except (ManifestError, OSError, ValueError) as exc:
+        logger.error("감사 manifest 적용 중단: %s", exc)
+        return 3
+    except Exception as exc:  # 외부 DB 경계
+        logger.error("감사 manifest RPC 실패: %s", exc.__class__.__name__)
         return 3
 
 
@@ -440,7 +695,13 @@ if __name__ == "__main__":
         help="실행 액션",
     )
     review_parser.add_argument(
-        "--slug", type=str, default=None, help="폰트 슬러그(approve/reject/unpublish에서 필수)"
+        "--slug", type=str, default=None, help="폰트 슬러그(unpublish legacy 명령용)"
+    )
+    review_parser.add_argument(
+        "--finding-id", type=str, default=None, help="승인/반려할 감사 finding ID"
+    )
+    review_parser.add_argument(
+        "--reviewed-by", type=str, default=None, help="검수자 식별자(승인/반려 필수)"
     )
     review_parser.add_argument(
         "--note", type=str, default=None, help="검수자 코멘트(approve에서 선택, reject/unpublish에서 필수)"
@@ -453,14 +714,106 @@ if __name__ == "__main__":
     # noonnu-publish 명령
     publish_parser = subparsers.add_parser(
         "noonnu-publish",
-        help="눈누 Tier B prod 발행 (dev→prod 동기화, 기본 dry-run)",
+        help="[deprecated] 대상 수 dry-run만 제공; 적용은 font-audit-manifest apply",
     )
     publish_parser.add_argument(
         "--confirm",
         action="store_true",
-        help="실제 prod 쓰기 활성화 (이중 확인 필수)",
+        help="[deprecated] 항상 차단됨; font-audit-manifest apply 사용",
     )
     publish_parser.set_defaults(func=main_noonnu_publish)
+
+    # 감사 수집 정책 확인 명령
+    policy_parser = subparsers.add_parser(
+        "font-audit-policy-check",
+        help="robots와 이용 조건 승인 전 정책 파일 생성",
+    )
+    policy_parser.add_argument(
+        "--out",
+        type=Path,
+        required=True,
+        help="정책 점검 JSON 출력 경로",
+    )
+    policy_parser.set_defaults(func=main_audit_policy_check)
+
+    baseline_parser = subparsers.add_parser(
+        "font-audit-export-baseline",
+        help="prod 공개 API를 읽기 전용으로 조회해 기준선 JSON 생성",
+    )
+    baseline_parser.add_argument(
+        "--source",
+        choices=["prod-public"],
+        required=True,
+        help="읽기 전용 공개 prod 출처",
+    )
+    baseline_parser.add_argument(
+        "--out", type=Path, required=True, help="기준선 JSON 출력 경로"
+    )
+    baseline_parser.set_defaults(func=main_audit_export_baseline)
+
+    bootstrap_parser = subparsers.add_parser(
+        "font-audit-bootstrap",
+        help="고정 prod·Tier A·Tier B snapshot으로 안정 출처키 manifest 생성",
+    )
+    bootstrap_parser.add_argument(
+        "--prod-snapshot", type=Path, required=True, help="prod 공개 기준선 JSON 경로"
+    )
+    bootstrap_parser.add_argument(
+        "--out", type=Path, required=True, help="bootstrap JSON 출력 경로"
+    )
+    bootstrap_parser.set_defaults(func=main_audit_bootstrap)
+
+    audit_run_parser = subparsers.add_parser(
+        "font-audit-run",
+        help="50종 법적·메타데이터 감사 실행 (기본 dev 저장, --dry-run은 파일만 생성)",
+    )
+    audit_run_parser.add_argument("--stage", choices=["legal", "metadata"], required=True)
+    audit_run_parser.add_argument("--limit", type=int, default=50)
+    audit_run_parser.add_argument(
+        "--require-slug", action="append", default=[], help="파일럿에 반드시 포함할 slug"
+    )
+    audit_run_parser.add_argument("--out", type=Path, required=True)
+    audit_run_parser.add_argument(
+        "--bootstrap",
+        type=Path,
+        default=Path("output") / "audit" / "bootstrap-manifest.json",
+        help="검증된 안정 출처키 bootstrap artifact 경로",
+    )
+    audit_run_parser.add_argument(
+        "--dry-run", action="store_true", help="DB 자격증명·DB 쓰기 없이 파일 산출물만 생성"
+    )
+    audit_run_parser.set_defaults(func=main_audit_run)
+
+    audit_scan_parser = subparsers.add_parser(
+        "font-audit-scan",
+        help="공개 prod 링크를 읽기 전용 검사해 검증 가능한 artifact 생성",
+    )
+    audit_scan_parser.add_argument("--kind", choices=["download", "license"], required=True)
+    audit_scan_parser.add_argument("--source", choices=["prod-public"], required=True)
+    audit_scan_parser.add_argument("--out", type=Path, required=True)
+    audit_scan_parser.set_defaults(func=main_audit_scan)
+
+    audit_import_parser = subparsers.add_parser(
+        "font-audit-import",
+        help="검증된 예약 artifact를 dev 감사 테이블에만 import",
+    )
+    audit_import_parser.add_argument("--artifact", type=Path, required=True)
+    audit_import_parser.add_argument("--sha256", type=Path, required=True)
+    audit_import_parser.set_defaults(func=main_audit_import)
+
+    manifest_parser = subparsers.add_parser(
+        "font-audit-manifest",
+        help="검증된 감사 manifest 적용",
+    )
+    manifest_subparsers = manifest_parser.add_subparsers(dest="manifest_action", required=True)
+    manifest_apply_parser = manifest_subparsers.add_parser("apply")
+    manifest_apply_parser.add_argument("--manifest", type=Path, required=True)
+    manifest_apply_parser.add_argument("--sha256", type=Path, required=True)
+    manifest_apply_parser.add_argument("--target", choices=["dev", "prod"], required=True)
+    manifest_apply_parser.add_argument("--confirm-hash", required=True)
+    manifest_apply_parser.add_argument("--approved-hash")
+    manifest_apply_parser.add_argument("--approval-id")
+    manifest_apply_parser.set_defaults(func=main_audit_manifest_apply)
 
     args = parser.parse_args()
 

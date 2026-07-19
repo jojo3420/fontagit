@@ -1,10 +1,11 @@
-import { Font } from "@/types/font";
+import { Font, type SourceTier } from "@/types/font";
 
 export type SortType = "popular" | "recent";
 
 export interface FilterState {
   categories: Set<string>;
   tiers: Set<"free" | "paid">;
+  sourceTiers: Set<SourceTier>;
   sort: SortType;
 }
 
@@ -12,6 +13,7 @@ export function filterFonts(
   fonts: Font[],
   categories: Set<string>,
   tiers: Set<"free" | "paid">,
+  sourceTiers: Set<SourceTier> = new Set(),
 ): Font[] {
   return fonts.filter((font) => {
     // 분류 필터
@@ -21,6 +23,10 @@ export function filterFonts(
 
     // 가격 필터
     if (tiers.size > 0 && !tiers.has(font.tier)) {
+      return false;
+    }
+
+    if (sourceTiers.size > 0 && (!font.sourceTier || !sourceTiers.has(font.sourceTier))) {
       return false;
     }
 
@@ -43,6 +49,7 @@ export function sortFonts(fonts: Font[], sortType: SortType): Font[] {
 export function parseFilterQuery(params: URLSearchParams): FilterState {
   const categories = new Set<string>();
   const tiers = new Set<"free" | "paid">();
+  const sourceTiers = new Set<SourceTier>();
 
   const categoryParam = params.get("category");
   if (categoryParam) {
@@ -64,13 +71,22 @@ export function parseFilterQuery(params: URLSearchParams): FilterState {
   const sortParam = params.get("sort");
   const sort: SortType = sortParam === "popular" ? "popular" : "recent";
 
-  return { categories, tiers, sort };
+  const sourceParam = params.get("source");
+  if (sourceParam) {
+    sourceParam.split(",").forEach((value) => {
+      const source = value.trim();
+      if (source === "A" || source === "B" || source === "C") sourceTiers.add(source);
+    });
+  }
+
+  return { categories, tiers, sourceTiers, sort };
 }
 
 export function buildFilterQuery(
   categories: Set<string>,
   tiers: Set<"free" | "paid">,
   sort: SortType,
+  sourceTiers: Set<SourceTier> = new Set(),
 ): string {
   const params = new URLSearchParams();
 
@@ -80,6 +96,10 @@ export function buildFilterQuery(
 
   if (tiers.size > 0) {
     params.set("tier", Array.from(tiers).join(","));
+  }
+
+  if (sourceTiers.size > 0) {
+    params.set("source", Array.from(sourceTiers).join(","));
   }
 
   params.set("sort", sort);

@@ -1,6 +1,9 @@
 """눈누 상세페이지 라이선스-스타일 추출 테스트"""
 import json
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+from uuid import UUID
 
 import pytest
 
@@ -227,53 +230,15 @@ class TestMapLicenseRows:
 class TestClassify:
     """Task 6: 분류 게이트"""
 
-    def test_classify_auto_safe_all_allowed(self):
-        """상업 4카테고리 모두 allowed + price 0 + official_url: auto_safe"""
+    def test_noonnu_rows_always_need_official_review(self):
+        """허용표가 전부 허용이어도 눈누 단독으로는 확정하지 않는다."""
         perms = {k: "allowed" for k in ne.PERMISSION_CATEGORIES}
-        result = ne.classify(parse_ok=True, price=0, perms=perms, official_url="https://example.com")
-        assert result == "auto_safe"
-
-    def test_classify_embedding_conditional_still_auto_safe(self):
-        """임베딩 conditional이어도 상업 4 allowed + price 0 + official_url: auto_safe"""
-        perms = {
-            "print": "allowed",
-            "website": "allowed",
-            "packaging": "allowed",
-            "video": "allowed",
-            "embedding": "conditional",
-            "branding": "allowed",
-        }
-        result = ne.classify(parse_ok=True, price=0, perms=perms, official_url="https://example.com")
-        assert result == "auto_safe"
-
-    def test_classify_commercial_category_conditional_needs_review(self):
-        """상업 카테고리 조건부: needs_review"""
-        perms = {
-            "print": "allowed",
-            "website": "conditional",
-            "packaging": "allowed",
-            "video": "allowed",
-            "embedding": "allowed",
-            "branding": "allowed",
-        }
         result = ne.classify(parse_ok=True, price=0, perms=perms, official_url="https://example.com")
         assert result == "needs_review"
 
-    def test_classify_price_nonzero_needs_review(self):
-        """price != 0: needs_review"""
-        perms = {k: "allowed" for k in ne.PERMISSION_CATEGORIES}
-        result = ne.classify(parse_ok=True, price=100, perms=perms, official_url="https://example.com")
-        assert result == "needs_review"
-
-    def test_classify_parse_fail_needs_review(self):
-        """파싱 실패: needs_review"""
+    def test_parse_failure_stays_needs_review(self):
+        """파싱이 실패한 후보도 안전하게 검수 대기로 남는다."""
         result = ne.classify(parse_ok=False, price=None, perms=None, official_url="https://example.com")
-        assert result == "needs_review"
-
-    def test_classify_no_official_url_needs_review(self):
-        """official_url 없음: needs_review"""
-        perms = {k: "allowed" for k in ne.PERMISSION_CATEGORIES}
-        result = ne.classify(parse_ok=True, price=0, perms=perms, official_url=None)
         assert result == "needs_review"
 
 
@@ -281,7 +246,7 @@ class TestBuildProposal:
     """Task 7: 제안 조립"""
 
     def test_build_proposal_auto_safe_from_auto_fixture(self):
-        """font_page/920(상업4 allowed): auto_safe"""
+        """눈누 단독 근거는 자동 승격하지 않는다."""
         html = _html("noonnu_auto")
         p = ne.build_proposal(
             "fid-1",
@@ -293,20 +258,16 @@ class TestBuildProposal:
         assert p["font_id"] == "fid-1"
         assert p["slug"] == "goldo"
         assert p["parse_status"] == "parsed"
-        assert p["classification"] == "auto_safe"
+        assert p["classification"] == "needs_review"
         assert p["proposed_commercial_free"] is True
         assert p["proposed_weights"] is not None
         assert p["proposed_italic"] is not None
         assert p["proposed_license_type"] is not None
-        assert p["review_status"] == "auto_published"
-        assert "_font_update" in p
-        fu = p["_font_update"]
-        assert fu["status"] == "published"
-        assert fu["license_verified"] is True
-        assert fu["auto_approved"] is True
+        assert p["review_status"] == "proposed"
+        assert "_font_update" not in p
 
     def test_build_proposal_conditional_embedding_still_auto_safe(self):
-        """font_page/1(임베딩 conditional, 상업4 allowed): auto_safe"""
+        """조건표가 있어도 공식 검증 전에는 검수 대기다."""
         html = _html("noonnu_conditional")
         p = ne.build_proposal(
             "fid-cond",
@@ -316,9 +277,8 @@ class TestBuildProposal:
             html,
         )
         assert p["parse_status"] == "parsed"
-        assert p["classification"] == "auto_safe"
-        assert p["review_status"] == "auto_published"
-        assert p["_font_update"] is not None
+        assert p["classification"] == "needs_review"
+        assert p["review_status"] == "proposed"
 
     def test_build_proposal_parse_fail_is_needs_review(self):
         """파싱 실패: classification=needs_review, parse_status=failed"""
@@ -333,7 +293,7 @@ class TestBuildProposal:
         assert p["classification"] == "needs_review"
         assert p["proposed_commercial_free"] is None
         assert p["review_status"] == "proposed"
-        assert p["_font_update"] is None
+        assert "_font_update" not in p
 
     def test_build_proposal_includes_all_fields(self):
         """모든 필드 포함 확인"""
@@ -343,7 +303,7 @@ class TestBuildProposal:
             "font_id", "slug", "source_url", "raw_permissions",
             "proposed_commercial_free", "proposed_embedding", "proposed_redistribute", "proposed_modify",
             "proposed_license_type", "proposed_weights", "proposed_italic", "proposed_category_ko",
-            "parse_status", "classification", "review_status", "_font_update"
+            "parse_status", "classification", "review_status"
         }
         assert required_keys.issubset(set(p.keys()))
 
@@ -370,3 +330,85 @@ class TestDeriveSlug:
         slug = _derive_slug("test font name", "")
         # 빈 name_en이므로 name_ko 사용: "test font name" -> "test-font-name"
         assert slug == "test-font-name"
+
+
+def test_enrich_writes_only_audit_snapshot_and_review_findings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """눈누 enrich는 fonts 검증값을 바꾸지 않고 감사 근거만 남긴다."""
+    seed_path = tmp_path / "seed.json"
+    seed_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "generated_at": "2026-07-18T00:00:00Z",
+                "record_count": 1,
+                "records": [
+                    {
+                        "name_ko": "엘리스 디지털코딩체",
+                        "name_en": "Elice Digital Coding",
+                        "maker": "엘리스",
+                        "official_url": "https://maker.example/download",
+                        "source_page": "https://noonnu.cc/font_page/920",
+                        "collected_at": "2026-07-18T00:00:00Z",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    tables = {name: MagicMock(name=name) for name in (
+        "fonts", "font_audit_runs", "font_source_snapshots", "font_audit_findings"
+    )}
+    schema = MagicMock()
+    schema.table.side_effect = tables.__getitem__
+    font_id = UUID("00000000-0000-0000-0000-000000000920")
+    tables["fonts"].select.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+        "id": str(font_id),
+        "status": "draft",
+        "official_url": "https://maker.example/download",
+        "download_url": None,
+        "license_source_url": None,
+    }
+    run_id = "10000000-0000-0000-0000-000000000008"
+    tables["font_audit_runs"].insert.return_value.execute.return_value.data = [{"id": run_id}]
+    tables["font_source_snapshots"].upsert.return_value.execute.return_value.data = [
+        {"id": "20000000-0000-0000-0000-000000000008"}
+    ]
+    tables["font_audit_findings"].upsert.return_value.execute.return_value.data = [
+        {"id": "30000000-0000-0000-0000-000000000008"}
+    ]
+
+    client = MagicMock()
+    client.schema.return_value = schema
+    monkeypatch.setattr(ne, "create_client", lambda *_: client)
+    monkeypatch.setattr(ne, "_parse_robots_policy", lambda _: SimpleNamespace(can_fetch=lambda *_: True))
+    monkeypatch.setattr(ne.httpx, "get", lambda *_args, **_kwargs: SimpleNamespace(
+        text="User-agent: *\nAllow: /", raise_for_status=lambda: None
+    ))
+    response = SimpleNamespace(
+        text=_html("noonnu_auto"),
+        content=_html("noonnu_auto").encode(),
+        status_code=200,
+        url="https://noonnu.cc/font_page/920",
+        raise_for_status=lambda: None,
+    )
+    http = MagicMock()
+    http.get.return_value = response
+    http.__enter__.return_value = http
+    monkeypatch.setattr(ne.httpx, "Client", lambda **_: http)
+    monkeypatch.setattr(ne.time, "sleep", lambda _: None)
+
+    result = ne.enrich_fonts(
+        seed_path, "https://dev.example", "dev-key", limit=1
+    )
+
+    assert result == (0, 1, 0)
+    tables["fonts"].update.assert_not_called()
+    tables["font_source_snapshots"].upsert.assert_called_once()
+    assert tables["font_audit_findings"].upsert.call_count >= 1
+    for call in tables["font_audit_findings"].upsert.call_args_list:
+        finding = call.args[0]
+        assert finding["auto_applicable"] is False
+        assert finding["confidence"] == "reference"
