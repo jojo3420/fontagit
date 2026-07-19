@@ -7,7 +7,6 @@ const routes = [
   { path: '/fonts/sandoll-gothic-neo', name: 'Sandoll Gothic Neo Detail' },
   { path: '/trends', name: 'Trends' },
   { path: '/playground', name: 'Playground' },
-  { path: '/compare', name: 'Compare' },
   { path: '/collections', name: 'Collections' },
   { path: '/collections/dawn-serif', name: 'Collection Detail' },
   { path: '/submit', name: 'Submit' },
@@ -80,7 +79,7 @@ test('preview input updates specimen live', async ({ page }) => {
 });
 
 test('compare updates all columns live and swaps a font', async ({ page }) => {
-  await page.goto('/compare/', { waitUntil: 'networkidle' });
+  await page.goto('/#compare', { waitUntil: 'networkidle' });
   await page.getByLabel('비교 문장 입력').fill('나란히');
   await expect(page.getByText('나란히').first()).toBeVisible();
   await page.getByLabel('2번 폰트 선택').selectOption('nanum-myeongjo');

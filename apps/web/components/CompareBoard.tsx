@@ -23,7 +23,7 @@ export function CompareBoard() {
   return (
     <div className={styles.wrap}>
       <div className={styles.head}>
-        <h1 className={styles.title}>폰트 비교</h1>
+        <h2 id="compare-heading" className={styles.title}>폰트 비교</h2>
         <span className={styles.subtitle}>
           같은 문장으로 나란히 놓고 결정하세요
         </span>
