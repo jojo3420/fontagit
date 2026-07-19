@@ -3,10 +3,17 @@
 import base64
 import binascii
 import json
+from pathlib import Path
 from urllib.parse import urlparse
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# pipeline은 자체 .env 없이 apps/web의 환경변수 파일을 SSoT로 공유한다.
+# dev 쓰기와 prod 읽기를 한 실행에서 함께 쓰므로 두 파일을 모두 로드하며,
+# 중복 키는 뒤 파일(.env.local=dev)이 우선한다.
+_WEB_ENV_DIR = Path(__file__).resolve().parents[3] / "web"
+_ENV_FILES = (_WEB_ENV_DIR / ".env.production", _WEB_ENV_DIR / ".env.local")
 
 
 class Settings(BaseSettings):
@@ -22,7 +29,7 @@ class Settings(BaseSettings):
     supabase_prod_secret_key: str | None = None
     github_token: str | None = None
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=_ENV_FILES, extra="ignore")
 
     @field_validator("google_fonts_api_key")
     @classmethod
@@ -49,7 +56,7 @@ class AuditSettings(BaseSettings):
     supabase_prod_public_anon_key: str | None = None
     supabase_prod_public_allowlist: str | None = None
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=_ENV_FILES, extra="ignore")
 
     def dev_write_credentials(self) -> tuple[str, str]:
         """감사 쓰기에만 쓰는 전용 dev 자격증명을 안전하게 반환한다.
