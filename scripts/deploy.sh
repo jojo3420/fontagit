@@ -32,18 +32,22 @@ fontagit 프로덕션 배포
 
 Usage:
   ./scripts/deploy.sh                    # main 브랜치에서 배포 (기본)
+  ./scripts/deploy.sh <ref>              # ref가 브랜치면 브랜치 배포, 태그면 태그 배포(자동 판별)
   ./scripts/deploy.sh --branch <name>    # 지정 브랜치에서 배포
   ./scripts/deploy.sh --new-tag <ver>    # 새 태그 생성 후 배포 (main에서만)
   ./scripts/deploy.sh --tag <ver>        # 기존 태그에서 배포
   ./scripts/deploy.sh --help             # 이 도움말
 
 옵션:
-  --branch <name>      지정한 브랜치에서 배포 (미리 체크아웃되어 있어야 함)
-  --new-tag <ver>      semver 태그 생성 후 배포 (v1.0.0 형식, main에서만)
-  --tag <ver>          기존 태그에서 배포
-  --help               이 도움말 출력
+  <ref>                 옵션 없이 브랜치명 또는 태그명 전달 시 존재 여부로 자동 판별
+  --branch <name>       지정한 브랜치에서 배포 (미리 체크아웃되어 있어야 함)
+  --new-tag <ver>        semver 태그 생성 후 배포 (v1.0.0 형식, main에서만)
+  --tag <ver>            기존 태그에서 배포
+  --help                 이 도움말 출력
 
 예시:
+  ./scripts/deploy.sh staging            # staging이 브랜치면 브랜치 배포
+  ./scripts/deploy.sh v1.0.0             # v1.0.0이 태그면 태그 배포
   ./scripts/deploy.sh --branch staging   # staging 브랜치에서 배포
   ./scripts/deploy.sh --new-tag v1.2.0   # 새 태그 v1.2.0 생성 후 배포
   ./scripts/deploy.sh --tag v1.0.0       # 기존 v1.0.0 태그에서 배포
@@ -51,6 +55,7 @@ EOF
 }
 
 BRANCH_FLAG_SET=""
+BARE_REF=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -86,10 +91,19 @@ while [[ $# -gt 0 ]]; do
       print_usage
       exit 0
       ;;
-    *)
+    -*)
       echo "ERROR: 알 수 없는 옵션: $1"
       print_usage
       exit 1
+      ;;
+    *)
+      if [[ -n "$BARE_REF" ]]; then
+        echo "ERROR: 위치 인자는 하나만 허용: $1"
+        print_usage
+        exit 1
+      fi
+      BARE_REF="$1"
+      shift
       ;;
   esac
 done
@@ -104,6 +118,33 @@ if [[ $OPTION_COUNT -gt 1 ]]; then
   echo "ERROR: --branch, --new-tag, --tag는 동시 지정 불가"
   print_usage
   exit 1
+fi
+
+if [[ -n "$BARE_REF" && $OPTION_COUNT -gt 0 ]]; then
+  echo "ERROR: '$BARE_REF' 위치 인자는 --branch/--new-tag/--tag와 동시 사용 불가"
+  print_usage
+  exit 1
+fi
+
+# 위치 인자 자동 판별: 존재하는 브랜치면 브랜치 배포, 존재하는 태그면 태그 배포
+if [[ -n "$BARE_REF" ]]; then
+  IS_BRANCH=""
+  IS_TAG=""
+  git show-ref --verify --quiet "refs/heads/$BARE_REF" && IS_BRANCH="1"
+  git ls-remote --tags origin "refs/tags/$BARE_REF" 2>/dev/null | grep -q . && IS_TAG="1"
+
+  if [[ -n "$IS_BRANCH" && -n "$IS_TAG" ]]; then
+    echo "ERROR: '$BARE_REF'는 브랜치와 태그 양쪽에 존재함 — --branch 또는 --tag로 명시하라"
+    exit 1
+  elif [[ -n "$IS_BRANCH" ]]; then
+    TARGET_BRANCH="$BARE_REF"
+    BRANCH_FLAG_SET="1"
+  elif [[ -n "$IS_TAG" ]]; then
+    DEPLOY_TAG="$BARE_REF"
+  else
+    echo "ERROR: '$BARE_REF'는 존재하는 브랜치도 태그도 아님. 새 태그를 만들려면 --new-tag $BARE_REF 사용"
+    exit 1
+  fi
 fi
 
 # 1) 배포 출처 고정: 최신 origin/main과 같은 깨끗한 main만 허용
