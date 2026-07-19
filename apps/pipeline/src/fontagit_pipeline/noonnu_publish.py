@@ -1,39 +1,11 @@
-"""dev에서 검증-발행된 Tier B 폰트를 prod DB로 동기화한다.
+"""이전 Noonnu dev→prod 행별 발행 명령의 읽기 전용 호환 경계."""
 
-prod 쓰기는 명시적 확인이 필수다.
-"""
+from __future__ import annotations
 
 import logging
 from typing import Any
 
-from supabase import create_client
-
 logger = logging.getLogger(__name__)
-
-# 동기화할 컬럼들
-_COLS = [
-    "slug",
-    "name_en",
-    "name_ko",
-    "source_tier",
-    "category_ko",
-    "category_google",
-    "subsets",
-    "variants",
-    "weights",
-    "is_commercial_free",
-    "license_type",
-    "license_verified",
-    "official_url",
-    "status",
-    "allow_embedding",
-    "allow_redistribute",
-    "allow_modify",
-    "license_note",
-    "verified_at",
-    "license_source_url",
-    "auto_approved",
-]
 
 
 def publish_to_prod(
@@ -43,67 +15,41 @@ def publish_to_prod(
     *,
     dry_run: bool = True,
 ) -> tuple[int, int]:
-    """dev에서 검증-발행된 Tier B 폰트를 prod DB로 동기화한다.
+    """예전 대상 수만 조회하고 실제 쓰기는 항상 차단한다.
 
-    Args:
-        dev_schema: Dev Supabase 스키마 객체 (client.schema("fontagit")).
-        prod_url: Prod Supabase URL.
-        prod_key: Prod Supabase secret key.
-        dry_run: True면 조회만, False면 실제 upsert 수행 (기본값: True).
-
-    Returns:
-        tuple[총 행수, 쓰기 성공 수]. dry_run=True면 (total, 0).
+    실제 반영은 before 값과 근거, 해시를 전체 검사하는
+    ``font-audit-manifest apply``만 사용해야 한다.
     """
-    # Dev에서 발행된 Tier B 폰트 조회 (페이지네이션)
-    try:
-        cols_str = ",".join(_COLS)
-        rows: list[dict[str, Any]] = []
-        page_size = 1000
-        offset = 0
+    _ = (prod_url, prod_key)
+    if not dry_run:
+        raise RuntimeError(
+            "noonnu-publish 실제 쓰기는 폐기됐습니다. "
+            "font-audit-manifest apply를 사용하세요."
+        )
 
-        while True:
-            response = (
-                dev_schema.table("fonts")
-                .select(cols_str)
-                .eq("source_tier", "B")
-                .eq("status", "published")
-                .order("slug")
-                .range(offset, offset + page_size - 1)
-                .execute()
-            )
-            batch = response.data or []
-            rows.extend(batch)
+    rows: list[dict[str, Any]] = []
+    page_size = 1000
+    offset = 0
+    while True:
+        response = (
+            dev_schema.table("fonts")
+            .select("slug")
+            .eq("source_tier", "B")
+            .eq("status", "published")
+            .order("slug")
+            .range(offset, offset + page_size - 1)
+            .execute()
+        )
+        batch = response.data or []
+        rows.extend(batch)
+        if len(batch) < page_size:
+            break
+        offset += page_size
 
-            if len(batch) < page_size:
-                break
-            offset += page_size
-    except Exception as exc:
-        logger.error("Dev에서 폰트 조회 실패: %s", exc)
-        raise
-
-    logger.info("조회 완료: %d개 폰트 (source_tier='B' AND status='published')", len(rows))
-
-    if dry_run:
-        logger.info("[dry-run] 실제 쓰기는 진행하지 않습니다")
-        return len(rows), 0
-
-    # Prod에 upsert
-    logger.info("Prod에 %d개 폰트 동기화 중...", len(rows))
-    prod_client = create_client(prod_url, prod_key)
-    prod_schema = prod_client.schema("fontagit")
-    written_count = 0
-
-    for idx, font_row in enumerate(rows, start=1):
-        try:
-            slug = font_row.get("slug", "?")
-            prod_schema.table("fonts").upsert(
-                font_row, on_conflict="slug"
-            ).execute()
-            written_count += 1
-            logger.debug("[%d/%d] Upsert 성공: %s", idx, len(rows), slug)
-        except Exception as exc:
-            logger.error("[%d/%d] Upsert 실패: %s", idx, len(rows), exc)
-            raise
-
-    logger.info("동기화 완료: %d개 쓰기 성공", written_count)
-    return len(rows), written_count
+    logger.warning(
+        "[deprecated dry-run] 대상 %d건. legacy official_url/is_commercial_free/"
+        "license_verified 소비자는 직접 반영하지 않습니다. "
+        "font-audit-manifest apply를 사용하세요.",
+        len(rows),
+    )
+    return len(rows), 0

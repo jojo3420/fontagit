@@ -1,0 +1,42 @@
+name: font-audit-license
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "41 18 1 1,4,7,10 *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: font-audit-license
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install frozen pipeline dependencies
+        run: uv sync --frozen
+        working-directory: apps/pipeline
+      - name: Scan public license links
+        run: >-
+          uv run python -m fontagit_pipeline font-audit-scan
+          --kind license --source prod-public --out output/audit/scheduled-license
+        working-directory: apps/pipeline
+        env:
+          SUPABASE_PROD_PUBLIC_URL: ${{ vars.PROD_PUBLIC_SUPABASE_URL }}
+          SUPABASE_PROD_PUBLIC_ANON_KEY: ${{ secrets.PROD_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_PROD_PUBLIC_ALLOWLIST: ${{ vars.PROD_PUBLIC_SUPABASE_ALLOWLIST }}
+      - name: Upload closed observation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: font-audit-license-observations
+          path: |
+            apps/pipeline/output/audit/scheduled-license/observations.json
+            apps/pipeline/output/audit/scheduled-license/observations.sha256
+          retention-days: 7
+          if-no-files-found: error

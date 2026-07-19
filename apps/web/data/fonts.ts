@@ -1,6 +1,6 @@
 import type { Font } from "@/types/font";
 
-export const fonts: Font[] = [
+const baseFonts: Font[] = [
   { slug: "pretendard", nameKo: "프리텐다드", nameEn: "Pretendard", fontKey: "pretendard",
     tier: "free", category: "고딕", foundry: "길형진", availableWeights: [400, 500, 700, 800],
     moves: 5120, license: { commercial: "yes", verifiedAt: "2026-07-12", type: "SIL OFL", webfont: "included", redistribution: "yes" },
@@ -44,3 +44,5 @@ export const fonts: Font[] = [
     priceFrom: 99000,
     freeAlternatives: ["pretendard", "do-hyeon", "black-han-sans"], subsets: ["korean"] },
 ];
+
+export const fonts: Font[] = baseFonts.map((font) => ({ ...font, scriptStatus: "verified" }));

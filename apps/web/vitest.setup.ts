@@ -22,3 +22,16 @@ vi.mock("next/font/google", () => ({
   Gaegu: fontStub,
   Song_Myung: fontStub,
 }));
+
+vi.mock("next/navigation", () => ({
+  __esModule: true,
+  useRouter: () => ({
+    push: vi.fn(),
+    prefetch: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+    refresh: vi.fn(),
+  }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/",
+}));

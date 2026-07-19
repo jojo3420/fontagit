@@ -10,7 +10,7 @@ const mockItems: TrendItem[] = [
     font: {
       slug: "noto-sans",
       nameKo: "Noto Sans",
-      fontKey: "noto-sans",
+      fontKey: null,
       tier: "free",
     },
     moves: 150,
