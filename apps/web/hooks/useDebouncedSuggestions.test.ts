@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 
 vi.mock('@/lib/db/search', () => ({
   searchSuggestions: vi.fn(),
@@ -15,9 +15,15 @@ describe('useDebouncedSuggestions', () => {
   });
 
   afterEach(() => {
-    vi.runOnlyPendingTimers();
+    vi.clearAllTimers();
     vi.useRealTimers();
   });
+
+  const advanceTimers = async (milliseconds: number) => {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(milliseconds);
+    });
+  };
 
   it('빈 쿼리에서 빈 배열 반환', () => {
     const { result } = renderHook(() => useDebouncedSuggestions(''));
@@ -39,8 +45,7 @@ describe('useDebouncedSuggestions', () => {
     rerender({ q: '지마켓' });
     expect(result.current.loading).toBe(true);
 
-    vi.advanceTimersByTime(200);
-    await vi.runAllTimersAsync();
+    await advanceTimers(200);
 
     expect(mockSearch).toHaveBeenCalledWith('지마켓', 8, expect.any(AbortSignal));
   });
@@ -73,9 +78,8 @@ describe('useDebouncedSuggestions', () => {
     );
 
     rerender({ q: '지마켓' });
-    vi.advanceTimersByTime(200);
+    await advanceTimers(200);
     rerender({ q: '' });
-    await vi.runAllTimersAsync();
 
     expect(result.current.items).toEqual([]);
   });
@@ -94,8 +98,7 @@ describe('useDebouncedSuggestions', () => {
     rerender({ q: '지마켓' });
     vi.advanceTimersByTime(100);
     rerender({ q: '노토' });
-    vi.advanceTimersByTime(200);
-    await vi.runAllTimersAsync();
+    await advanceTimers(200);
 
     expect(mockSearch).toHaveBeenCalledTimes(1);
     expect(mockSearch).toHaveBeenCalledWith('노토', 8, expect.any(AbortSignal));
