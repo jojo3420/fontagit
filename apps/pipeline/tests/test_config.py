@@ -72,6 +72,7 @@ def test_audit_settings_require_separate_managed_dev_origin_without_prod_secret(
             supabase_dev_url="https://dev-ref.supabase.co",
             supabase_dev_secret_key="dev-key",
             supabase_audit_dev_allowlist="dev-ref",
+            _env_file=None,
         ).dev_write_credentials()
 
     monkeypatch.setenv("SUPABASE_DEV_URL", "https://prod-ref.supabase.co")
