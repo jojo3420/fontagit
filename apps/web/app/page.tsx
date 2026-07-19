@@ -19,7 +19,7 @@ export default async function Home() {
         <Hero />
         <WeeklyRankPanel items={items} source={source} />
       </div>
-      <section id="compare" className={styles.compareSection}>
+      <section id="compare" className={styles.compareSection} aria-labelledby="compare-heading">
         <div className={styles.container}>
           <CompareLazy
             placeholder={<div className={styles.comparePlaceholder} />}

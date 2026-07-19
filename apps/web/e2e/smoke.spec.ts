@@ -78,12 +78,21 @@ test('preview input updates specimen live', async ({ page }) => {
   await expect(page.getByText('가나다 테스트').first()).toBeVisible();
 });
 
-test('compare updates all columns live and swaps a font', async ({ page }) => {
-  await page.goto('/#compare', { waitUntil: 'networkidle' });
+test('home compare section: anchor, live update, font swap', async ({ page }) => {
+  await page.goto('/', { waitUntil: 'networkidle' });
+  await expect(page.locator('#compare')).toHaveCount(1);
+  await page.locator('#compare').scrollIntoViewIfNeeded();
   await page.getByLabel('비교 문장 입력').fill('나란히');
   await expect(page.getByText('나란히').first()).toBeVisible();
   await page.getByLabel('2번 폰트 선택').selectOption('nanum-myeongjo');
   await expect(page.getByLabel('2번 폰트 선택')).toHaveValue('nanum-myeongjo');
+});
+
+test('compare anchor works from another page', async ({ page }) => {
+  await page.goto('/fonts/', { waitUntil: 'networkidle' });
+  await page.goto('/#compare', { waitUntil: 'networkidle' });
+  await page.locator('#compare').scrollIntoViewIfNeeded();
+  await expect(page.getByLabel('비교 문장 입력')).toBeVisible();
 });
 
 test('header collections link navigates without 404', async ({ page }) => {
