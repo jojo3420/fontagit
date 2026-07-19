@@ -7,7 +7,6 @@ const routes = [
   { path: '/fonts/sandoll-gothic-neo', name: 'Sandoll Gothic Neo Detail' },
   { path: '/trends', name: 'Trends' },
   { path: '/playground', name: 'Playground' },
-  { path: '/compare', name: 'Compare' },
   { path: '/collections', name: 'Collections' },
   { path: '/collections/dawn-serif', name: 'Collection Detail' },
   { path: '/submit', name: 'Submit' },
@@ -79,12 +78,27 @@ test('preview input updates specimen live', async ({ page }) => {
   await expect(page.getByText('가나다 테스트').first()).toBeVisible();
 });
 
-test('compare updates all columns live and swaps a font', async ({ page }) => {
-  await page.goto('/compare/', { waitUntil: 'networkidle' });
+test('home compare section: anchor, live update, font swap', async ({ page }) => {
+  await page.goto('/', { waitUntil: 'networkidle' });
+  await expect(page.locator('#compare')).toHaveCount(1);
+  await page.locator('#compare').scrollIntoViewIfNeeded();
   await page.getByLabel('비교 문장 입력').fill('나란히');
   await expect(page.getByText('나란히').first()).toBeVisible();
   await page.getByLabel('2번 폰트 선택').selectOption('nanum-myeongjo');
   await expect(page.getByLabel('2번 폰트 선택')).toHaveValue('nanum-myeongjo');
+});
+
+test('compare anchor works from another page', async ({ page }) => {
+  await page.goto('/fonts/', { waitUntil: 'networkidle' });
+  await page.goto('/#compare', { waitUntil: 'networkidle' });
+  await page.locator('#compare').scrollIntoViewIfNeeded();
+  await expect(page.getByLabel('비교 문장 입력')).toBeVisible();
+});
+
+test('compare anchor works via direct URL', async ({ page }) => {
+  await page.goto('/#compare', { waitUntil: 'networkidle' });
+  await page.locator('#compare').scrollIntoViewIfNeeded();
+  await expect(page.getByLabel('비교 문장 입력')).toBeVisible();
 });
 
 test('header collections link navigates without 404', async ({ page }) => {
@@ -120,7 +134,7 @@ test('mobile viewport shows compare tab in tab bar and hides header tool links',
 
   // Verify compare tab is visible with correct href
   await expect(tabBar.getByRole('link', { name: '비교' })).toBeVisible();
-  await expect(tabBar.getByRole('link', { name: '비교' })).toHaveAttribute('href', /^\/compare\/?$/);
+  await expect(tabBar.getByRole('link', { name: '비교' })).toHaveAttribute('href', /^\/#compare$/);
 
   // Verify header tool links (canvas and compare) are hidden on mobile
   const headerNav = page.getByRole('navigation').first();
@@ -145,5 +159,5 @@ test('header nav contains canvas and compare links (desktop)', async ({ page }) 
   await expect(nav.getByRole('link', { name: '캔버스' })).toBeVisible();
   await expect(nav.getByRole('link', { name: '캔버스' })).toHaveAttribute('href', /^\/playground\/?$/);
   await expect(nav.getByRole('link', { name: '비교' })).toBeVisible();
-  await expect(nav.getByRole('link', { name: '비교' })).toHaveAttribute('href', /^\/compare\/?$/);
+  await expect(nav.getByRole('link', { name: '비교' })).toHaveAttribute('href', /^\/#compare$/);
 });
