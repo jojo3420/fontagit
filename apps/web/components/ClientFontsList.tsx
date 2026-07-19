@@ -21,12 +21,12 @@ interface Props {
 export function ClientFontsList({ fonts }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { categories, tiers, sort } = parseFilterQuery(searchParams);
+  const { categories, tiers, sourceTiers, sort } = parseFilterQuery(searchParams);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const hasPopularityData = fonts.some((font) => font.moves > 0);
   const effectiveSort = sort === "popular" && !hasPopularityData ? "recent" : sort;
 
-  const filtered = filterFonts(fonts, categories, tiers);
+  const filtered = filterFonts(fonts, categories, tiers, sourceTiers);
   const sorted = sortFonts(filtered, effectiveSort);
   const filterKey = `${searchParams.toString()}|${effectiveSort}`;
 
@@ -62,7 +62,7 @@ export function ClientFontsList({ fonts }: Props) {
   const handleSortChange = (newSort: "popular" | "recent") => {
     if (newSort === effectiveSort) return;
 
-    const query = buildFilterQuery(categories, tiers, newSort);
+    const query = buildFilterQuery(categories, tiers, newSort, sourceTiers);
     router.push(`?${query}`);
   };
 

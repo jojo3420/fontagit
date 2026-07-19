@@ -128,18 +128,20 @@ describe('검색 페이지 (page.tsx)', () => {
 
     // 1. 입력 후 debounce 경과
     await user.type(input, '노토');
-    await new Promise((r) => setTimeout(r, 300)); // debounce 250ms + 여유
 
     // 2. 로딩 표시 확인
-    expect(screen.getByText('검색 중...')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('검색 중...')).toBeInTheDocument();
+    });
 
     // 3. 입력 전부 삭제
     await user.clear(input);
-    await new Promise((r) => setTimeout(r, 300)); // debounce 다시 경과
 
     // 4. 로딩이 사라지고 초기 안내 메시지가 보여야 함
-    expect(screen.queryByText('검색 중...')).not.toBeInTheDocument();
-    expect(screen.getByText('검색어를 입력하세요.')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText('검색 중...')).not.toBeInTheDocument();
+      expect(screen.getByText('검색어를 입력하세요.')).toBeInTheDocument();
+    });
   });
 
   it('searchFonts reject → error message displayed', async () => {
@@ -199,15 +201,17 @@ describe('검색 페이지 (page.tsx)', () => {
     const input = screen.getByPlaceholderText(/검색/i) as HTMLInputElement;
 
     await user.type(input, '노토 산스');
-    await new Promise((r) => setTimeout(r, 300)); // debounce 250ms + 여유
-    expect(mockReplace).toHaveBeenLastCalledWith(
-      `/search?q=${encodeURIComponent('노토 산스')}`,
-      { scroll: false }
-    );
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenLastCalledWith(
+        `/search?q=${encodeURIComponent('노토 산스')}`,
+        { scroll: false }
+      );
+    });
 
     await user.clear(input);
-    await new Promise((r) => setTimeout(r, 300));
-    expect(mockReplace).toHaveBeenLastCalledWith('/search', { scroll: false });
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenLastCalledWith('/search', { scroll: false });
+    });
   });
 
 });

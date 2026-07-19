@@ -1,11 +1,47 @@
 """build_document 함수 통합 테스트."""
 
+import argparse
+import hashlib
 from datetime import datetime, timezone
 from unittest.mock import patch, MagicMock
 
-from fontagit_pipeline.__main__ import build_document, main
+from fontagit_pipeline.__main__ import build_document, main, main_audit_manifest_apply
 from fontagit_pipeline.models import GoogleFontRaw, OutputDocument
 from fontagit_pipeline.licenses import LicenseFetchError
+
+
+def test_prod_manifest_apply_requires_every_extra_gate_without_second_file_read() -> None:
+    """prod는 enable·승인 ID·승인 SHA 중 하나라도 없으면 RPC 전에 멈춘다."""
+    manifest_bytes = b"{}"
+    digest = hashlib.sha256(manifest_bytes).hexdigest()
+    manifest_path = MagicMock(read_bytes=MagicMock(return_value=manifest_bytes))
+    sha_path = MagicMock(read_text=MagicMock(return_value=digest + "\n"))
+    args = argparse.Namespace(
+        manifest=manifest_path,
+        sha256=sha_path,
+        target="prod",
+        confirm_hash=digest,
+        approved_hash=digest,
+        approval_id="human-approval-1",
+    )
+    fake_manifest = MagicMock(schema_version=1)
+
+    with patch("fontagit_pipeline.audit_manifest.verify_manifest_bytes", return_value=fake_manifest), patch(
+        "fontagit_pipeline.config.load_audit_settings", return_value=MagicMock()
+    ), patch("builtins.input") as prompt, patch.dict("os.environ", {}, clear=True):
+        assert main_audit_manifest_apply(args) == 3
+        prompt.assert_not_called()
+
+    with patch("fontagit_pipeline.audit_manifest.verify_manifest_bytes", return_value=fake_manifest), patch(
+        "fontagit_pipeline.config.load_audit_settings", return_value=MagicMock()
+    ), patch("builtins.input") as prompt, patch.dict(
+        "os.environ", {"FONTAGIT_PROD_MANIFEST_ENABLED": "true"}, clear=True
+    ):
+        args.approved_hash = "0" * 64
+        assert main_audit_manifest_apply(args) == 3
+        prompt.assert_not_called()
+
+    assert manifest_path.read_bytes.call_count == 2
 
 
 def test_build_document_creates_output_document():

@@ -165,9 +165,10 @@ def import_noonnu_seeds(
             # Supabase 임포트 (멱등 upsert)
             # published 폰트는 절대 덮어쓰지 않도록 RPC 호출
             try:
+                rpc_params: Any = {"p_font": font_row}
                 response = schema.rpc(
                     "upsert_noonnu_draft",
-                    {"p_font": font_row},
+                    rpc_params,
                 ).execute()
 
                 if response.data:
@@ -193,74 +194,18 @@ def import_noonnu_seeds(
                         upserted_count += 1
 
             except Exception as rpc_exc:
-                # RPC 호출 실패 (예: 함수 없음 → 대체로직)
-                logger.debug(
-                    "[%d/%d] RPC 호출 실패: %s (대체로직 사용)",
+                # slug 조회 후 직접 update하면 조회 직후 published로 바뀐
+                # 행을 덮어쓸 수 있다. 안전 RPC 실패 시는 쓰기 0건으로 중단한다.
+                logger.error(
+                    "[%d/%d] upsert_noonnu_draft RPC 실패: %s",
                     idx,
                     len(records),
                     rpc_exc,
                 )
-                # 대체: 직접 upsert
-                try:
-                    # 기존 레코드 조회 (없으면 None)
-                    try:
-                        existing_response = (
-                            schema.table("fonts")
-                            .select("id, status")
-                            .eq("slug", slug)
-                            .maybe_single()
-                            .execute()
-                        )
-                        existing = existing_response.data
-                    except Exception:
-                        existing = None
-
-                    if existing:
-                        existing_status = existing.get("status")
-                        if existing_status == "published":
-                            logger.info(
-                                "[%d/%d] 스킵 - published 폰트: slug=%s",
-                                idx,
-                                len(records),
-                                slug,
-                            )
-                            skipped_count += 1
-                        else:
-                            # draft 또는 archived: 업데이트
-                            (
-                                schema.table("fonts")
-                                .update(font_row)
-                                .eq("slug", slug)
-                                .execute()
-                            )
-                            logger.info(
-                                "[%d/%d] 임포트 성공 (업데이트): slug=%s",
-                                idx,
-                                len(records),
-                                slug,
-                            )
-                            upserted_count += 1
-                    else:
-                        # 신규 삽입
-                        schema.table("fonts").insert(font_row).execute()
-                        logger.info(
-                            "[%d/%d] 임포트 성공 (신규): slug=%s",
-                            idx,
-                            len(records),
-                            slug,
-                        )
-                        upserted_count += 1
-                except Exception as fallback_exc:
-                    logger.error(
-                        "[%d/%d] 임포트 실패: slug=%s, %s",
-                        idx,
-                        len(records),
-                        slug,
-                        fallback_exc,
-                    )
-                    raise NoonnuImportError(
-                        f"폰트 임포트 실패 (slug={slug}): {fallback_exc}"
-                    ) from fallback_exc
+                raise NoonnuImportError(
+                    "upsert_noonnu_draft 안전 RPC 실패; "
+                    f"직접 fonts 쓰기는 차단됨 (slug={slug})"
+                ) from rpc_exc
 
         except NoonnuImportError:
             raise

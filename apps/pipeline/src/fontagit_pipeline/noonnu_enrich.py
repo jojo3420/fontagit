@@ -2,18 +2,24 @@
 
 LLM 불사용, BeautifulSoup과 정규식만으로 사실 추출 (결정론적).
 """
+import hashlib
 import json
 import logging
 import re
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
+from uuid import UUID
 
 import httpx
 from bs4 import BeautifulSoup
 from supabase import create_client
 
+from fontagit_pipeline.audit_store import (
+    FindingDraft,
+    SnapshotDraft,
+    SupabaseAuditStore,
+)
 from fontagit_pipeline.models import NoonnuSeedOutput
 from fontagit_pipeline.noonnu_seed import (
     _ROBOT_USER_AGENT,
@@ -261,16 +267,13 @@ def classify(
     perms: Optional[dict[str, Optional[str]]],
     official_url: Optional[str] = None,
 ) -> str:
-    """자동 발행 게이트(D6). 상업 4카테고리 전부 allowed + price 정확히 0.0 + 파싱성공 + 공식URL 필수만 auto_safe."""
-    if not official_url:
-        return "needs_review"
-    if not parse_ok or perms is None:
-        return "needs_review"
-    # price가 None이거나 0이 아니면 needs_review (0.5, -0.1 등은 needs_review)
-    if price is None or price != 0.0:
-        return "needs_review"
-    if all(perms[k] == "allowed" for k in _COMMERCIAL_KEYS):
-        return "auto_safe"
+    """눈누 단독 근거는 항상 사람 검수로 보낸다.
+
+    이전 코드는 ``official_url`` 문자열이 있는지만 보고 자동 발행했다.
+    하지만 그 주소가 진짜 제작사나 공공기관 출처인지는 이 단계에서
+    증명할 수 없다. 해석 결과는 구조화된 후보로만 남긴다.
+    """
+    _ = (parse_ok, price, perms, official_url)
     return "needs_review"
 
 
@@ -315,30 +318,7 @@ def build_proposal(font_id: str, slug: str, source_url: str, official_url: str, 
         "classification": classification,
         "review_status": "auto_published" if classification == "auto_safe" else "proposed",
     }
-    proposal["_font_update"] = (
-        _font_update_for(rows, license_type, weights, italic, official_url)
-        if classification == "auto_safe" else None
-    )
     return proposal
-
-
-def _font_update_for(rows: dict, license_type: str, weights: list[int],  # type: ignore[type-arg]
-                     italic: bool, official_url: str) -> dict:  # type: ignore[type-arg]
-    """auto_safe 제안을 fonts 발행 업데이트로 변환."""
-    return {
-        "is_commercial_free": bool(rows["is_commercial_free"]),
-        "allow_embedding": rows["allow_embedding"],
-        "allow_redistribute": rows["allow_redistribute"],
-        "allow_modify": rows["allow_modify"],
-        "license_type": license_type,
-        "license_note": rows["license_note"],
-        "weights": weights,
-        "variants": ["italic"] if italic else [],
-        "license_verified": True,
-        "auto_approved": True,
-        "license_source_url": official_url,
-        "status": "published",
-    }
 
 
 
@@ -366,7 +346,7 @@ def enrich_fonts(
     limit: Optional[int] = None,
     only_slug: Optional[str] = None,
 ) -> tuple[int, int, int]:
-    """seed의 눈누 URL을 재방문해 제안 적재 + auto_safe 자동 발행.
+    """seed의 눈누 URL을 재방문해 감사 snapshot과 finding만 적재한다.
     
     Args:
         seed_path: seed JSON 경로 (기본: output/tier-b-noonnu-seed.json).
@@ -376,7 +356,7 @@ def enrich_fonts(
         only_slug: 특정 슬러그만 처리 (None=모두).
     
     Returns:
-        (auto_published, proposed, skipped) 튜플.
+        (auto_published, proposed, skipped) 튜플. auto_published는 항상 0이다.
     
     Raises:
         NoonnuEnrichError: 파일/DB 오류.
@@ -397,29 +377,58 @@ def enrich_fonts(
     except (json.JSONDecodeError, ValueError) as exc:
         raise NoonnuEnrichError(f"seed JSON 파싱 오류: {exc}") from exc
     
+    records = doc.records[:limit] if limit else doc.records
+    if only_slug:
+        records = [
+            record
+            for record in records
+            if _derive_slug(record.name_ko, record.name_en) == only_slug
+        ]
+    if not records:
+        return 0, 0, 0
+
     client = create_client(supabase_url, secret_key)
     schema = client.schema("fontagit")
-    
+    audit_store = SupabaseAuditStore(client)
     try:
         robots_response = httpx.get(_ROBOTS_URL, timeout=10.0)
         robots_response.raise_for_status()
         robots_policy = _parse_robots_policy(robots_response.text)
     except httpx.HTTPError as exc:
         raise NoonnuEnrichError(f"robots.txt fetch 실패: {exc}") from exc
+
+    baseline_sha256 = hashlib.sha256(
+        json.dumps(
+            [
+                {
+                    "slug": _derive_slug(record.name_ko, record.name_en),
+                    "source_page": record.source_page,
+                }
+                for record in records
+            ],
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    run_id = audit_store.start_run(
+        stage="legal",
+        target_count=len(records),
+        baseline_sha256=baseline_sha256,
+        dry_run=False,
+    )
     
     auto, proposed, skipped = 0, 0, 0
-    records = doc.records[:limit] if limit else doc.records
     
     with httpx.Client(follow_redirects=True) as http:
         for rec in records:
             slug = _derive_slug(rec.name_ko, rec.name_en)
             
-            if only_slug and slug != only_slug:
-                continue
-            
             try:
                 result: Any = (schema.table("fonts")
-                         .select("id,status,official_url")
+                         .select(
+                             "id,status,official_url,download_url,license_source_url"
+                         )
                          .eq("slug", slug)
                          .maybe_single()
                          .execute())
@@ -471,40 +480,109 @@ def enrich_fonts(
                 skipped += 1
                 continue
             
-            fu = proposal.pop("_font_update")
+            try:
+                _save_audit_candidate(
+                    audit_store=audit_store,
+                    run_id=run_id,
+                    font=font,
+                    source_page=rec.source_page,
+                    provider_record_id=rec.source_page.rstrip("/").rsplit("/", 1)[-1],
+                    official_candidate=font.get("official_url") or rec.official_url,
+                    proposal=proposal,
+                    raw_html=html,
+                    final_url=str(html_response.url),
+                    http_status=html_response.status_code,
+                )
+                proposed += 1
+                logger.info("감사 후보 추가: %s", slug)
+            except Exception as exc:
+                logger.warning("감사 근거 저장 실패(slug=%s): %s", slug, exc.__class__.__name__)
+                skipped += 1
 
-            # S4: auto 경로 순서 재배치 - 폰트 발행을 먼저, 제안 저장을 나중에
-            # 이렇게 하면 폰트 발행 실패 시 auto_published 제안이 남지 않음 (부분 원자성)
-            if fu is not None:
-                fu["verified_at"] = datetime.now(timezone.utc).isoformat()
-                try:
-                    schema.table("fonts").update(fu).eq("id", font["id"]).execute()
-                except Exception as exc:
-                    logger.warning("폰트 발행 실패(slug=%s): %s", slug, exc.__class__.__name__)
-                    skipped += 1
-                    continue
-
-                # 폰트 발행 성공 후 제안 저장
-                try:
-                    schema.table("license_proposals").upsert(
-                        proposal, on_conflict="font_id"
-                    ).execute()
-                    auto += 1
-                    logger.info("자동발행 완료: %s", slug)
-                except Exception as exc:
-                    logger.warning("proposal 저장 실패(slug=%s): %s", slug, exc.__class__.__name__)
-                    skipped += 1
-            else:
-                # proposed 경로: 검수 필요
-                try:
-                    schema.table("license_proposals").upsert(
-                        proposal, on_conflict="font_id"
-                    ).execute()
-                    proposed += 1
-                    logger.info("검수 제안 추가: %s", slug)
-                except Exception as exc:
-                    logger.warning("proposal 저장 실패(slug=%s): %s", slug, exc.__class__.__name__)
-                    skipped += 1
-    
+    audit_store.complete_run(
+        run_id,
+        {
+            "success_count": proposed,
+            "verified_count": 0,
+            "needs_review_count": proposed,
+            "broken_count": 0,
+        },
+    )
     logger.info("enrich 완료: 자동발행 %d, 검수대기 %d, 스킵 %d", auto, proposed, skipped)
     return auto, proposed, skipped
+
+
+def _save_audit_candidate(
+    *,
+    audit_store: SupabaseAuditStore,
+    run_id: UUID,
+    font: dict[str, Any],
+    source_page: str,
+    provider_record_id: str,
+    official_candidate: str | None,
+    proposal: dict[str, Any],
+    raw_html: str,
+    final_url: str,
+    http_status: int,
+) -> None:
+    """눈누 정보를 공개값이 아닌 비공개 감사 근거로만 저장한다."""
+    font_id = UUID(str(font["id"]))
+    extracted = {
+        **proposal,
+        "official_candidate": official_candidate,
+        "candidate_origin": "legacy-seed",
+    }
+    normalized_sha256 = hashlib.sha256(
+        json.dumps(
+            extracted,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    snapshot_id = audit_store.save_snapshot(
+        run_id,
+        SnapshotDraft(
+            font_id=font_id,
+            provider="noonnu",
+            provider_record_id=provider_record_id,
+            source_kind="noonnu",
+            document_kind="license",
+            request_url=source_page,
+            final_url=final_url,
+            http_status=http_status,
+            raw_text=None,
+            raw_sha256=hashlib.sha256(raw_html.encode("utf-8")).hexdigest(),
+            normalized_sha256=normalized_sha256,
+            extracted=extracted,
+            evidence_locations={
+                "license_permissions": "noonnu detail license table",
+                "official_candidate": "legacy seed official_url",
+            },
+            extraction_rule_id="legacy-noonnu-enrich-structured-v1",
+            parser_version="legacy-noonnu-enrich-v2",
+        ),
+    )
+    candidates = {
+        "license_source_url": source_page,
+        "download_url": official_candidate,
+    }
+    for field_name, proposed_value in candidates.items():
+        if not proposed_value:
+            continue
+        audit_store.save_finding(
+            run_id,
+            FindingDraft(
+                font_id=font_id,
+                field_name=field_name,
+                before_value=font.get(field_name),
+                proposed_value=proposed_value,
+                evidence_id=snapshot_id,
+                confidence="reference",
+                auto_applicable=False,
+                review_reason=(
+                    "눈누/legacy seed 후보로 제작사 공식 또는 승인된 "
+                    "공공기관 출처 재확인 필요"
+                ),
+            ),
+        )

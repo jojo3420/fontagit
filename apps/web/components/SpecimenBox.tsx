@@ -21,7 +21,7 @@ export function SpecimenBox({
   initialText?: string;
   caption?: string;
 }) {
-  const [text, setText] = useState(initialText ?? getDefaultSpecimenText(font.subsets));
+  const [text, setText] = useState(initialText ?? getDefaultSpecimenText(font));
   return (
     <div className={styles.box}>
       <LazyFontPreview font={font} className={styles.sample}>

@@ -15,7 +15,7 @@ interface ClientFontFiltersProps {
 export function ClientFontFilters({ fonts }: ClientFontFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { categories, tiers, sort } = parseFilterQuery(searchParams);
+  const { categories, tiers, sourceTiers, sort } = parseFilterQuery(searchParams);
 
   // 카테고리별 개수 계산
   const categoryCount = new Map<string, number>();
@@ -31,7 +31,7 @@ export function ClientFontFilters({ fonts }: ClientFontFiltersProps) {
       newCategories.delete(category);
     }
 
-    const query = buildFilterQuery(newCategories, tiers, sort);
+    const query = buildFilterQuery(newCategories, tiers, sort, sourceTiers);
     router.push(`?${query}`);
   };
 
@@ -43,7 +43,7 @@ export function ClientFontFilters({ fonts }: ClientFontFiltersProps) {
       newTiers.delete(tier);
     }
 
-    const query = buildFilterQuery(categories, newTiers, sort);
+    const query = buildFilterQuery(categories, newTiers, sort, sourceTiers);
     router.push(`?${query}`);
   };
 
