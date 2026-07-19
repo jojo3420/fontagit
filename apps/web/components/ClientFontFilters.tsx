@@ -1,17 +1,12 @@
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
-import type { Font, SourceTier } from "@/types/font";
+import type { Font } from "@/types/font";
 import { parseFilterQuery, buildFilterQuery } from "@/lib/filters";
 import styles from "./FontFilters.module.css";
 
 const CATEGORIES = ["고딕", "명조", "손글씨", "장식"] as const;
 const PRICES = ["무료", "유료"] as const;
-const SOURCES: { key: SourceTier; label: string }[] = [
-  { key: "A", label: "Google Fonts" },
-  { key: "B", label: "눈누 수집" },
-  { key: "C", label: "직접 등록" },
-];
 
 interface ClientFontFiltersProps {
   fonts: Font[];
@@ -52,13 +47,6 @@ export function ClientFontFilters({ fonts }: ClientFontFiltersProps) {
     router.push(`?${query}`);
   };
 
-  const handleSourceChange = (source: SourceTier, checked: boolean) => {
-    const nextSources = new Set(sourceTiers);
-    if (checked) nextSources.add(source);
-    else nextSources.delete(source);
-    router.push(`?${buildFilterQuery(categories, tiers, sort, nextSources)}`);
-  };
-
   return (
     <aside className={styles.sidebar}>
       <section className={styles.section}>
@@ -90,25 +78,6 @@ export function ClientFontFilters({ fonts }: ClientFontFiltersProps) {
                 onChange={(e) => handleTierChange(tierKey, e.target.checked)}
               />
               {p}
-            </label>
-          );
-        })}
-      </section>
-      <section className={styles.section}>
-        <h2 className={styles.title}>출처</h2>
-        {SOURCES.map(({ key, label }) => {
-          const count = fonts.filter((font) => font.sourceTier === key).length;
-          return (
-            <label key={key} className={styles.check}>
-              <input
-                type="checkbox"
-                name="source"
-                value={key}
-                checked={sourceTiers.has(key)}
-                onChange={(event) => handleSourceChange(key, event.target.checked)}
-              />
-              <span>{label}</span>
-              <span className={styles.optionCount}>{count}</span>
             </label>
           );
         })}
