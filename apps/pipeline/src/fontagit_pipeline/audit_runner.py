@@ -27,7 +27,9 @@ from fontagit_pipeline.audit_store import (
     ApprovedFontFileCandidate,
     AuditStore,
     FindingDraft,
+    InMemoryAuditStore,
     SnapshotDraft,
+    SupabaseAuditStore,
 )
 
 if TYPE_CHECKING:
@@ -285,6 +287,43 @@ def select_pilot(
     if len(selected) != size:
         raise AuditInputError("not enough font targets for requested pilot size")
     return selected
+
+
+def _resolve_dev_font_ids(
+    selected: Sequence[FontTarget],
+    store: AuditStore,
+) -> list[FontTarget]:
+    """prod font_id를 dev font_id로 변환한다 (SupabaseAuditStore인 경우만).
+
+    dry-run (InMemoryAuditStore)이면 변환 없이 원본 반환.
+    SupabaseAuditStore면 각 target마다 store.resolve_font_id()로 dev UUID를 조회해
+    font_id 필드만 치환한 새 FontTarget 반환.
+    """
+    if isinstance(store, InMemoryAuditStore):
+        # dry-run: 변환 없음
+        return list(selected)
+
+    if not isinstance(store, SupabaseAuditStore):
+        # 예상 밖의 store 타입: 그대로 반환
+        return list(selected)
+
+    resolved: list[FontTarget] = []
+    for target in selected:
+        dev_font_id = store.resolve_font_id(
+            slug=target.slug,
+            name_ko=target.name_ko,
+            name_en=target.name_en,
+            source_tier=target.source_tier,
+        )
+        if dev_font_id is None:
+            raise ValueError(
+                f"Cannot resolve font ID for {target.slug} "
+                f"(name_ko={target.name_ko}, source_tier={target.source_tier}): "
+                f"0 or multiple matches in dev fonts"
+            )
+        resolved.append(replace(target, font_id=dev_font_id))
+
+    return resolved
 
 
 def run_legal_audit(

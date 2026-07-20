@@ -463,11 +463,12 @@ def main_audit_bootstrap(args: argparse.Namespace) -> int:
 
 
 def main_audit_run(args: argparse.Namespace) -> int:
-    """법적·메타데이터 감사 파일럿과 보고서를 만든다."""
+    """법적-메타데이터 감사 파일럿과 보고서를 만든다."""
     from fontagit_pipeline.audit_license import _load_rules
     from fontagit_pipeline.audit_policy import load_source_registry
     from fontagit_pipeline.audit_runner import (
         AuditGateError,
+        _resolve_dev_font_ids,
         load_bootstrap_targets,
         run_legal_audit,
         run_metadata_audit,
@@ -498,6 +499,7 @@ def main_audit_run(args: argparse.Namespace) -> int:
             dev_store = SupabaseAuditStore.from_dev_credentials(
                 dev_url, dev_secret_key
             )
+            selected = _resolve_dev_font_ids(selected, dev_store)
             if args.stage == "metadata":
                 report = run_metadata_audit(selected, dev_store, registry)
             else:
@@ -753,7 +755,7 @@ if __name__ == "__main__":
 
     bootstrap_parser = subparsers.add_parser(
         "font-audit-bootstrap",
-        help="고정 prod·Tier A·Tier B snapshot으로 안정 출처키 manifest 생성",
+        help="고정 prod-Tier A-Tier B snapshot으로 안정 출처키 manifest 생성",
     )
     bootstrap_parser.add_argument(
         "--prod-snapshot", type=Path, required=True, help="prod 공개 기준선 JSON 경로"
@@ -765,7 +767,7 @@ if __name__ == "__main__":
 
     audit_run_parser = subparsers.add_parser(
         "font-audit-run",
-        help="50종 법적·메타데이터 감사 실행 (기본 dev 저장, --dry-run은 파일만 생성)",
+        help="50종 법적-메타데이터 감사 실행 (기본 dev 저장, --dry-run은 파일만 생성)",
     )
     audit_run_parser.add_argument("--stage", choices=["legal", "metadata"], required=True)
     audit_run_parser.add_argument("--limit", type=int, default=50)
@@ -780,7 +782,7 @@ if __name__ == "__main__":
         help="검증된 안정 출처키 bootstrap artifact 경로",
     )
     audit_run_parser.add_argument(
-        "--dry-run", action="store_true", help="DB 자격증명·DB 쓰기 없이 파일 산출물만 생성"
+        "--dry-run", action="store_true", help="DB 자격증명-DB 쓰기 없이 파일 산출물만 생성"
     )
     audit_run_parser.set_defaults(func=main_audit_run)
 
