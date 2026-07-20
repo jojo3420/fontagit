@@ -38,7 +38,7 @@
     - 손글씨 분류 → `handwriting`
     - 장식/디스플레이 분류 → `decorative`
     - 명조/세리프 분류 → `brand`
-    - 고딕/산세리프 분류 → 굵은 굵기(700 이상)만 있고 본문 굵기(400)가 없으면 `headline`, 아니면 `body`
+    - 고딕/산세리프 분류 → `font.availableWeights`(number[], 매퍼가 빈 배열 시 [400] 기본값 보장)에서 굵은 굵기(700 이상)만 있고 본문 굵기(400)가 없으면 `headline`, 아니면 `body`
     - 미분류/기타 → `body` (fallback)
     - (정확 임계값-키워드 보조는 TDD로 확정)
   - `groupFontsBySection(fonts): Record<SectionSlug, Font[]>` — 섹션별 그룹핑. 빈 섹션은 UI에서 숨김.
@@ -48,7 +48,7 @@
 ### 3.2 라우팅/페이지
 
 - `apps/web/app/fonts/page.tsx` (서버 컴포넌트, 개편)
-  - `searchParams.section` 없음 → **섹션 개요 모드**: `getAllFonts()` → `groupFontsBySection` → `SectionedFontsView` 렌더.
+  - `searchParams.section` 없음 → **섹션 개요 모드**: `getAllFonts()` → `groupFontsBySection` → **서버에서 섹션별 top N + 총개수만 추려** `SectionedFontsView`로 전달(클라이언트 직렬화 페이로드 절감).
   - `section=all` 또는 기타 필터 존재 → **평면 목록 모드**: 기존 `ClientFontFilters` + `ClientFontsList`(섹션 필터 반영).
 - 섹션 상세는 별도 라우트가 아니라 `/fonts?section=<슬러그>` 쿼리로 평면 목록 모드 + 섹션 필터.
 
@@ -57,7 +57,7 @@
 - `SectionedFontsView`(신규, 클라이언트): 그룹핑된 폰트를 받아 (1) 상단 슬림 스티키 **타입 캔버스 바**의 문구 상태 `useState(text)`를 보유, (2) `FontSection[]`을 렌더하며 `previewText`를 아래로 전달.
 - `TypeCanvasBar`(신규, 클라이언트): 문구 입력 + 초기화. 상태는 `SectionedFontsView`가 소유(상태 끌어올리기). 스티키 CSS.
 - `FontSection`(신규): 섹션 헤더(라벨+가이드) + 에디터 추천(있으면 상단) + 대표 폰트 상위 N개(예: 12) + "더보기" 링크(`/fonts?section=slug`).
-- `FontCard`(수정): 선택적 `previewText?: string` prop 추가. 있으면 `getSpecimenText()` 대신 해당 문구 렌더. 없으면 기존 팬그램 유지(하위 호환).
+- `FontCard`(수정): 선택적 `previewText?: string` prop 추가. 있으면 `getSpecimenText()` 대신 해당 문구 렌더. 없으면 기존 팬그램 유지(하위 호환). `previewText`는 반드시 기존 `LazyFontPreview` 렌더 경로를 통해 표시해 뷰포트 밖 카드의 웹폰트 조기 로딩을 막는다.
 - `lib/filters.ts`(수정): `parseFilterQuery`가 `section` 파라미터를 읽고, `filterFonts`가 `sectionOf`로 섹션 필터를 적용.
 
 ### 3.4 데이터 흐름 (타입 캔버스 실시간 동기화)
@@ -69,6 +69,13 @@
 ```
 
 기존 `getSpecimenText(font)` 팬그램 로직은 `previewText`가 비어 있을 때의 기본값으로 재사용한다.
+
+### 3.5 성능 고려 (agy 리뷰 반영)
+
+- **입력 랙 방지**: 캔버스 문구를 `useDeferredValue`로 감싸 FontCard 렌더에 전달한다. 매 키 입력마다 노출 카드가 동기 리렌더되어 버벅이는 것을 막는다.
+- **지연 로딩 유지**: 위 3.3의 `LazyFontPreview` 통합으로 뷰포트 밖 카드는 문구가 바뀌어도 로딩/렌더하지 않는다.
+- **페이로드 절감**: 3.2의 서버 그룹핑 top N 전달로 개요 모드 초기 페이로드를 현재보다 줄인다.
+- **참고**: 현재 `/fonts`는 이미 전체 폰트를 클라이언트로 전달+무한스크롤이므로, 위 조치는 신규 회귀 방지가 아니라 기존 대비 개선/유지 목적이다.
 
 ## 4. 범위
 
