@@ -4,13 +4,14 @@ import styles from "./FontGrid.module.css";
 
 interface FontGridProps {
   fonts: Font[];
+  previewText?: string;
 }
 
-export function FontGrid({ fonts }: FontGridProps) {
+export function FontGrid({ fonts, previewText }: FontGridProps) {
   return (
     <div className={styles.grid}>
       {fonts.map((font) => (
-        <FontCard key={font.slug} font={font} />
+        <FontCard key={font.slug} font={font} previewText={previewText} />
       ))}
     </div>
   );

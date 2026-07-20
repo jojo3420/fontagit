@@ -9,16 +9,18 @@ export function FontSection({
   section,
   fonts,
   totalCount,
+  previewText,
 }: {
   section: SectionDef;
   fonts: Font[];
   totalCount: number;
+  previewText?: string;
 }): JSX.Element {
   return (
     <section className={styles.section}>
       <h2>{section.label}</h2>
       <p>{section.guide}</p>
-      <FontGrid fonts={fonts} />
+      <FontGrid fonts={fonts} previewText={previewText} />
       <Link href={`/fonts?section=${section.slug}`}>
         더보기 ({totalCount}종)
       </Link>
