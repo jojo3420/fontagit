@@ -44,5 +44,6 @@ describe("groupFontsBySection", () => {
 describe("SECTIONS", () => {
   it("5개 섹션이 order 순으로 정의됨", () => {
     expect(SECTIONS.map((s) => s.slug)).toEqual(["body", "headline", "brand", "handwriting", "decorative"]);
+    expect(SECTIONS.map((s) => s.order)).toEqual([1, 2, 3, 4, 5]);
   });
 });
