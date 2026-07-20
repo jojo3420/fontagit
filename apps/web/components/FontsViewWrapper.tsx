@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import type { Font } from "@/types/font";
+import { ClientFontFilters } from "./ClientFontFilters";
 import { ClientFontsList } from "./ClientFontsList";
 import { SectionedFontsView } from "./SectionedFontsView";
 
@@ -26,6 +27,9 @@ export function FontsViewWrapper({ fonts }: FontsViewWrapperProps) {
   return isOverview ? (
     <SectionedFontsView fonts={fonts} />
   ) : (
-    <ClientFontsList fonts={fonts} />
+    <>
+      <ClientFontFilters fonts={fonts} />
+      <ClientFontsList fonts={fonts} />
+    </>
   );
 }
