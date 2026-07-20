@@ -4,17 +4,19 @@ import type { Font } from "@/types/font";
 import { FontSection } from "./FontSection";
 import styles from "./SectionOverview.module.css";
 
+const DEFAULT_TOP_N = 12;
+
 /**
  * 섹션 개요: 모든 용도 섹션별로 대표 폰트를 계층화하여 렌더한다.
  * 각 섹션별로 topN개의 폰트를 표시하고, 더보기 링크로 전체를 연결한다.
  *
  * @param fonts - 폰트 목록
- * @param topN - 각 섹션당 표시할 폰트 개수 (기본값: 6)
+ * @param topN - 각 섹션당 표시할 폰트 개수 (기본값: 12)
  * @returns JSX.Element
  */
 export function SectionOverview({
   fonts,
-  topN = 6,
+  topN = DEFAULT_TOP_N,
 }: {
   fonts: Font[];
   topN?: number;
@@ -30,6 +32,7 @@ export function SectionOverview({
       </div>
       {SECTIONS.map((section) => {
         const all = groups[section.slug];
+        if (all.length === 0) return null;
         return (
           <FontSection
             key={section.slug}
