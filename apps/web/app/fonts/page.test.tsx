@@ -9,31 +9,49 @@ vi.mock("next/navigation", () => ({
   })),
 }));
 
-vi.mock("@/lib/db/fonts", () => ({
+vi.mock("@/lib/data", () => ({
   getAllFonts: vi.fn().mockResolvedValue(fonts),
-  getFontBySlug: vi.fn(),
-  getAllSlugs: vi.fn(),
-  resolveFreeAlternatives: vi.fn(),
-}));
-
-vi.mock("@/lib/db/collections", () => ({
-  getAllCollections: vi.fn(),
-  getCollectionBySlug: vi.fn(),
-  getAllCollectionSlugs: vi.fn(),
-}));
-
-vi.mock("@/lib/db/trends", () => ({
-  getTrends: vi.fn(),
 }));
 
 import FontsPage from "@/app/fonts/page";
 
-describe("폰트 목록 페이지", () => {
-  it("필터 섹션과 개수/정렬 툴바를 렌더한다", async () => {
-    const ui = await FontsPage();
+describe("폰트 목록 페이지 - 개요/평면 모드 분기", () => {
+  it("파라미터 없으면 개요 모드(섹션별 요약)를 렌더한다", async () => {
+    const searchParams = Promise.resolve({});
+    const ui = await FontsPage({ searchParams });
     render(ui);
+
+    // 개요 모드: 섹션 제목들이 표시된다
+    expect(screen.getByText(/본문-긴 글/i)).toBeInTheDocument();
+    // 손글씨는 h2 또는 p 여러 곳에서 나타날 수 있으므로 getAllByText 사용
+    expect(screen.getAllByText(/손글씨/i).length).toBeGreaterThan(0);
+  });
+
+  it("?section=all이면 평면 모드(필터 툴바)를 렌더한다", async () => {
+    const searchParams = Promise.resolve({ section: "all" });
+    const ui = await FontsPage({ searchParams });
+    render(ui);
+
+    // 평면 모드: 정렬 버튼이 표시된다
     expect(screen.getByText("분류")).toBeInTheDocument();
-    expect(screen.getByText(`폰트 ${fonts.length}종`)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "인기순" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "최신순" })).toBeInTheDocument();
+  });
+
+  it("?section=body면 평면 모드를 렌더하고 섹션 필터를 적용한다", async () => {
+    const searchParams = Promise.resolve({ section: "body" });
+    const ui = await FontsPage({ searchParams });
+    render(ui);
+
+    // 평면 모드: 정렬 버튼이 표시된다
+    expect(screen.getByText("분류")).toBeInTheDocument();
+  });
+
+  it("?category=고딕이면 평면 모드를 렌더한다", async () => {
+    const searchParams = Promise.resolve({ category: "고딕" });
+    const ui = await FontsPage({ searchParams });
+    render(ui);
+
+    // 평면 모드: 정렬 버튼이 표시된다
+    expect(screen.getByText("분류")).toBeInTheDocument();
   });
 });

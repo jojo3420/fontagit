@@ -3,6 +3,8 @@ import { Suspense } from "react";
 import { getAllFonts } from "@/lib/data";
 import { ClientFontFilters } from "@/components/ClientFontFilters";
 import { ClientFontsList } from "@/components/ClientFontsList";
+import { SectionOverview } from "@/components/SectionOverview";
+import type { SearchParams } from "next/server";
 import styles from "./page.module.css";
 
 export const metadata: Metadata = {
@@ -10,8 +12,31 @@ export const metadata: Metadata = {
   alternates: { canonical: "/fonts/" },
 };
 
-export default async function FontsPage() {
+/**
+ * 개요 모드 판정: section/category/tier/source 파라미터가 모두 없으면 true
+ */
+function isOverviewMode(params: SearchParams): boolean {
+  return !params.section && !params.category && !params.tier && !params.source;
+}
+
+export default async function FontsPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const params = await searchParams;
   const fonts = await getAllFonts();
+  const overview = isOverviewMode(params);
+
+  if (overview) {
+    return (
+      <main className={styles.main}>
+        <Suspense fallback={<div />}>
+          <SectionOverview fonts={fonts} />
+        </Suspense>
+      </main>
+    );
+  }
 
   return (
     <main className={styles.main}>

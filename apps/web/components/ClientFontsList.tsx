@@ -10,6 +10,7 @@ import {
   parseFilterQuery,
   buildFilterQuery,
 } from "@/lib/filters";
+import { sectionOf } from "@/lib/sections";
 import styles from "./ClientFontsList.module.css";
 
 const ITEMS_PER_PAGE = 36;
@@ -18,17 +19,28 @@ interface Props {
   fonts: Font[];
 }
 
+/**
+ * 클라이언트 사이드 폰트 목록 컴포넌트: 필터, 정렬, 무한스크롤 처리
+ * ?section 파라미터로 특정 용도의 폰트만 필터링할 수 있다
+ */
 export function ClientFontsList({ fonts }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { categories, tiers, sourceTiers, sort } = parseFilterQuery(searchParams);
+  const section = searchParams.get("section");
   const sentinelRef = useRef<HTMLDivElement>(null);
   const hasPopularityData = fonts.some((font) => font.moves > 0);
   const effectiveSort = sort === "popular" && !hasPopularityData ? "recent" : sort;
 
-  const filtered = filterFonts(fonts, categories, tiers, sourceTiers);
+  // 섹션 필터: ?section이 없거나 "all"이면 모든 폰트, 아니면 해당 섹션만
+  const sectionFiltered =
+    section && section !== "all"
+      ? fonts.filter((font) => sectionOf(font) === section)
+      : fonts;
+
+  const filtered = filterFonts(sectionFiltered, categories, tiers, sourceTiers);
   const sorted = sortFonts(filtered, effectiveSort);
-  const filterKey = `${searchParams.toString()}|${effectiveSort}`;
+  const filterKey = `${searchParams.toString()}|${effectiveSort}|section=${section}`;
 
   const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE);
   // 필터/정렬이 바뀌면 표시 개수를 첫 페이지로 되돌린다(렌더 중 상태 조정 패턴)
