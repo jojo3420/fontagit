@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { getAllFonts } from "@/lib/data";
 import { ClientFontFilters } from "@/components/ClientFontFilters";
 import { ClientFontsList } from "@/components/ClientFontsList";
-import { SectionOverview } from "@/components/SectionOverview";
+import { SectionedFontsView } from "@/components/SectionedFontsView";
 import type { SearchParams } from "next/server";
 import styles from "./page.module.css";
 
@@ -32,7 +32,7 @@ export default async function FontsPage({
     return (
       <main className={styles.main}>
         <Suspense fallback={<div />}>
-          <SectionOverview fonts={fonts} />
+          <SectionedFontsView fonts={fonts} />
         </Suspense>
       </main>
     );
