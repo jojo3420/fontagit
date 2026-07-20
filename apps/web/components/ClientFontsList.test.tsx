@@ -28,7 +28,7 @@ describe("ClientFontsList 섹션 필터", () => {
   });
 
   it("?section이 없으면 모든 폰트를 렌더한다", () => {
-    (useSearchParams as any).mockReturnValue(new URLSearchParams());
+    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams());
     render(<ClientFontsList fonts={fonts} />);
 
     const count = fonts.length;
@@ -38,7 +38,7 @@ describe("ClientFontsList 섹션 필터", () => {
   it("?section=body면 body 섹션 폰트만 필터링한다", () => {
     const params = new URLSearchParams();
     params.set("section", "body");
-    (useSearchParams as any).mockReturnValue(params);
+    vi.mocked(useSearchParams).mockReturnValue(params);
 
     const bodyFonts = fonts.filter((font) => sectionOf(font) === "body");
     const expectedCount = bodyFonts.length;
@@ -50,7 +50,7 @@ describe("ClientFontsList 섹션 필터", () => {
   it("?section=decorative면 decorative 섹션 폰트만 필터링한다", () => {
     const params = new URLSearchParams();
     params.set("section", "decorative");
-    (useSearchParams as any).mockReturnValue(params);
+    vi.mocked(useSearchParams).mockReturnValue(params);
 
     const decorativeFonts = fonts.filter(
       (font) => sectionOf(font) === "decorative"
@@ -64,7 +64,7 @@ describe("ClientFontsList 섹션 필터", () => {
   it("?section=all이면 섹션 필터를 무시하고 모든 폰트를 렌더한다", () => {
     const params = new URLSearchParams();
     params.set("section", "all");
-    (useSearchParams as any).mockReturnValue(params);
+    vi.mocked(useSearchParams).mockReturnValue(params);
 
     render(<ClientFontsList fonts={fonts} />);
     expect(screen.getByText(`폰트 ${fonts.length}종`)).toBeInTheDocument();
@@ -74,7 +74,7 @@ describe("ClientFontsList 섹션 필터", () => {
     const params = new URLSearchParams();
     params.set("section", "body");
     params.set("category", "고딕");
-    (useSearchParams as any).mockReturnValue(params);
+    vi.mocked(useSearchParams).mockReturnValue(params);
 
     const filtered = fonts.filter(
       (font) => sectionOf(font) === "body" && font.category === "고딕"

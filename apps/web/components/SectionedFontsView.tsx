@@ -16,7 +16,7 @@ interface SectionedFontsViewProps {
  * TypeCanvasBar에서 입력한 문구를 useDeferredValue로 감싸서
  * SectionOverview의 previewText로 전달하여 대량 카드 리렌더 성능 최적화.
  */
-export function SectionedFontsView({ fonts }: SectionedFontsViewProps): JSX.Element {
+export function SectionedFontsView({ fonts }: SectionedFontsViewProps) {
   const [text, setText] = useState<string>("");
   const deferredText = useDeferredValue(text);
 

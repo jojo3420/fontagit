@@ -15,7 +15,7 @@ export function FontSection({
   fonts: Font[];
   totalCount: number;
   previewText?: string;
-}): JSX.Element {
+}) {
   return (
     <section className={styles.section}>
       <h2>{section.label}</h2>

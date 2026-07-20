@@ -14,11 +14,12 @@ vi.mock("@/lib/data", () => ({
 }));
 
 import FontsPage from "@/app/fonts/page";
+import { useSearchParams } from "next/navigation";
 
 describe("폰트 목록 페이지 - 개요/평면 모드 분기", () => {
   it("파라미터 없으면 개요 모드(섹션별 요약)를 렌더한다", async () => {
-    const searchParams = Promise.resolve({});
-    const ui = await FontsPage({ searchParams });
+    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams());
+    const ui = await FontsPage();
     render(ui);
 
     // 개요 모드: 섹션 제목들이 표시된다
@@ -28,8 +29,10 @@ describe("폰트 목록 페이지 - 개요/평면 모드 분기", () => {
   });
 
   it("?section=all이면 평면 모드(필터 툴바)를 렌더한다", async () => {
-    const searchParams = Promise.resolve({ section: "all" });
-    const ui = await FontsPage({ searchParams });
+    const params = new URLSearchParams();
+    params.set("section", "all");
+    vi.mocked(useSearchParams).mockReturnValue(params);
+    const ui = await FontsPage();
     render(ui);
 
     // 평면 모드: 정렬 버튼이 표시된다
@@ -38,8 +41,10 @@ describe("폰트 목록 페이지 - 개요/평면 모드 분기", () => {
   });
 
   it("?section=body면 평면 모드를 렌더하고 섹션 필터를 적용한다", async () => {
-    const searchParams = Promise.resolve({ section: "body" });
-    const ui = await FontsPage({ searchParams });
+    const params = new URLSearchParams();
+    params.set("section", "body");
+    vi.mocked(useSearchParams).mockReturnValue(params);
+    const ui = await FontsPage();
     render(ui);
 
     // 평면 모드: 정렬 버튼이 표시된다
@@ -47,8 +52,10 @@ describe("폰트 목록 페이지 - 개요/평면 모드 분기", () => {
   });
 
   it("?category=고딕이면 평면 모드를 렌더한다", async () => {
-    const searchParams = Promise.resolve({ category: "고딕" });
-    const ui = await FontsPage({ searchParams });
+    const params = new URLSearchParams();
+    params.set("category", "고딕");
+    vi.mocked(useSearchParams).mockReturnValue(params);
+    const ui = await FontsPage();
     render(ui);
 
     // 평면 모드: 정렬 버튼이 표시된다

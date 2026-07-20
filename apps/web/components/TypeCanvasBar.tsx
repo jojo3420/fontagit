@@ -21,7 +21,7 @@ export function TypeCanvasBar({
   value,
   onChange,
   placeholder = "문구를 입력하세요",
-}: TypeCanvasBarProps): JSX.Element {
+}: TypeCanvasBarProps) {
   const handleReset = (): void => {
     onChange("");
   };

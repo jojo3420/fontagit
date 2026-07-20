@@ -1,4 +1,4 @@
-import type { Font, Category } from "@/types/font";
+import type { Font } from "@/types/font";
 
 /** /fonts 용도 섹션 slug */
 export type SectionSlug = "body" | "headline" | "brand" | "handwriting" | "decorative";

@@ -14,7 +14,6 @@ const DEFAULT_TOP_N = 12;
  * @param fonts - 폰트 목록
  * @param topN - 각 섹션당 표시할 폰트 개수 (기본값: 12)
  * @param previewText - 모든 폰트 카드에 표시할 견본 문구
- * @returns JSX.Element
  */
 export function SectionOverview({
   fonts,
@@ -24,7 +23,7 @@ export function SectionOverview({
   fonts: Font[];
   topN?: number;
   previewText?: string;
-}): JSX.Element {
+}) {
   const groups = groupFontsBySection(fonts);
 
   return (
