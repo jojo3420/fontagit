@@ -3,6 +3,7 @@
 import { useState, useDeferredValue } from "react";
 import { TypeCanvasBar } from "./TypeCanvasBar";
 import { SectionOverview } from "./SectionOverview";
+import styles from "./SectionedFontsView.module.css";
 import type { Font } from "@/types/font";
 
 interface SectionedFontsViewProps {
@@ -21,7 +22,7 @@ export function SectionedFontsView({ fonts }: SectionedFontsViewProps) {
   const deferredText = useDeferredValue(text);
 
   return (
-    <div>
+    <div className={styles.wrapper}>
       <TypeCanvasBar value={text} onChange={setText} />
       <SectionOverview fonts={fonts} previewText={deferredText} />
     </div>

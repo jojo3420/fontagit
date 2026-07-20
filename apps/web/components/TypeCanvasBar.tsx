@@ -34,6 +34,7 @@ export function TypeCanvasBar({
         onChange={(e) => onChange(e.currentTarget.value)}
         placeholder={placeholder}
         className={styles.input}
+        aria-label="폰트 견본 텍스트 입력"
       />
       <button onClick={handleReset} className={styles.resetButton}>
         초기화

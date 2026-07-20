@@ -40,7 +40,7 @@ export function ClientFontsList({ fonts }: Props) {
 
   const filtered = filterFonts(sectionFiltered, categories, tiers, sourceTiers);
   const sorted = sortFonts(filtered, effectiveSort);
-  const filterKey = `${searchParams.toString()}|${effectiveSort}|section=${section}`;
+  const filterKey = `${searchParams.toString()}|${effectiveSort}`;
 
   const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE);
   // 필터/정렬이 바뀌면 표시 개수를 첫 페이지로 되돌린다(렌더 중 상태 조정 패턴)
