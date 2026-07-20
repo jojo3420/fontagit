@@ -63,6 +63,7 @@ _SCHEDULED_OBSERVATION_FIELDS = {
     "error_kind",
 }
 _MAX_SCHEDULED_ARTIFACT_BYTES = 8 * 1024 * 1024
+_CRAWL_DELAY_SECONDS = 1.5
 
 
 class AuditInputError(ValueError):
@@ -348,6 +349,11 @@ def run_legal_audit(
     finding_ids: list[UUID] = []
     counts = {"verified": 0, "needs_review": 0, "broken": 0, "pending": 0}
     errors: list[str] = []
+    effective_fetcher: AuditFetcher = (
+        (lambda url: fetch_public_url(url, delay_seconds=_CRAWL_DELAY_SECONDS))
+        if fetcher is fetch_public_url
+        else fetcher
+    )
 
     for target in targets:
         try:
@@ -358,7 +364,7 @@ def run_legal_audit(
                 source_registry,
                 rules,
                 dry_run=dry_run,
-                fetcher=fetcher,
+                fetcher=effective_fetcher,
             )
         except (FetchError, UnicodeError, ValueError) as exc:
             counts["needs_review"] += 1
@@ -403,10 +409,11 @@ def run_metadata_audit(
     source_registry = (
         registry if isinstance(registry, SourceRegistry) else SourceRegistry.model_validate(registry)
     )
-    effective_font_fetcher = font_fetcher
-    if effective_font_fetcher is None:
+    if font_fetcher is not None:
+        effective_font_fetcher: AuditFetcher = font_fetcher
+    else:
         effective_font_fetcher = (
-            (lambda url: fetch_public_url(url, max_body_bytes=32 * 1024 * 1024))
+            (lambda url: fetch_public_url(url, max_body_bytes=32 * 1024 * 1024, delay_seconds=_CRAWL_DELAY_SECONDS))
             if fetcher is fetch_public_url
             else fetcher
         )
@@ -856,9 +863,14 @@ def scan_scheduled_targets(
         raise AuditGateError("scheduled scan target count is zero")
     observations: list[ScheduledObservation] = []
     errors: list[str] = []
+    effective_fetcher: AuditFetcher = (
+        (lambda url: fetch_public_url(url, delay_seconds=_CRAWL_DELAY_SECONDS))
+        if fetcher is fetch_public_url
+        else fetcher
+    )
     for target in targets:
         try:
-            fetched = fetcher(target.url)
+            fetched = effective_fetcher(target.url)
         except FetchError as exc:
             errors.append(f"{target.font_id}:{exc.__class__.__name__}")
             continue
@@ -1906,3 +1918,144 @@ def _atomic_write(path: Path, content: bytes) -> None:
         except FileNotFoundError:
             pass
         raise
+
+
+def run_batch_crawl(
+    targets: Sequence[FontTarget],
+    store: AuditStore,
+    registry: SourceRegistry | Mapping[str, object],
+    rules: Mapping[str, object],
+    batch_size: int = 100,
+    checkpoint_path: Path | None = None,
+    dry_run: bool = False,
+    fetcher: AuditFetcher = fetch_public_url,
+) -> AuditReport:
+    """배치 단위로 전수 폰트를 크롤링하고 체크포인트로 재개를 지원한다.
+    
+    Args:
+        targets: 크롤링 대상 폰트 목록
+        store: 감사 저장소
+        registry: 폰트 소스 레지스트리
+        rules: 라이선스 규칙
+        batch_size: 배치 크기 (기본값 100)
+        checkpoint_path: 체크포인트 파일 경로 (None이면 사용 안 함)
+        dry_run: dry-run 모드
+        fetcher: HTTP 페처 (기본값 fetch_public_url)
+    
+    Returns:
+        누적된 AuditReport
+    """
+    if not targets:
+        raise AuditInputError("batch crawl requires at least one target")
+    
+    # 체크포인트 로드
+    completed_font_ids: set[UUID] = set()
+    batches_done: int = 0
+    if checkpoint_path and checkpoint_path.exists():
+        try:
+            cp_data = json.loads(checkpoint_path.read_text())
+            completed_font_ids = set(UUID(fid) for fid in cp_data.get("completed_font_ids", []))
+            batches_done = cp_data.get("batches_done", 0)
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise ValueError(f"Invalid checkpoint file: {exc}")
+    
+    # 남은 대상 필터링
+    remaining = [t for t in targets if t.font_id not in completed_font_ids]
+    if not remaining and batches_done > 0:
+        # 모든 대상이 이미 완료됨
+        return AuditReport(
+            run_id=uuid4(),
+            stage="legal",
+            dry_run=dry_run,
+            targets=list(targets),
+            snapshot_ids=[],
+            finding_ids=[],
+            verified_count=0,
+            needs_review_count=0,
+            broken_count=0,
+            pending_count=0,
+            errors=[],
+        )
+    
+    # 배치 생성
+    batches = [remaining[i:i + batch_size] for i in range(0, len(remaining), batch_size)]
+    
+    # 누적 결과
+    all_snapshot_ids: list[UUID] = []
+    all_finding_ids: list[UUID] = []
+    total_verified = 0
+    total_needs_review = 0
+    total_broken = 0
+    total_pending = 0
+    all_errors: list[str] = []
+    
+    # 배치 순회
+    source_registry = registry if isinstance(registry, SourceRegistry) else SourceRegistry.model_validate(registry)
+    
+    for batch_idx, batch in enumerate(batches, start=batches_done + 1):
+        try:
+            # 게이트 비활성화: assert_safe() 호출 안 함
+            report = run_legal_audit(
+                batch,
+                store,
+                source_registry,
+                rules,
+                dry_run=dry_run,
+                fetcher=fetcher,
+            )
+            
+            # 결과 누적
+            all_snapshot_ids.extend(report.snapshot_ids)
+            all_finding_ids.extend(report.finding_ids)
+            total_verified += report.verified_count
+            total_needs_review += report.needs_review_count
+            total_broken += report.broken_count
+            total_pending += report.pending_count
+            all_errors.extend(report.errors)
+            
+            # 체크포인트 업데이트
+            for target in batch:
+                completed_font_ids.add(target.font_id)
+            
+            if checkpoint_path:
+                cp_data = {
+                    "completed_font_ids": [str(fid) for fid in completed_font_ids],
+                    "batches_done": batch_idx,
+                    "updated_at": datetime.now(UTC).isoformat(),
+                }
+                checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+                checkpoint_path.write_text(json.dumps(cp_data, indent=2))
+            
+            # 진행률 로그
+            total_targets = len(targets)
+            completed_count = len(completed_font_ids)
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(
+                "[배치 %d/%d] 처리 %d종, 누적 완료 %d/%d",
+                batch_idx,
+                len(batches),
+                len(batch),
+                completed_count,
+                total_targets,
+            )
+        except (FetchError, UnicodeError, ValueError, AuditInputError) as exc:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error("배치 %d 실패: %s", batch_idx, exc)
+            raise
+    
+    # 최종 보고서 생성
+    return AuditReport(
+        run_id=uuid4(),
+        stage="legal",
+        dry_run=dry_run,
+        targets=list(targets),
+        snapshot_ids=all_snapshot_ids,
+        finding_ids=all_finding_ids,
+        verified_count=total_verified,
+        needs_review_count=total_needs_review,
+        broken_count=total_broken,
+        pending_count=total_pending,
+        errors=all_errors,
+    )
