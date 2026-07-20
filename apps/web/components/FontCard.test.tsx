@@ -16,4 +16,10 @@ describe("FontCard", () => {
     render(<FontCard font={font} />);
     expect(screen.getByText(/다람쥐 헌/)).toBeInTheDocument();
   });
+  it("커스텀 견본 문구를 렌더한다", () => {
+    const font = fonts.find((f) => f.slug === "nanum-myeongjo")!;
+    const customText = "커스텀 테스트";
+    render(<FontCard font={font} previewText={customText} />);
+    expect(screen.getByText(customText)).toBeInTheDocument();
+  });
 });
