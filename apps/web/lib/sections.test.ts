@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sectionOf, groupFontsBySection, SECTIONS } from "./sections";
+import { sectionOf, groupFontsBySection, SECTIONS, orderByCuration } from "./sections";
 import type { Font } from "@/types/font";
 
 function makeFont(over: Partial<Font>): Font {
@@ -45,5 +45,40 @@ describe("SECTIONS", () => {
   it("5개 섹션이 order 순으로 정의됨", () => {
     expect(SECTIONS.map((s) => s.slug)).toEqual(["body", "headline", "brand", "handwriting", "decorative"]);
     expect(SECTIONS.map((s) => s.order)).toEqual([1, 2, 3, 4, 5]);
+  });
+});
+
+describe("orderByCuration", () => {
+  it("추천 slug가 앞으로 오고 나머지는 원래 순서 유지", () => {
+    const fonts = [
+      makeFont({ slug: "a" }),
+      makeFont({ slug: "b" }),
+      makeFont({ slug: "c" }),
+    ];
+    const recommended = ["c"];
+    const result = orderByCuration(fonts, recommended);
+    expect(result.map((f) => f.slug)).toEqual(["c", "a", "b"]);
+  });
+
+  it("추천 slug가 여러 개일 때 순서대로 앞으로 옴", () => {
+    const fonts = [
+      makeFont({ slug: "a" }),
+      makeFont({ slug: "b" }),
+      makeFont({ slug: "c" }),
+    ];
+    const recommended = ["b", "c"];
+    const result = orderByCuration(fonts, recommended);
+    expect(result.map((f) => f.slug)).toEqual(["b", "c", "a"]);
+  });
+
+  it("추천에 없는 폰트는 원래 순서 유지", () => {
+    const fonts = [
+      makeFont({ slug: "a" }),
+      makeFont({ slug: "b" }),
+      makeFont({ slug: "c" }),
+    ];
+    const recommended = ["d"];
+    const result = orderByCuration(fonts, recommended);
+    expect(result.map((f) => f.slug)).toEqual(["a", "b", "c"]);
   });
 });

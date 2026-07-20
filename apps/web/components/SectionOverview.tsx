@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { SECTIONS, groupFontsBySection } from "@/lib/sections";
+import { SECTIONS, groupFontsBySection, orderByCuration } from "@/lib/sections";
 import type { Font } from "@/types/font";
+import { SECTION_CURATION } from "@/data/sectionCuration";
 import { FontSection } from "./FontSection";
 import styles from "./SectionOverview.module.css";
 
@@ -34,7 +35,8 @@ export function SectionOverview({
         </Link>
       </div>
       {SECTIONS.map((section) => {
-        const all = groups[section.slug];
+        const fonts = groups[section.slug];
+        const all = orderByCuration(fonts, SECTION_CURATION[section.slug]);
         if (all.length === 0) return null;
         return (
           <FontSection
