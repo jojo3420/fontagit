@@ -52,6 +52,7 @@ class AuditSettings(BaseSettings):
     supabase_dev_secret_key: str | None = None
     supabase_audit_dev_allowlist: str | None = None
     supabase_allowed_dev_origins: str | None = None
+    supabase_audit_prod_allowlist: str | None = None
     supabase_prod_public_url: str | None = None
     supabase_prod_public_anon_key: str | None = None
     supabase_prod_public_allowlist: str | None = None
@@ -87,6 +88,33 @@ class AuditSettings(BaseSettings):
             if not allowed_origins or dev_origin not in allowed_origins:
                 raise ValueError(
                     "SUPABASE_ALLOWED_DEV_ORIGINS must explicitly approve the self-hosted dev origin"
+                )
+        return url, key
+
+    def prod_write_credentials(self) -> tuple[str, str]:
+        """감사 쓰기에만 쓰는 전용 prod 자격증명을 안전하게 반환한다.
+
+        일반 ``SUPABASE_PROD_URL``/``SUPABASE_PROD_SECRET_KEY``는 공개 기준선 읽기와
+        기존 명령 호환용일 뿐, 이 경계에서 fallback으로 사용하지 않는다.
+        """
+        url = _required_setting(self.supabase_prod_url, "SUPABASE_PROD_URL")
+        key = _required_setting(self.supabase_prod_secret_key, "SUPABASE_PROD_SECRET_KEY")
+        origin = _https_origin(url, "SUPABASE_PROD_URL")
+        prod_ref = _supabase_project_ref(origin)
+        if prod_ref is not None:
+            approved = _allowlist_items(self.supabase_audit_prod_allowlist)
+            if not approved or (prod_ref not in approved and origin not in approved):
+                raise ValueError(
+                    "SUPABASE_AUDIT_PROD_ALLOWLIST must explicitly approve the self-hosted prod origin"
+                )
+        else:
+            allowed_origins = {
+                _https_origin(item, "SUPABASE_AUDIT_PROD_ALLOWLIST")
+                for item in _allowlist_items(self.supabase_audit_prod_allowlist)
+            }
+            if not allowed_origins or origin not in allowed_origins:
+                raise ValueError(
+                    "SUPABASE_AUDIT_PROD_ALLOWLIST must explicitly approve the self-hosted prod origin"
                 )
         return url, key
 
@@ -134,7 +162,7 @@ def load_audit_settings() -> AuditSettings:
 
 def _required_setting(value: str | None, name: str) -> str:
     if not value or not value.strip():
-        raise ValueError(f"{name} is required for dev audit writes")
+        raise ValueError(f"{name} is required for audit writes")
     return value.strip()
 
 

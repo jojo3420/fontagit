@@ -111,3 +111,35 @@ def test_audit_settings_accepts_explicit_self_hosted_dev_origin() -> None:
         supabase_prod_url="https://supabase.example.com:443",
         supabase_allowed_dev_origins="https://10.0.0.7:8443",
     ).dev_write_credentials() == ("https://10.0.0.7:8443/", "dev-key")
+
+
+def test_prod_write_credentials_requires_settings() -> None:
+    """prod 쓰기는 SUPABASE_PROD_URL과 SUPABASE_PROD_SECRET_KEY가 필수다."""
+    with pytest.raises(ValueError, match="SUPABASE_PROD"):
+        AuditSettings(_env_file=None).prod_write_credentials()
+
+    with pytest.raises(ValueError, match="SUPABASE_PROD_SECRET_KEY"):
+        AuditSettings(
+            supabase_prod_url="https://prod.supabase.co",
+            _env_file=None,
+        ).prod_write_credentials()
+
+
+def test_prod_write_credentials_requires_allowlist() -> None:
+    """managed prod는 allowlist 승인이 필수다."""
+    with pytest.raises(ValueError, match="SUPABASE_AUDIT_PROD_ALLOWLIST"):
+        AuditSettings(
+            supabase_prod_url="https://prod-ref.supabase.co",
+            supabase_prod_secret_key="prod-key",
+            _env_file=None,
+        ).prod_write_credentials()
+
+
+def test_prod_write_credentials_accepts_approved() -> None:
+    """allowlist에서 승인된 managed prod URL은 자격증명을 반환한다."""
+    assert AuditSettings(
+        supabase_prod_url="https://prod-ref.supabase.co",
+        supabase_prod_secret_key="prod-key",
+        supabase_audit_prod_allowlist="prod-ref",
+        _env_file=None,
+    ).prod_write_credentials() == ("https://prod-ref.supabase.co", "prod-key")
