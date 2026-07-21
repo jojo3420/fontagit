@@ -184,28 +184,40 @@ def apply_update(
         return False
 
 
-def main(apply: bool = False, report_path: str = "output/audit/ofl-verify-report.json") -> int:
+def main(apply: bool = False, report_path: str | None = None, target: str = "dev") -> int:
     """OFL 공식 확인 엔진의 메인 진입점.
 
     Args:
         apply: True일 때만 confirmed 폰트를 DB에 PATCH
-        report_path: 결과 report JSON 저장 경로
+        report_path: 결과 report JSON 저장 경로. None일 때 target별 기본값 적용
+        target: "dev" 또는 "prod". 대상 Supabase 환경
 
     Returns:
         성공 시 0, 오류 시 0이 아닌 값
     """
     try:
-        logger.info("OFL 공식 확인 엔진 시작")
+        logger.info("OFL 공식 확인 엔진 시작 (target=%s)", target)
 
-        # Dev 자격증명 로드
+        # 자격증명 로드 및 base URL 설정
         settings = load_audit_settings()
-        dev_url, dev_key = settings.dev_write_credentials()
-        base = dev_url.rstrip("/") + "/rest/v1"
+        if target == "prod":
+            write_url, write_key = settings.prod_write_credentials()
+        else:
+            write_url, write_key = settings.dev_write_credentials()
+
+        base = write_url.rstrip("/") + "/rest/v1"
         headers = {
-            "apikey": dev_key,
-            "Authorization": f"Bearer {dev_key}",
+            "apikey": write_key,
+            "Authorization": f"Bearer {write_key}",
             "Accept-Profile": "fontagit",
         }
+
+        # Report path 기본값 설정
+        if report_path is None:
+            if target == "prod":
+                report_path = "output/audit/ofl-verify-report-prod.json"
+            else:
+                report_path = "output/audit/ofl-verify-report.json"
 
         # Google Fonts 라이선스 맵 조회
         logger.info("Google Fonts 라이선스 맵 조회 중...")
@@ -215,15 +227,28 @@ def main(apply: bool = False, report_path: str = "output/audit/ofl-verify-report
             logger.error("라이선스 맵 조회 실패: %s", str(exc))
             return 1
 
-        # OFL 후보 폰트 조회
+        # OFL 후보 폰트 조회 및 dev verified 게이트 처리
         logger.info("OFL 후보 폰트 조회 중...")
+        dev_verified_keys = None
         with httpx.Client(timeout=10.0) as client:
             candidates = fetch_ofl_candidates(client, base, headers)
             logger.info("%d개 OFL 후보 폰트 조회 완료", len(candidates))
 
+            # Prod 모드: dev에서 verified 폰트 목록 조회 (게이트 2)
+            if target == "prod":
+                dev_base = settings.dev_write_credentials()[0].rstrip("/") + "/rest/v1"
+                dev_headers = {
+                    "apikey": settings.dev_write_credentials()[1],
+                    "Authorization": f"Bearer {settings.dev_write_credentials()[1]}",
+                    "Accept-Profile": "fontagit",
+                }
+                logger.info("Dev에서 OFL verified 폰트 목록 조회 중...")
+                dev_verified_keys = fetch_dev_verified_keys(client, dev_base, dev_headers)
+                logger.info("Dev verified 폰트 %d개 조회 완료", len(dev_verified_keys))
+
             # Report 생성
             checked_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-            report = build_report(candidates, license_map, checked_at)
+            report = build_report(candidates, license_map, checked_at, dev_verified_keys=dev_verified_keys)
 
             # Report 저장
             report_dir = Path(report_path).parent
@@ -281,9 +306,15 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--report-path",
-        default="output/audit/ofl-verify-report.json",
-        help="결과 report JSON 저장 경로",
+        default=None,
+        help="결과 report JSON 저장 경로. 미지정 시 target별 기본값 적용",
+    )
+    parser.add_argument(
+        "--target",
+        choices=["dev", "prod"],
+        default="dev",
+        help="대상 Supabase 환경 (기본: dev)",
     )
 
     args = parser.parse_args()
-    sys.exit(main(apply=args.apply, report_path=args.report_path))
+    sys.exit(main(apply=args.apply, report_path=args.report_path, target=args.target))
