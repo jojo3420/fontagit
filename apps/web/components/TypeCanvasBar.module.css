@@ -2,7 +2,7 @@
   display: flex;
   gap: 0.5rem;
   padding: 1rem;
-  background-color: #f5f5f5;
+  background-color: var(--surface-2);
   border-radius: 0.375rem;
   position: sticky;
   top: 0;
@@ -12,7 +12,9 @@
 .input {
   flex: 1;
   padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db;
+  background-color: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
   border-radius: 0.375rem;
   font-size: 1rem;
   outline: none;
@@ -20,14 +22,15 @@
 }
 
 .input:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--point);
+  box-shadow: 0 0 0 3px var(--point-weak);
 }
 
 .resetButton {
   padding: 0.5rem 1rem;
-  background-color: #e5e7eb;
-  border: 1px solid #d1d5db;
+  background-color: var(--surface-2);
+  color: var(--ink);
+  border: 1px solid var(--border);
   border-radius: 0.375rem;
   font-size: 0.875rem;
   font-weight: 500;
@@ -36,9 +39,9 @@
 }
 
 .resetButton:hover {
-  background-color: #d1d5db;
+  background-color: var(--border);
 }
 
 .resetButton:active {
-  background-color: #bfdbfe;
+  background-color: var(--point-weak);
 }
