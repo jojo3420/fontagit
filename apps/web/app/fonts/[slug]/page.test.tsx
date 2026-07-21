@@ -28,6 +28,15 @@ vi.mock("@/app/fonts/[slug]/ReportForm", () => ({
   ReportForm: () => null,
 }));
 
+vi.mock("@/components/GlyphChecker", () => ({
+  GlyphChecker: ({ fontKey, fontName, tier }: { fontKey: string; fontName: string; tier: "free" | "paid" }) => (
+    <div data-testid={`glyph-checker-${fontKey}`}>
+      <h3>글자 지원 검사</h3>
+      <input aria-label="글자 검사 입력" placeholder={fontName} />
+    </div>
+  ),
+}));
+
 async function renderDetail(slug: string) {
   const ui = await FontDetail({ params: Promise.resolve({ slug }) });
   render(ui);
@@ -60,6 +69,22 @@ describe("폰트 상세 페이지", () => {
     expect(screen.getByText(/구매하러 가기/)).toBeInTheDocument();
     expect(screen.getByText(/비슷한 무료 대안/)).toBeInTheDocument();
     expect(screen.queryByLabelText("미리보기 입력")).toBeNull();
+  });
+
+  it("무료 웹폰트: 글자 지원 검사 노출", async () => {
+    await renderDetail("nanum-myeongjo");
+    expect(screen.getByRole("heading", { level: 3, name: "글자 지원 검사" })).toBeInTheDocument();
+    expect(screen.getByLabelText("글자 검사 입력")).toBeInTheDocument();
+  });
+
+  it("유료 폰트: 글자 지원 검사 숨김", async () => {
+    await renderDetail("sandoll-gothic-neo");
+    expect(screen.queryByRole("heading", { level: 3, name: "글자 지원 검사" })).toBeNull();
+  });
+
+  it("로컬 폰트(pretendard): 글자 지원 검사 숨김", async () => {
+    await renderDetail("pretendard");
+    expect(screen.queryByRole("heading", { level: 3, name: "글자 지원 검사" })).toBeNull();
   });
 });
 

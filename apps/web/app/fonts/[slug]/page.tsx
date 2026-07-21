@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getFontBySlug, getAllSlugs, resolveFreeAlternatives } from "@/lib/data";
 import { getSiteUrl } from "@/lib/seo";
+import { isGlyphCheckSupported } from "@/lib/glyphSupport";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { SpecimenBox } from "@/components/SpecimenBox";
+import { GlyphChecker } from "@/components/GlyphChecker";
 import { LicenseSummaryCard } from "@/components/LicenseSummaryCard";
 import { AlternativesCard } from "@/components/AlternativesCard";
 import { TierChip } from "@/components/TierChip";
@@ -123,6 +125,9 @@ function PublishedFontDetail({ font, alternatives }: { font: Font; alternatives:
             {font.foundry} {String.fromCharCode(183)} {font.availableWeights.length}가지 굵기 {String.fromCharCode(183)} 이동 {font.moves.toLocaleString()}회
           </p>
           <SpecimenBox font={font} editable={!isPaid} caption={caption} />
+          {isGlyphCheckSupported(font.fontKey, font.tier) && (
+            <GlyphChecker fontKey={font.fontKey} fontName={font.nameKo} tier={font.tier} />
+          )}
           <AdFitUnit unit={ADFIT_UNIT_DETAIL ?? ""} width={300} height={250} label />
           {font.id && <ReportForm fontId={font.id} fontName={font.nameKo} />}
         </div>
