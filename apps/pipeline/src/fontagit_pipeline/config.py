@@ -105,7 +105,7 @@ class AuditSettings(BaseSettings):
             approved = _allowlist_items(self.supabase_audit_prod_allowlist)
             if not approved or (prod_ref not in approved and origin not in approved):
                 raise ValueError(
-                    "SUPABASE_AUDIT_PROD_ALLOWLIST must explicitly approve the self-hosted prod origin"
+                    "SUPABASE_AUDIT_PROD_ALLOWLIST must approve the managed prod URL or project ref"
                 )
         else:
             allowed_origins = {
