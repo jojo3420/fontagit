@@ -115,7 +115,7 @@ def test_audit_settings_accepts_explicit_self_hosted_dev_origin() -> None:
 
 def test_prod_write_credentials_requires_settings() -> None:
     """prod 쓰기는 SUPABASE_PROD_URL과 SUPABASE_PROD_SECRET_KEY가 필수다."""
-    with pytest.raises(ValueError, match="SUPABASE_PROD"):
+    with pytest.raises(ValueError, match="SUPABASE_PROD_URL"):
         AuditSettings(_env_file=None).prod_write_credentials()
 
     with pytest.raises(ValueError, match="SUPABASE_PROD_SECRET_KEY"):
@@ -126,7 +126,8 @@ def test_prod_write_credentials_requires_settings() -> None:
 
 
 def test_prod_write_credentials_requires_allowlist() -> None:
-    """managed prod는 allowlist 승인이 필수다."""
+    """prod 쓰기는 SUPABASE_AUDIT_PROD_ALLOWLIST가 필수다 (managed/자체호스팅 모두)."""
+    # managed prod: allowlist 없음
     with pytest.raises(ValueError, match="SUPABASE_AUDIT_PROD_ALLOWLIST"):
         AuditSettings(
             supabase_prod_url="https://prod-ref.supabase.co",
@@ -134,12 +135,38 @@ def test_prod_write_credentials_requires_allowlist() -> None:
             _env_file=None,
         ).prod_write_credentials()
 
+    # managed prod: allowlist 불일치
+    with pytest.raises(ValueError, match="SUPABASE_AUDIT_PROD_ALLOWLIST"):
+        AuditSettings(
+            supabase_prod_url="https://prod-ref.supabase.co",
+            supabase_prod_secret_key="prod-key",
+            supabase_audit_prod_allowlist="other-ref",
+            _env_file=None,
+        ).prod_write_credentials()
+
+    # 자체호스팅 prod: allowlist 없음
+    with pytest.raises(ValueError, match="SUPABASE_AUDIT_PROD_ALLOWLIST"):
+        AuditSettings(
+            supabase_prod_url="https://supabase.example.com",
+            supabase_prod_secret_key="prod-key",
+            _env_file=None,
+        ).prod_write_credentials()
+
 
 def test_prod_write_credentials_accepts_approved() -> None:
-    """allowlist에서 승인된 managed prod URL은 자격증명을 반환한다."""
+    """allowlist에서 승인된 managed/자체호스팅 prod URL은 자격증명을 반환한다."""
+    # managed prod: allowlist 일치
     assert AuditSettings(
         supabase_prod_url="https://prod-ref.supabase.co",
         supabase_prod_secret_key="prod-key",
         supabase_audit_prod_allowlist="prod-ref",
         _env_file=None,
     ).prod_write_credentials() == ("https://prod-ref.supabase.co", "prod-key")
+
+    # 자체호스팅 prod: allowlist 일치
+    assert AuditSettings(
+        supabase_prod_url="https://supabase.example.com",
+        supabase_prod_secret_key="prod-key",
+        supabase_audit_prod_allowlist="https://supabase.example.com",
+        _env_file=None,
+    ).prod_write_credentials() == ("https://supabase.example.com", "prod-key")
