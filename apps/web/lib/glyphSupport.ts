@@ -1,8 +1,18 @@
+import type { FontKey, Tier } from "@/types/font";
+
 const MAX_GLYPHS = 50;
 
 export interface GlyphSupportResult {
   char: string;
   supported: boolean;
+}
+
+/** 글자 지원 검사 가능 여부를 판정한다. */
+export function isGlyphCheckSupported(
+  fontKey: FontKey | null,
+  tier: Tier,
+): boolean {
+  return tier === "free" && fontKey !== null && fontKey !== "pretendard";
 }
 
 export function normalizeText(text: string): string[] {

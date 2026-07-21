@@ -3,7 +3,9 @@
 import { useState, useCallback } from "react";
 import type { FontKey } from "@/types/font";
 import { canvasFamilyOf } from "@/lib/fonts";
-import { detectGlyphSupport, aggregateResults } from "@/lib/glyphSupport";
+import { detectGlyphSupport,
+  aggregateResults,
+  isGlyphCheckSupported, } from "@/lib/glyphSupport";
 import type { GlyphSupportResult } from "@/lib/glyphSupport";
 import styles from "./GlyphChecker.module.css";
 
@@ -31,7 +33,7 @@ export function GlyphChecker({ fontKey, fontName, tier }: GlyphCheckerProps) {
 
   // Tier A(웹폰트) 판정: 구글폰트 free tier만 지원
   const isWebfontAvailable =
-    tier === "free" && fontKey !== null && fontKey !== "pretendard";
+    isGlyphCheckSupported(fontKey, tier);
 
   const handleCheck = useCallback(async () => {
     if (!inputText.trim()) {

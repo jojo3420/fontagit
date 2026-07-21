@@ -4,6 +4,7 @@ import {
   comparePixelData,
   isGlyphSupported,
   normalizeText,
+  isGlyphCheckSupported,
 } from "./glyphSupport";
 
 function pixels(alphaValues: number[]): Uint8ClampedArray {
@@ -70,5 +71,23 @@ describe("aggregateResults", () => {
 
   it("결과가 없으면 양쪽 모두 빈 배열이다", () => {
     expect(aggregateResults([])).toEqual({ supported: [], unsupported: [] });
+  });
+});
+
+describe("isGlyphCheckSupported", () => {
+  it("free 티어이고 fontKey가 null이 아니고 pretendard가 아니면 true", () => {
+    expect(isGlyphCheckSupported("jua", "free")).toBe(true);
+  });
+
+  it("free 티어이지만 fontKey가 pretendard이면 false", () => {
+    expect(isGlyphCheckSupported("pretendard", "free")).toBe(false);
+  });
+
+  it("free 티어이지만 fontKey가 null이면 false", () => {
+    expect(isGlyphCheckSupported(null, "free")).toBe(false);
+  });
+
+  it("paid 티어이면 false", () => {
+    expect(isGlyphCheckSupported("jua", "paid")).toBe(false);
   });
 });
