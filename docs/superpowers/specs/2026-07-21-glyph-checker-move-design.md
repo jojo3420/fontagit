@@ -50,13 +50,37 @@
 
 페이지 게이트(섹션 노출 여부)와 `GlyphChecker` 내부 게이트(안내문 vs 검사 폼)가 **동일 조건**을 봐야 한다. 인라인 중복으로 두면 두 조건이 어긋나 "섹션은 보이는데 안내문만 뜨는" 불일치가 발생할 수 있다. 단일 함수로 묶어 오용을 원천 차단한다(misuse-proof).
 
+## 적대적 리뷰 결과 (폰트 로딩 검증)
+
+가장 큰 잠재 구멍: "상세 페이지에서 웹폰트 @font-face가 로드되지 않아 검사가 모든 글자를 미지원으로 오판정"할 위험. 코드로 검증한 결과 **닫혀 있음**.
+
+- 검사 대상 폰트(fontKey 보유 8종: blackHanSans, jua, doHyeon, gowunBatang, nanumMyeongjo, kirangHaerang, gaegu, songMyung)는 `next/font/google`로 로드된다. 이 @font-face는 `app/layout.tsx:38`의 `<html className={fontClassNames}>`를 통해 **전역 적용**되므로 상세 페이지에서도 활성이다.
+- 따라서 검사기는 `SpecimenBox`/`LazyFontPreview`의 지연 stylesheet 주입에 **의존하지 않는다**. SpecimenBox 아래 배치는 순수 UX 결정이며 로딩 의존성이 아니다.
+- `GlyphChecker.handleCheck`의 `document.fonts.load('48px ' + canvasFamilyOf(fontKey))`는 전역 @font-face를 찾아 실제 다운로드를 트리거하므로 `loadedFaces.length > 0`. `display: "swap"` + `preload: false`라도 규칙 자체는 SSG 산출물에 포함되어 있어 최초 클릭에도 정상 로드된다.
+- `FontKey`는 정확히 9종이고 `fontKeyToCanvasFamily`가 전부 커버 → 유효 fontKey에 대해 `canvasFamilyOf`가 null을 반환하지 않는다("검사할 폰트를 찾을 수 없습니다" 발생 안 함).
+
+### 게이트가 정확히 맞는 이유 (미래 유지보수 주의)
+
+게이트 `tier === "free" && fontKey !== null && fontKey !== "pretendard"`는 위 8종과 **정확히 일치**한다.
+- pretendard: fontKey는 있으나 `next/font/google` 목록에 없는 로컬 폰트 → 명시적 제외(기존 "로컬 폰트는 글리프 검사를 지원하지 않습니다" 문구와 일치).
+- fontKey가 없는 Tier A 폰트: `LazyFontPreview` stylesheet로만 로드되며 `fontKey !== null`에서 제외.
+- 유료: `tier === "free"`에서 제외.
+
+주의: 이 게이트를 `resolveFontPreview().stylesheetUrl` 유무로 바꾸면 안 된다. 8종은 stylesheetUrl이 `null`(next/font가 처리)이라 오히려 전부 숨겨진다. 현재 게이트가 정답이며 추가로 조이지 않는다.
+
 ## 테스트 (`app/fonts/[slug]/page.test.tsx` 추가)
 
 - 무료 웹폰트(`nanum-myeongjo`): "글자 지원 검사" 노출.
 - 유료(`sandoll-gothic-neo`): "글자 지원 검사" 없음.
 - 로컬(`pretendard`): "글자 지원 검사" 없음.
 
-기존 테스트 영향 없음: `GlyphChecker` 입력 `aria-label`은 "글자 검사 입력"으로 `SpecimenBox`의 "미리보기 입력"과 겹치지 않는다.
+기존 테스트 영향 없음: `GlyphChecker` 입력 `aria-label`은 "글자 검사 입력"으로 `SpecimenBox`의 "미리보기 입력"과 겹치지 않는다. 초기 렌더는 `useState`만 실행하고 `document.fonts`/canvas는 클릭 시에만 접근하므로 jsdom에서 안전하다. `next/font/google` 임포트는 기존 상세 테스트가 이미 `SpecimenBox` 경유로 처리하고 있어 신규 위험 없음.
+
+실제 글자 검출 로직(canvas 기반)은 jsdom에서 검증 불가 → 단위 테스트는 노출/숨김만 다룬다. 검출 정상 동작은 빌드 후 상세 페이지에서 수동 확인 또는 e2e로 검증(권장 후속, 이번 범위 밖).
+
+## a11y 참고
+
+상세 페이지는 `<h1>`(폰트명) 다음 `GlyphChecker`의 `<h3>글자 지원 검사</h3>`로 h2를 건너뛴다(경미). 기존 컴포넌트를 최소 변경으로 유지하기 위해 h3 유지. 필요 시 후속에서 조정.
 
 ## 영향 범위
 
