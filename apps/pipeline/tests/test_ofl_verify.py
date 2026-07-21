@@ -9,6 +9,7 @@ from fontagit_pipeline.licenses import LicenseFetchError
 from fontagit_pipeline.ofl_verify import (
     apply_update,
     build_report,
+    fetch_dev_verified_keys,
     fetch_ofl_candidates,
     plan_font_update,
 )
@@ -272,3 +273,46 @@ class TestMainFlow:
         assert Path(report_path).exists()
         report_data = json.loads(Path(report_path).read_text(encoding="utf-8"))
         assert report_data["counts"]["confirmed"] == 1
+
+
+class TestFetchDevVerifiedKeys:
+    """dev verified 교차 게이트용 조회."""
+
+    def test_returns_normalized_name_set(self) -> None:
+        """name_en을 정규화한 집합을 반환하고 null 이름은 건너뛴다."""
+        client = MagicMock()
+        client.get.return_value.json.return_value = [
+            {"name_en": "Noto Sans KR"},
+            {"name_en": "Roboto"},
+            {"name_en": None},
+        ]
+        keys = fetch_dev_verified_keys(client, "https://dev.example/rest/v1", {})
+        assert keys == {"notosanskr", "roboto"}
+        called_url = client.get.call_args[0][0]
+        assert "license_type=eq.OFL" in called_url
+        assert "license_status=eq.verified" in called_url
+
+
+class TestBuildReportCrossCheck:
+    """게이트 2(dev verified 교차) 분류."""
+
+    def test_mismatch_goes_to_unconfirmed_with_reason(self) -> None:
+        """공식 OFL이어도 dev verified에 없으면 예외로 분류한다(fail-closed)."""
+        license_map = {"notosanskr": "OFL", "roboto": "OFL"}
+        fonts = [{"name_en": "Noto Sans KR"}, {"name_en": "Roboto"}]
+        report = build_report(
+            fonts, license_map, "2026-07-21T00:00:00+00:00",
+            dev_verified_keys={"notosanskr"},
+        )
+        assert report["counts"]["confirmed"] == 1
+        assert report["confirmed"][0]["name_en"] == "Noto Sans KR"
+        assert report["unconfirmed"][0]["name_en"] == "Roboto"
+        assert report["unconfirmed"][0]["reason"] == "dev-verified-mismatch"
+
+    def test_none_keys_keeps_existing_behavior(self) -> None:
+        """dev_verified_keys=None(기본)은 기존 dev 동작과 동일하다."""
+        license_map = {"notosanskr": "OFL"}
+        fonts = [{"name_en": "Noto Sans KR"}]
+        report = build_report(fonts, license_map, "2026-07-21T00:00:00+00:00")
+        assert report["counts"]["confirmed"] == 1
+        assert "reason" not in report["confirmed"][0]

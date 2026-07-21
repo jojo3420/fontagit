@@ -63,7 +63,10 @@ def plan_font_update(
 
 
 def build_report(
-    candidates: list[dict], license_map: dict[str, str], checked_at: str
+    candidates: list[dict],
+    license_map: dict[str, str],
+    checked_at: str,
+    dev_verified_keys: set[str] | None = None,
 ) -> dict:
     """OFL 후보 폰트들을 분류하여 report를 생성한다.
 
@@ -71,6 +74,7 @@ def build_report(
         candidates: fonts 테이블에서 조회한 폰트 행 리스트
         license_map: resolve_license_type 호출용 맵
         checked_at: 확인 시각 ISO8601 UTC
+        dev_verified_keys: dev의 OFL verified 정규화된 name_en 집합 (기본 None)
 
     Returns:
         {"confirmed": [...], "unconfirmed": [...], "counts": {...}} 형태의 report dict
@@ -80,10 +84,16 @@ def build_report(
 
     for font in candidates:
         proposal = plan_font_update(font, license_map, checked_at)
-        if proposal is not None:
-            confirmed.append({**font, "proposal": proposal})
-        else:
+        if proposal is None:
             unconfirmed.append(font)
+            continue
+        if (
+            dev_verified_keys is not None
+            and normalize_family_dir(font.get("name_en", "")) not in dev_verified_keys
+        ):
+            unconfirmed.append({**font, "reason": "dev-verified-mismatch"})
+            continue
+        confirmed.append({**font, "proposal": proposal})
 
     return {
         "confirmed": confirmed,
@@ -113,6 +123,31 @@ def fetch_ofl_candidates(
     response = client.get(url, headers=headers)
     response.raise_for_status()
     return response.json()
+
+
+def fetch_dev_verified_keys(
+    client: httpx.Client, base: str, headers: dict[str, str]
+) -> set[str]:
+    """dev에서 OFL verified 폰트의 정규화된 name_en 집합을 조회한다.
+
+    prod 승격 시 게이트 2(dev 교차 확인)의 기준 집합으로 쓴다.
+
+    Args:
+        client: httpx.Client 인스턴스
+        base: dev REST API base URL
+        headers: dev API 헤더
+
+    Returns:
+        normalize_family_dir 적용된 name_en 집합
+    """
+    url = f"{base}/fonts?license_type=eq.OFL&license_status=eq.verified&select=name_en"
+    response = client.get(url, headers=headers)
+    response.raise_for_status()
+    return {
+        normalize_family_dir(row["name_en"])
+        for row in response.json()
+        if row.get("name_en")
+    }
 
 
 def apply_update(
