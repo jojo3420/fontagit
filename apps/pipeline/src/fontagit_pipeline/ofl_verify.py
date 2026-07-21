@@ -215,7 +215,7 @@ def main(apply: bool = False, report_path: str | None = None, target: str = "dev
         # Report path 기본값 설정
         if report_path is None:
             if target == "prod":
-                report_path = "output/audit/ofl-verify-report-prod.json"
+                report_path = "output/audit/ofl-verify-prod-report.json"
             else:
                 report_path = "output/audit/ofl-verify-report.json"
 
@@ -236,10 +236,11 @@ def main(apply: bool = False, report_path: str | None = None, target: str = "dev
 
             # Prod 모드: dev에서 verified 폰트 목록 조회 (게이트 2)
             if target == "prod":
-                dev_base = settings.dev_write_credentials()[0].rstrip("/") + "/rest/v1"
+                dev_url, dev_key = settings.dev_write_credentials()
+                dev_base = dev_url.rstrip("/") + "/rest/v1"
                 dev_headers = {
-                    "apikey": settings.dev_write_credentials()[1],
-                    "Authorization": f"Bearer {settings.dev_write_credentials()[1]}",
+                    "apikey": dev_key,
+                    "Authorization": f"Bearer {dev_key}",
                     "Accept-Profile": "fontagit",
                 }
                 logger.info("Dev에서 OFL verified 폰트 목록 조회 중...")
