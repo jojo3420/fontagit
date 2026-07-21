@@ -1,0 +1,68 @@
+<h2>타입 캔버스를 /fonts 어디에 둘까요?</h2>
+<p class="subtitle">"타입 캔버스"는 문구 입력창입니다. 입력하면 <b>모든 섹션의 폰트 타일이 그 문구로 실시간 전환</b>됩니다(기본은 팬그램). 배치 3가지입니다.</p>
+
+<style>
+  .wf { border:1px solid var(--border,#3a3a3a); border-radius:8px; padding:10px; background:rgba(127,127,127,0.06); font-size:11px; line-height:1.4; }
+  .wf .cvs { border:1.5px dashed #e0a94b; border-radius:6px; padding:7px 9px; margin-bottom:7px; color:#e0a94b; }
+  .wf .cvs.big { padding:16px 9px; font-size:16px; }
+  .wf .cvs.slim { padding:5px 9px; font-size:11px; }
+  .wf .sec-h { font-weight:700; margin:7px 0 3px; }
+  .wf .row { display:flex; gap:5px; margin:3px 0; }
+  .wf .tile { flex:1; border:1px solid rgba(127,127,127,0.3); border-radius:5px; padding:7px 4px; text-align:center; }
+  .wf small { color:#9a9a9a; font-size:9px; }
+  .sticky-note { color:#5aa9e6; font-size:9px; }
+</style>
+
+<div class="cards">
+  <div class="card" data-choice="A" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="wf">
+        <div class="cvs slim">미리볼 문구: 아지트▏ <span class="sticky-note">[스크롤해도 고정]</span></div>
+        <div class="sec-h">본문·긴 글</div>
+        <div class="row"><div class="tile">아지트</div><div class="tile">아지트</div><div class="tile">아지트</div></div>
+        <div class="sec-h">제목·강조</div>
+        <div class="row"><div class="tile">아지트</div><div class="tile">아지트</div><div class="tile">아지트</div></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. 상단 슬림 스티키 바 <span style="color:#e0a94b">(추천)</span></h3>
+      <p>얇은 입력창이 <b>스크롤해도 상단에 고정</b>. 어느 섹션을 보든 문구를 바꿀 수 있어 "한 번 입력, 어디서나 미리보기"가 됨. 공간 최소.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="B" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="wf">
+        <div class="cvs big">아지트<br><small style="color:#9a9a9a">[문구 입력___] [초기화]</small></div>
+        <div class="sec-h">본문·긴 글</div>
+        <div class="row"><div class="tile">아지트</div><div class="tile">아지트</div><div class="tile">아지트</div></div>
+        <div class="sec-h">제목·강조</div>
+        <div class="row"><div class="tile">아지트</div><div class="tile">아지트</div><div class="tile">아지트</div></div>
+        <small>스크롤하면 캔버스는 사라지고 타일은 문구 유지</small>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. 히어로 대형 캔버스</h3>
+      <p>페이지 최상단에 <b>큰 미리보기 캔버스</b>. 시원하고 임팩트 있음. 단, 스크롤하면 입력창이 사라져 아래 섹션에서 문구를 바꾸려면 위로 올라가야 함.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="C" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="wf">
+        <div class="cvs slim">아지트▏ <span class="sticky-note">[히어로가 축소되어 고정]</span></div>
+        <div class="sec-h">본문·긴 글</div>
+        <div class="row"><div class="tile">아지트</div><div class="tile">아지트</div><div class="tile">아지트</div></div>
+        <div class="sec-h">제목·강조</div>
+        <div class="row"><div class="tile">아지트</div><div class="tile">아지트</div><div class="tile">아지트</div></div>
+        <small>맨 위에선 큰 히어로 → 스크롤하면 슬림 바로 축소</small>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. 히어로 + 스크롤 시 슬림 스티키로 축소</h3>
+      <p>A와 B의 장점 결합: 맨 위에선 큰 캔버스, 스크롤하면 얇은 고정 바로 줄어듦. UX 최고지만 <b>구현이 가장 복잡</b>(스크롤 연동).</p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:14px">추천 <b>A(슬림 스티키 바)</b>: "한 번 입력, 모든 섹션에서 확인"이라는 핵심 가치를 최소 복잡도로 달성. 기본 문구는 팬그램, 초기화 버튼 제공.</p>

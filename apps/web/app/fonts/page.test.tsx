@@ -9,31 +9,59 @@ vi.mock("next/navigation", () => ({
   })),
 }));
 
-vi.mock("@/lib/db/fonts", () => ({
+vi.mock("@/lib/data", () => ({
   getAllFonts: vi.fn().mockResolvedValue(fonts),
-  getFontBySlug: vi.fn(),
-  getAllSlugs: vi.fn(),
-  resolveFreeAlternatives: vi.fn(),
-}));
-
-vi.mock("@/lib/db/collections", () => ({
-  getAllCollections: vi.fn(),
-  getCollectionBySlug: vi.fn(),
-  getAllCollectionSlugs: vi.fn(),
-}));
-
-vi.mock("@/lib/db/trends", () => ({
-  getTrends: vi.fn(),
 }));
 
 import FontsPage from "@/app/fonts/page";
+import { useSearchParams } from "next/navigation";
 
-describe("폰트 목록 페이지", () => {
-  it("필터 섹션과 개수/정렬 툴바를 렌더한다", async () => {
+describe("폰트 목록 페이지 - 개요/평면 모드 분기", () => {
+  it("파라미터 없으면 개요 모드(섹션별 요약)를 렌더하고 필터는 숨긴다", async () => {
+    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams());
     const ui = await FontsPage();
     render(ui);
+
+    // 개요 모드: 섹션 제목들이 표시된다
+    expect(screen.getByText(/본문-긴 글/i)).toBeInTheDocument();
+    // 손글씨는 h2 또는 p 여러 곳에서 나타날 수 있으므로 getAllByText 사용
+    expect(screen.getAllByText(/손글씨/i).length).toBeGreaterThan(0);
+    
+    // 필터가 렌더되지 않음 (분류 텍스트 미존재)
+    expect(screen.queryByText("분류")).not.toBeInTheDocument();
+  });
+
+  it("?section=all이면 평면 모드(필터+목록)를 렌더한다", async () => {
+    const params = new URLSearchParams();
+    params.set("section", "all");
+    vi.mocked(useSearchParams).mockReturnValue(params);
+    const ui = await FontsPage();
+    render(ui);
+
+    // 평면 모드: 필터 텍스트와 정렬 버튼이 표시된다
     expect(screen.getByText("분류")).toBeInTheDocument();
-    expect(screen.getByText(`폰트 ${fonts.length}종`)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "인기순" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "최신순" })).toBeInTheDocument();
+  });
+
+  it("?section=body면 평면 모드(필터+목록)를 렌더한다", async () => {
+    const params = new URLSearchParams();
+    params.set("section", "body");
+    vi.mocked(useSearchParams).mockReturnValue(params);
+    const ui = await FontsPage();
+    render(ui);
+
+    // 평면 모드: 필터 텍스트가 표시된다
+    expect(screen.getByText("분류")).toBeInTheDocument();
+  });
+
+  it("?category=고딕이면 평면 모드(필터+목록)를 렌더한다", async () => {
+    const params = new URLSearchParams();
+    params.set("category", "고딕");
+    vi.mocked(useSearchParams).mockReturnValue(params);
+    const ui = await FontsPage();
+    render(ui);
+
+    // 평면 모드: 필터 텍스트가 표시된다
+    expect(screen.getByText("분류")).toBeInTheDocument();
   });
 });

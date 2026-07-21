@@ -1,0 +1,74 @@
+<h2>/fonts를 어떻게 조직해 입문자를 안내할까요?</h2>
+<p class="subtitle">지금은 고딕체가 평면 나열이라 입문자가 "언제 뭘 써야 하는지" 막막합니다. 세 가지 조직 방향입니다. 마음에 드는 카드를 클릭해 주세요.</p>
+
+<style>
+  .wf { border:1px solid var(--border,#3a3a3a); border-radius:8px; padding:10px; background:rgba(127,127,127,0.06); font-size:11px; line-height:1.35; }
+  .wf .bar { background:rgba(127,127,127,0.18); border-radius:4px; padding:4px 7px; margin-bottom:6px; font-weight:600; }
+  .wf .guide { color:#e0a94b; font-size:10px; margin:2px 0 6px; }
+  .wf .chips span { display:inline-block; border:1px solid rgba(127,127,127,0.4); border-radius:12px; padding:1px 7px; margin:2px 3px 2px 0; font-size:10px; }
+  .wf .row { display:flex; gap:5px; margin:4px 0; }
+  .wf .tile { flex:1; border:1px solid rgba(127,127,127,0.3); border-radius:5px; padding:8px 4px; text-align:center; font-size:13px; }
+  .wf .sec { margin:8px 0; }
+  .wf .sec-h { font-weight:700; font-size:11px; margin-bottom:3px; }
+  .wf small { color:#9a9a9a; font-size:9px; }
+</style>
+
+<div class="cards">
+  <div class="card" data-choice="A" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="wf">
+        <div class="bar">/fonts — 무엇을 만드시나요?</div>
+        <div class="sec">
+          <div class="sec-h">제목·로고에 임팩트</div>
+          <div class="guide">굵고 개성 있는 서체로 시선을 잡을 때</div>
+          <div class="row"><div class="tile">Aa</div><div class="tile">Aa</div><div class="tile">Aa</div><div class="tile">Aa</div></div>
+        </div>
+        <div class="sec">
+          <div class="sec-h">본문·긴 글 가독성</div>
+          <div class="guide">오래 읽어도 편한 본문용 서체</div>
+          <div class="row"><div class="tile">가</div><div class="tile">가</div><div class="tile">가</div><div class="tile">가</div></div>
+        </div>
+        <small>...브랜드 개성 · 감성 손글씨 섹션 계속</small>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. 용도별 섹션 중심</h3>
+      <p>"제목용 / 본문용 / 브랜딩 / 손글씨"처럼 <b>상황별 섹션</b>으로 나누고, 각 섹션에 한 줄 가이드 + 대표 폰트. 입문자가 "내 상황"으로 바로 진입. 컬렉션은 섹션 안 큐레이션으로 편입.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="B" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="wf">
+        <div class="bar">/fonts — 추천 컬렉션</div>
+        <div class="row"><div class="tile" style="flex:1.4">새벽 명조<br><small>12종</small></div><div class="tile" style="flex:1.4">브랜드 고딕<br><small>18종</small></div><div class="tile" style="flex:1.4">손끝 온기<br><small>9종</small></div></div>
+        <div class="bar" style="margin-top:8px">필터 | 전체 1,240종 [인기][최신]</div>
+        <div class="row"><div class="tile">Aa</div><div class="tile">Aa</div><div class="tile">Aa</div><div class="tile">Aa</div></div>
+        <div class="row"><div class="tile">Aa</div><div class="tile">Aa</div><div class="tile">Aa</div><div class="tile">Aa</div></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. 컬렉션 우선</h3>
+      <p>큐레이션 <b>컬렉션 카드</b>를 크게 앞세우고, 그 아래 기존 필터+전체 목록 유지. 감성 테마 중심. 기존 구조 최소 변경이지만, "용도" 안내는 컬렉션 이름에 의존.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="C" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="wf">
+        <div class="bar">/fonts — 서체 고르기 막막하세요?</div>
+        <div class="guide" style="margin-bottom:6px">용도를 고르면 맞는 서체로 안내해요</div>
+        <div class="chips"><span>제목·로고</span><span>본문</span><span>브랜딩</span><span>손글씨</span><span>귀여운</span></div>
+        <div class="bar" style="margin-top:8px">추천 컬렉션 · 새벽명조 · 브랜드고딕 →</div>
+        <div class="bar">필터 | 전체 1,240종</div>
+        <div class="row"><div class="tile">Aa</div><div class="tile">Aa</div><div class="tile">Aa</div><div class="tile">Aa</div></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. 하이브리드 (가이드 + 컬렉션 + 전체)</h3>
+      <p>상단에 <b>용도 태그 칩</b>(선택 가이드) → 컬렉션 스트립 → 필터+전체 목록. 입문자 안내와 기존 탐색을 모두 담되 화면 요소가 가장 많음.</p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:14px">참고: 데이터는 아직 컬렉션 3개뿐(#28에서 확충 예정). 지금은 <b>구조/틀</b>을 정하고, 데이터가 늘면 자동으로 채워지도록 만드는 게 목표입니다.</p>
