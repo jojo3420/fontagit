@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -645,6 +646,57 @@ class SupabaseAuditStore:
         if not isinstance(data, list) or not all(isinstance(row, Mapping) for row in data):
             raise RuntimeError("이전 예약 관찰 조회 결과가 올바르지 않습니다")
         return data
+
+    def resolve_font_id(
+        self,
+        slug: str,
+        name_ko: str | None,
+        name_en: str | None,
+        source_tier: str,
+    ) -> UUID | None:
+        """dev fonts 테이블에서 prod font_id를 dev font_id로 변환한다.
+
+        복합키 (slug + NFC정규화(name_ko) + source_tier)로 dev fonts를 조회.
+        name_ko가 None이면 name_en으로 보조매칭.
+        정확히 1개 매칭 → UUID 반환. 0개 또는 2개+ → None 반환.
+        """
+        query = self._schema.table("fonts").select("id, name_ko, name_en").eq("slug", slug).eq("source_tier", source_tier)
+
+        data = query.execute().data
+        if not isinstance(data, list):
+            return None
+
+        candidates: list[UUID] = []
+        for row in data:
+            if not isinstance(row, Mapping):
+                continue
+            row_id = row.get("id")
+            row_name_ko = row.get("name_ko")
+            if not isinstance(row_id, str):
+                continue
+
+            # name_ko 비교 (NFC 정규화 적용)
+            if name_ko is not None and isinstance(row_name_ko, str):
+                normalized_target = unicodedata.normalize("NFC", name_ko)
+                normalized_row = unicodedata.normalize("NFC", row_name_ko)
+                if normalized_target == normalized_row:
+                    try:
+                        candidates.append(UUID(row_id))
+                    except ValueError:
+                        continue
+            # name_ko가 None이면 name_en으로 보조매칭
+            elif name_ko is None and name_en is not None:
+                row_name_en = row.get("name_en")
+                if name_en == row_name_en:
+                    try:
+                        candidates.append(UUID(row_id))
+                    except ValueError:
+                        continue
+
+        # 정확히 1개만 반환
+        if len(candidates) == 1:
+            return candidates[0]
+        return None
 
 
 def _report_count(report: Mapping[str, object], key: str) -> int:

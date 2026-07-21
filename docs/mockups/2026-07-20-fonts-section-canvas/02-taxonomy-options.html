@@ -1,0 +1,54 @@
+<h2>어떤 "용도 섹션"으로 나눌까요?</h2>
+<p class="subtitle">핵심 문제는 "고딕이 많은데 구분이 안 됨". 용도로 나누면 같은 고딕도 <b>본문 고딕 / 제목 고딕</b>으로 갈라져 입문자가 고르기 쉬워집니다. 세 가지 분류안입니다.</p>
+
+<style>
+  .tax { list-style:none; padding:0; margin:0; font-size:12px; }
+  .tax li { padding:6px 0; border-bottom:1px solid rgba(127,127,127,0.18); }
+  .tax b { display:block; font-size:12.5px; }
+  .tax small { color:#9a9a9a; font-size:10.5px; }
+  .count { color:#e0a94b; font-weight:700; }
+</style>
+
+<div class="cards">
+  <div class="card" data-choice="1" onclick="toggleSelect(this)">
+    <div class="card-body">
+      <h3>1안. 용도 5분류 <span class="count">(추천)</span></h3>
+      <ul class="tax">
+        <li><b>본문·긴 글</b><small>오래 읽어도 편안한 서체 — 문서, 블로그, 앱 본문</small></li>
+        <li><b>제목·강조</b><small>시선을 잡는 굵고 큰 서체 — 헤드라인, 배너</small></li>
+        <li><b>브랜드·감성</b><small>분위기를 만드는 명조·세리프 — 에디토리얼, 감성 콘텐츠</small></li>
+        <li><b>손글씨·캐주얼</b><small>친근하고 개성 있는 손글씨 — SNS, 인사말</small></li>
+        <li><b>개성·장식</b><small>튀는 디스플레이 — 포스터, 이벤트, 굿즈</small></li>
+      </ul>
+      <p style="margin-top:8px"><small>고딕 더미를 "본문 고딕"과 "제목 고딕"으로 갈라주는 균형점. 대부분의 상황을 커버.</small></p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="2" onclick="toggleSelect(this)">
+    <div class="card-body">
+      <h3>2안. 상황·결과물 중심</h3>
+      <ul class="tax">
+        <li><b>문서·리포트</b><small>보고서, 계약서, 인쇄물</small></li>
+        <li><b>로고·브랜딩</b><small>상호, 브랜드 아이덴티티</small></li>
+        <li><b>SNS·콘텐츠 카드</b><small>인스타, 유튜브 썸네일</small></li>
+        <li><b>감성·에디토리얼</b><small>매거진, 청첩장, 감성 문구</small></li>
+        <li><b>이벤트·포스터</b><small>행사, 프로모션</small></li>
+      </ul>
+      <p style="margin-top:8px"><small>"내가 만드는 결과물"로 진입. 더 직관적이지만 한 폰트가 여러 상황에 걸쳐 분류가 겹칠 수 있음.</small></p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="3" onclick="toggleSelect(this)">
+    <div class="card-body">
+      <h3>3안. 최소 3분류 (초입문)</h3>
+      <ul class="tax">
+        <li><b>읽기용</b><small>본문에 편한 서체</small></li>
+        <li><b>보여주기용</b><small>제목·로고에 강한 서체</small></li>
+        <li><b>분위기용</b><small>감성·손글씨·장식</small></li>
+      </ul>
+      <p style="margin-top:8px"><small>가장 단순해 부담이 적음. 다만 폰트가 늘면 한 버킷이 다시 비대해져 "고딕 더미" 문제가 재발할 위험.</small></p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:14px">추천은 <b>1안(용도 5분류)</b>입니다. 골라주시거나, 섹션 이름·개수를 바꾸고 싶으면 터미널로 말씀해 주세요. (예: "브랜드·감성과 개성·장식을 합쳐 4개로")</p>

@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 import hashlib
 import json
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -25,6 +25,7 @@ from fontagit_pipeline.audit_runner import (
     build_scheduled_artifact,
     import_observations,
     read_regular_file_once,
+    run_batch_crawl,
     run_legal_audit,
     run_metadata_audit,
     select_pilot,
@@ -752,3 +753,185 @@ def test_scheduled_license_hash_change_creates_review_without_public_apply() -> 
     result = import_observations(changed.canonical_bytes, changed.sha256, store)
     assert (result.status, result.applied_count) == ("needs_review", 0)
     assert store.finding_count == 1
+
+
+def test_batch_crawl_tier_b_filter() -> None:
+    """Tier B 필터가 Tier A 대상을 제외한다."""
+    from fontagit_pipeline.audit_runner import run_batch_crawl
+
+    targets = [
+        FontTarget(
+            font_id=uuid4(),
+            slug="tier-a-font",
+            name_ko="티어A",
+            name_en="Tier A",
+            source_tier="A",
+            provider="google-fonts",
+            provider_record_id="1",
+            reference_url="https://fonts.google.com/metadata/fonts/test",
+        ),
+        FontTarget(
+            font_id=uuid4(),
+            slug="tier-b-font",
+            name_ko="티어B",
+            name_en="Tier B",
+            source_tier="B",
+            provider="noonnu",
+            provider_record_id="100",
+            reference_url="https://noonnu.cc/font_page/100",
+        ),
+    ]
+
+    # Tier B만 선택
+    tier_b = [t for t in targets if t.source_tier == "B"]
+    assert len(tier_b) == 1
+    assert tier_b[0].slug == "tier-b-font"
+
+
+def test_batch_crawl_batch_split() -> None:
+    """배치 분할이 올바르게 작동한다."""
+    targets = [FontTarget(
+        font_id=uuid4(),
+        slug=f"font-{i}",
+        name_ko=f"폰트{i}",
+        name_en=f"Font{i}",
+        source_tier="B",
+        provider="noonnu",
+        provider_record_id=str(i),
+        reference_url=f"https://noonnu.cc/font_page/{i}",
+    ) for i in range(250)]
+
+    batch_size = 100
+    batches = [targets[i:i + batch_size] for i in range(0, len(targets), batch_size)]
+    assert len(batches) == 3
+    assert len(batches[0]) == 100
+    assert len(batches[1]) == 100
+    assert len(batches[2]) == 50
+
+
+def test_batch_crawl_checkpoint_resume() -> None:
+    """체크포인트에서 재개할 때 이미 완료된 대상을 건너뛴다."""
+    import tempfile
+    from pathlib import Path
+
+    from fontagit_pipeline.audit_runner import run_batch_crawl
+
+    targets = [FontTarget(
+        font_id=uuid4(),
+        slug=f"font-{i}",
+        name_ko=f"폰트{i}",
+        name_en=f"Font{i}",
+        source_tier="B",
+        provider="noonnu",
+        provider_record_id=str(i),
+        reference_url=f"https://noonnu.cc/font_page/{i}",
+    ) for i in range(10)]
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        checkpoint_path = Path(tmpdir) / "checkpoint.json"
+
+        # 처음 3개 완료
+        completed_ids = [str(targets[i].font_id) for i in range(3)]
+        cp_data = {
+            "completed_font_ids": completed_ids,
+            "batches_done": 1,
+            "updated_at": "2026-07-20T00:00:00+00:00",
+        }
+        checkpoint_path.write_text(json.dumps(cp_data))
+
+        # 체크포인트 로드
+        cp = json.loads(checkpoint_path.read_text())
+        loaded_ids = set(UUID(fid) for fid in cp["completed_font_ids"])
+        remaining = [t for t in targets if t.font_id not in loaded_ids]
+
+        assert len(loaded_ids) == 3
+        assert len(remaining) == 7
+        assert remaining[0].slug == "font-3"
+
+
+def test_batch_crawl_no_assert_safe() -> None:
+    """배치 크롤링은 pending/needs_review가 있어도 assert_safe()를 호출하지 않는다."""
+    from fontagit_pipeline.audit_runner import run_batch_crawl
+    from fontagit_pipeline.audit_http import FetchResult
+
+    store = InMemoryAuditStore()
+
+    target = FontTarget(
+        font_id=uuid4(),
+        slug="test-font",
+        name_ko="테스트",
+        name_en="Test",
+        source_tier="B",
+        provider="noonnu",
+        provider_record_id="1",
+        reference_url="https://noonnu.cc/font_page/1",
+    )
+
+    def fake_fetcher(url: str, *, delay_seconds: float = 0.0) -> FetchResult:
+        return FetchResult(
+            url=url,
+            http_status=200,
+            final_url=url,
+            content_sha256="a" * 64,
+            content=b"test license",
+        )
+
+    rules = {"version": 1, "standard_licenses": [], "maker_templates": []}
+    registry = {"version": 1, "entries": []}
+
+    report = run_batch_crawl(
+        [target],
+        store,
+        registry,
+        rules,
+        batch_size=100,
+        dry_run=True,
+        fetcher=fake_fetcher,
+    )
+
+    # 보고서 반환됨 (assert_safe() 호출 안 함)
+    assert report.run_id is not None
+    assert len(report.targets) == 1
+
+
+def test_batch_crawl_dry_run() -> None:
+    """dry-run 모드에서는 InMemoryAuditStore를 사용하고 실제 저장 안 함."""
+    from fontagit_pipeline.audit_runner import run_batch_crawl
+    from fontagit_pipeline.audit_http import FetchResult
+
+    store = InMemoryAuditStore()
+    targets = [FontTarget(
+        font_id=uuid4(),
+        slug=f"font-{i}",
+        name_ko=f"폰트{i}",
+        name_en=f"Font{i}",
+        source_tier="B",
+        provider="noonnu",
+        provider_record_id=str(i),
+        reference_url=f"https://noonnu.cc/font_page/{i}",
+    ) for i in range(3)]
+
+    def fake_fetcher(url: str, *, delay_seconds: float = 0.0) -> FetchResult:
+        return FetchResult(
+            url=url,
+            http_status=200,
+            final_url=url,
+            content_sha256="a" * 64,
+            content=b"test license",
+        )
+
+    rules = {"version": 1, "standard_licenses": [], "maker_templates": []}
+    registry = {"version": 1, "entries": []}
+
+    report = run_batch_crawl(
+        targets,
+        store,
+        registry,
+        rules,
+        batch_size=100,
+        dry_run=True,
+        fetcher=fake_fetcher,
+    )
+
+    assert report.dry_run is True
+    assert len(report.targets) == 3

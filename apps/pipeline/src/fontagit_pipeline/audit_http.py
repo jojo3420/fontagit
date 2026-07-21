@@ -5,6 +5,7 @@ import ipaddress
 import socket
 import subprocess
 import tempfile
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -309,6 +310,7 @@ def fetch_public_url(
     max_bytes: int | None = None,
     max_body_bytes: int | None = None,
     max_redirects: int = _MAX_REDIRECTS,
+    delay_seconds: float = 0.0,
 ) -> FetchResult:
     """공개 DNS 결과만 고정해 GET하고 리다이렉트마다 다시 검사한다."""
     if max_bytes is not None and max_body_bytes is not None:
@@ -322,6 +324,11 @@ def fetch_public_url(
         or max_redirects > _MAX_REDIRECTS
     ):
         raise ValueError("link observation limits are outside the permitted range")
+    if delay_seconds < 0:
+        raise ValueError("delay_seconds must be non-negative")
+
+    if delay_seconds > 0:
+        time.sleep(delay_seconds)
 
     current_url = url
     redirect_count = 0

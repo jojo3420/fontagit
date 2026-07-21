@@ -3,6 +3,7 @@
 import json
 import socket
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -211,3 +212,61 @@ def test_broken_requires_two_independent_observations_24_hours_apart() -> None:
 
     assert classify_download(observations[:1]) == "needs_review"
     assert classify_download(observations) == "broken"
+
+
+def test_fetch_public_url_applies_delay_when_specified(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """delay_seconds > 0일 때 time.sleep이 정확히 1회 호출된다."""
+    sleep_calls: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+
+    def fake_getaddrinfo(host: str, port: int, **_: object) -> list[tuple[object, ...]]:
+        return _dns_result("93.184.216.34")
+
+    def fake_popen(argv: list[str], **_: object) -> _StreamingCurl:
+        header_path = Path(argv[argv.index("--dump-header") + 1])
+        header_path.write_bytes(b"HTTP/1.1 200 OK\r\n\r\n")
+        return _StreamingCurl([b"test"])
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    monkeypatch.setattr("time.sleep", fake_sleep)
+
+    fetch_public_url("https://example.com/test", delay_seconds=1.5)
+
+    assert sleep_calls == [1.5]
+
+
+def test_fetch_public_url_no_delay_by_default(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """delay_seconds=0.0(기본값)일 때 time.sleep이 호출되지 않는다."""
+    sleep_calls: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+
+    def fake_getaddrinfo(host: str, port: int, **_: object) -> list[tuple[object, ...]]:
+        return _dns_result("93.184.216.34")
+
+    def fake_popen(argv: list[str], **_: object) -> _StreamingCurl:
+        header_path = Path(argv[argv.index("--dump-header") + 1])
+        header_path.write_bytes(b"HTTP/1.1 200 OK\r\n\r\n")
+        return _StreamingCurl([b"test"])
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    monkeypatch.setattr("time.sleep", fake_sleep)
+
+    fetch_public_url("https://example.com/test")
+
+    assert sleep_calls == []
+
+
+def test_fetch_public_url_negative_delay_raises_error() -> None:
+    """음수 delay_seconds는 ValueError를 발생시킨다."""
+    with pytest.raises(ValueError, match="non-negative"):
+        fetch_public_url("https://example.com/test", delay_seconds=-0.5)

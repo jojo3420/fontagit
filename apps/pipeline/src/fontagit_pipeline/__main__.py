@@ -463,11 +463,12 @@ def main_audit_bootstrap(args: argparse.Namespace) -> int:
 
 
 def main_audit_run(args: argparse.Namespace) -> int:
-    """법적·메타데이터 감사 파일럿과 보고서를 만든다."""
+    """법적-메타데이터 감사 파일럿과 보고서를 만든다."""
     from fontagit_pipeline.audit_license import _load_rules
     from fontagit_pipeline.audit_policy import load_source_registry
     from fontagit_pipeline.audit_runner import (
         AuditGateError,
+        _resolve_dev_font_ids,
         load_bootstrap_targets,
         run_legal_audit,
         run_metadata_audit,
@@ -498,6 +499,7 @@ def main_audit_run(args: argparse.Namespace) -> int:
             dev_store = SupabaseAuditStore.from_dev_credentials(
                 dev_url, dev_secret_key
             )
+            selected = _resolve_dev_font_ids(selected, dev_store)
             if args.stage == "metadata":
                 report = run_metadata_audit(selected, dev_store, registry)
             else:
@@ -641,6 +643,84 @@ def main_audit_manifest_apply(args: argparse.Namespace) -> int:
         return 3
 
 
+def main_audit_crawl_all(args: argparse.Namespace) -> int:
+    """전수 배치 크롤링을 실행하고 체크포인트로 재개를 지원한다."""
+    from fontagit_pipeline.audit_license import _load_rules
+    from fontagit_pipeline.audit_policy import load_source_registry
+    from fontagit_pipeline.audit_runner import (
+        AuditGateError,
+        _resolve_dev_font_ids,
+        load_bootstrap_targets,
+        run_batch_crawl,
+        write_audit_artifacts,
+    )
+    from fontagit_pipeline.audit_store import InMemoryAuditStore, SupabaseAuditStore
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    try:
+        targets = load_bootstrap_targets(args.bootstrap)
+
+        # Tier B 필터: source_tier == "B"만 선택
+        tier_b_targets = [t for t in targets if t.source_tier == "B"]
+        if not tier_b_targets:
+            logger.warning("Tier B 대상 없음")
+            return 1
+
+        logger.info("전수 크롤링 시작: Tier B %d종, batch_size=%d", len(tier_b_targets), args.batch_size)
+
+        registry = load_source_registry()
+        checkpoint_path = Path(args.checkpoint) if args.checkpoint else None
+
+        if args.dry_run:
+            dry_store = InMemoryAuditStore()
+            rules = _load_rules(Path(__file__).with_name("data") / "license_rules.json")
+            report = run_batch_crawl(
+                tier_b_targets,
+                dry_store,
+                registry,
+                rules,
+                batch_size=args.batch_size,
+                checkpoint_path=checkpoint_path,
+                dry_run=True,
+            )
+        else:
+            from fontagit_pipeline.config import load_audit_settings
+
+            settings = load_audit_settings()
+            dev_url, dev_secret_key = settings.dev_write_credentials()
+            dev_store = SupabaseAuditStore.from_dev_credentials(
+                dev_url, dev_secret_key
+            )
+            tier_b_targets = _resolve_dev_font_ids(tier_b_targets, dev_store)
+            rules = _load_rules(Path(__file__).with_name("data") / "license_rules.json")
+            report = run_batch_crawl(
+                tier_b_targets,
+                dev_store,
+                registry,
+                rules,
+                batch_size=args.batch_size,
+                checkpoint_path=checkpoint_path,
+                dry_run=False,
+            )
+
+        # 최종 결과 저장
+        digest = write_audit_artifacts(report, args.out)
+        logger.info(
+            "전수 크롤링 완료: verified=%d, needs_review=%d, pending=%d, broken=%d, "
+            "errors=%d, sha256=%s",
+            report.verified_count,
+            report.needs_review_count,
+            report.pending_count,
+            report.broken_count,
+            len(report.errors),
+            digest,
+        )
+        return 0
+    except (AuditGateError, OSError, ValueError) as exc:
+        logger.error("전수 크롤링 중단: %s", exc)
+        return 3
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="FontAgit 파이프라인",
@@ -753,7 +833,7 @@ if __name__ == "__main__":
 
     bootstrap_parser = subparsers.add_parser(
         "font-audit-bootstrap",
-        help="고정 prod·Tier A·Tier B snapshot으로 안정 출처키 manifest 생성",
+        help="고정 prod-Tier A-Tier B snapshot으로 안정 출처키 manifest 생성",
     )
     bootstrap_parser.add_argument(
         "--prod-snapshot", type=Path, required=True, help="prod 공개 기준선 JSON 경로"
@@ -765,7 +845,7 @@ if __name__ == "__main__":
 
     audit_run_parser = subparsers.add_parser(
         "font-audit-run",
-        help="50종 법적·메타데이터 감사 실행 (기본 dev 저장, --dry-run은 파일만 생성)",
+        help="50종 법적-메타데이터 감사 실행 (기본 dev 저장, --dry-run은 파일만 생성)",
     )
     audit_run_parser.add_argument("--stage", choices=["legal", "metadata"], required=True)
     audit_run_parser.add_argument("--limit", type=int, default=50)
@@ -780,7 +860,7 @@ if __name__ == "__main__":
         help="검증된 안정 출처키 bootstrap artifact 경로",
     )
     audit_run_parser.add_argument(
-        "--dry-run", action="store_true", help="DB 자격증명·DB 쓰기 없이 파일 산출물만 생성"
+        "--dry-run", action="store_true", help="DB 자격증명-DB 쓰기 없이 파일 산출물만 생성"
     )
     audit_run_parser.set_defaults(func=main_audit_run)
 
@@ -814,6 +894,28 @@ if __name__ == "__main__":
     manifest_apply_parser.add_argument("--approved-hash")
     manifest_apply_parser.add_argument("--approval-id")
     manifest_apply_parser.set_defaults(func=main_audit_manifest_apply)
+
+    crawl_all_parser = subparsers.add_parser(
+        "font-audit-crawl-all",
+        help="전수 Tier B 폰트 배치 크롤링 (체크포인트 재개 지원)",
+    )
+    crawl_all_parser.add_argument("--stage", choices=["legal"], default="legal", help="감사 단계 (기본값 legal)")
+    crawl_all_parser.add_argument("--batch-size", type=int, default=100, help="배치 크기 (기본값 100)")
+    crawl_all_parser.add_argument("--out", type=Path, required=True, help="결과 저장 경로")
+    crawl_all_parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        default=Path("output") / "audit" / "crawl-all-progress.json",
+        help="체크포인트 파일 경로 (기본값 output/audit/crawl-all-progress.json)",
+    )
+    crawl_all_parser.add_argument(
+        "--bootstrap",
+        type=Path,
+        default=Path("output") / "audit" / "bootstrap-manifest.json",
+        help="bootstrap artifact 경로",
+    )
+    crawl_all_parser.add_argument("--dry-run", action="store_true", help="dry-run 모드")
+    crawl_all_parser.set_defaults(func=main_audit_crawl_all)
 
     args = parser.parse_args()
 

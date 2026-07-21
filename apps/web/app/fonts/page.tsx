@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getAllFonts } from "@/lib/data";
-import { ClientFontFilters } from "@/components/ClientFontFilters";
-import { ClientFontsList } from "@/components/ClientFontsList";
+import { FontsViewWrapper } from "@/components/FontsViewWrapper";
 import styles from "./page.module.css";
 
 export const metadata: Metadata = {
@@ -16,10 +15,7 @@ export default async function FontsPage() {
   return (
     <main className={styles.main}>
       <Suspense fallback={<div />}>
-        <ClientFontFilters fonts={fonts} />
-      </Suspense>
-      <Suspense fallback={<div />}>
-        <ClientFontsList fonts={fonts} />
+        <FontsViewWrapper fonts={fonts} />
       </Suspense>
     </main>
   );
