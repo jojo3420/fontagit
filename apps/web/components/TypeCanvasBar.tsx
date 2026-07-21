@@ -36,7 +36,7 @@ export function TypeCanvasBar({
         className={styles.input}
         aria-label="폰트 견본 텍스트 입력"
       />
-      <button onClick={handleReset} className={styles.resetButton}>
+      <button type="button" onClick={handleReset} className={styles.resetButton}>
         초기화
       </button>
     </div>

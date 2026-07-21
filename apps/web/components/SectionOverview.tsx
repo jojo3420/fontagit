@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useMemo } from "react";
 import { SECTIONS, groupFontsBySection, orderByCuration } from "@/lib/sections";
 import type { Font } from "@/types/font";
 import { SECTION_CURATION } from "@/data/sectionCuration";
@@ -24,7 +25,14 @@ export function SectionOverview({
   topN?: number;
   previewText?: string;
 }) {
-  const groups = groupFontsBySection(fonts);
+  const sectionFonts = useMemo(() => {
+    const groups = groupFontsBySection(fonts);
+    return SECTIONS.map((section) => {
+      const sectionFontList = groups[section.slug];
+      const all = orderByCuration(sectionFontList, SECTION_CURATION[section.slug]);
+      return { section, all };
+    }).filter(({ all }) => all.length > 0);
+  }, [fonts]);
 
   return (
     <div className={styles.overview}>
@@ -33,20 +41,15 @@ export function SectionOverview({
           전체 폰트 보기
         </Link>
       </div>
-      {SECTIONS.map((section) => {
-        const fonts = groups[section.slug];
-        const all = orderByCuration(fonts, SECTION_CURATION[section.slug]);
-        if (all.length === 0) return null;
-        return (
-          <FontSection
-            key={section.slug}
-            section={section}
-            fonts={all.slice(0, topN)}
-            totalCount={all.length}
-            previewText={previewText}
-          />
-        );
-      })}
+      {sectionFonts.map(({ section, all }) => (
+        <FontSection
+          key={section.slug}
+          section={section}
+          fonts={all.slice(0, topN)}
+          totalCount={all.length}
+          previewText={previewText}
+        />
+      ))}
     </div>
   );
 }

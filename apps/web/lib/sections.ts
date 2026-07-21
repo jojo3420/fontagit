@@ -81,7 +81,7 @@ export function groupFontsBySection(fonts: Font[]): Record<SectionSlug, Font[]> 
 }
 
 /** 추천 slug를 앞으로 정렬(안정 정렬). 추천에 없는 폰트는 원래 순서 유지. */
-export function orderByCuration(fonts: Font[], recommendedSlugs: string[]): Font[] {
+export function orderByCuration(fonts: Font[], recommendedSlugs: string[] = []): Font[] {
   const rank = new Map(recommendedSlugs.map((s, i) => [s, i]));
   return [...fonts].sort((a, b) => {
     const ra = rank.has(a.slug) ? rank.get(a.slug)! : Number.MAX_SAFE_INTEGER;
