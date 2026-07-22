@@ -267,6 +267,37 @@ def test_findings_are_immutable_per_run_and_urls_use_safe_priority() -> None:
     assert mismatch_report.finding_ids == []
 
 
+def test_metadata_evidence_includes_noonnu_tags(monkeypatch: pytest.MonkeyPatch) -> None:
+    """눈누 메타데이터 증거에 추출된 태그가 포함되어야 한다."""
+    fixture = Path(__file__).parent / "fixtures" / "audit" / "noonnu-white-tailed-eagle.html"
+    reference_html = fixture.read_bytes()
+
+    def noonnu_fetch(url: str) -> FetchResult:
+        content = reference_html if url.endswith("/613") else b"<html><body>cta</body></html>"
+        return FetchResult(200, url, content, "1" * 64, 0)
+
+    def font_fetch(url: str, max_bytes: int = 32 * 1024 * 1024) -> FetchResult:
+        return _fetched(url)
+
+    monkeypatch.setattr("fontagit_pipeline.audit_runner.sys.platform", "linux")
+
+    noonnu_target = replace(
+        _targets()[0], name_ko="흰꼬리수리", foundry=None, candidates=()
+    )
+    store = InMemoryAuditStore()
+    report = run_metadata_audit(
+        [noonnu_target],
+        store,
+        registry={"version": 1, "entries": []},
+        fetcher=noonnu_fetch,
+        font_fetcher=font_fetch,
+    )
+
+    # 스냅샷에서 extracted["tags"]를 검증한다.
+    _, snapshot = store.snapshot_draft(report.snapshot_ids[0])
+    assert snapshot.extracted.get("tags") == ["삐뚤빼뚤"]
+
+
 def test_dry_run_writes_artifacts_without_calling_store(tmp_path: Path) -> None:
     """dry-run은 자격증명이나 DB 저장 없이 원자적 산출물과 SHA만 남긴다."""
     store = InMemoryAuditStore(fail_on_write=True)
