@@ -246,3 +246,163 @@ def test_approve_finding_raises_on_zero_affected_rows() -> None:
         assert False, "should raise ValueError"
     except ValueError:
         pass
+
+
+def test_get_run_returns_correct_audit_run() -> None:
+    """get_run(run_id)는 font_audit_runs 레코드를 dict로 반환."""
+    run_id = UUID("00000000-0000-0000-0000-000000000907")
+
+    run_data = {
+        "id": str(run_id),
+        "stage": "legal",
+        "target_environment": "dev",
+        "target_count": 5,
+        "success_count": 5,
+        "verified_count": 2,
+        "review_count": 3,
+        "broken_count": 0,
+        "parser_version": "audit-v1",
+        "baseline_sha256": "a" * 64,
+        "manifest_sha256": None,
+        "dry_run": False,
+        "status": "completed",
+        "started_at": "2026-07-22T10:00:00+00:00",
+        "finished_at": "2026-07-22T11:00:00+00:00",
+    }
+
+    select_response = _query([run_data])
+
+    schema = MagicMock()
+    schema.table.return_value = select_response
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+    result = store.get_run(run_id)
+
+    assert result == run_data
+    assert result["id"] == str(run_id)
+    assert result["stage"] == "legal"
+    assert result["status"] == "completed"
+
+
+def test_get_approved_findings_returns_findings_list() -> None:
+    """get_approved_findings(run_id)는 approved 상태 findings 리스트 반환."""
+    run_id = UUID("00000000-0000-0000-0000-000000000908")
+    font_id = UUID("00000000-0000-0000-0000-000000000809")
+    evidence_id = UUID("00000000-0000-0000-0000-000000000810")
+
+    findings_data = [
+        {
+            "id": "00000000-0000-0000-0000-000000000911",
+            "run_id": str(run_id),
+            "font_id": str(font_id),
+            "field_name": "download_url",
+            "before_value": None,
+            "proposed_value": "https://example.com/font.woff2",
+            "evidence_id": str(evidence_id),
+            "confidence": "official",
+            "auto_applicable": False,
+            "review_reason": "사람 검수 완료",
+            "status": "approved",
+            "reviewed_by": "reviewer",
+            "reviewed_at": "2026-07-22T10:30:00+00:00",
+        },
+        {
+            "id": "00000000-0000-0000-0000-000000000912",
+            "run_id": str(run_id),
+            "font_id": str(font_id),
+            "field_name": "license_status",
+            "before_value": "pending",
+            "proposed_value": "verified",
+            "evidence_id": str(evidence_id),
+            "confidence": "official",
+            "auto_applicable": False,
+            "review_reason": "OFL 라이선스 확인",
+            "status": "approved",
+            "reviewed_by": "reviewer",
+            "reviewed_at": "2026-07-22T10:35:00+00:00",
+        },
+    ]
+
+    select_response = _query(findings_data)
+
+    schema = MagicMock()
+    schema.table.return_value = select_response
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+    results = store.get_approved_findings(run_id)
+
+    assert len(results) == 2
+    assert results[0]["status"] == "approved"
+    assert results[0]["field_name"] == "download_url"
+    assert results[1]["field_name"] == "license_status"
+    assert results[1]["reviewed_by"] == "reviewer"
+
+
+def test_get_current_fonts_with_snapshots_returns_fonts_with_evidence() -> None:
+    """get_current_fonts_with_snapshots(run_id)는 evidence_snapshots가 포함된 fonts 리스트 반환."""
+    run_id = UUID("00000000-0000-0000-0000-000000000909")
+    font_id = UUID("00000000-0000-0000-0000-000000000810")
+    snapshot_id = UUID("00000000-0000-0000-0000-000000000813")
+
+    font_data = {
+        "id": str(font_id),
+        "source_key": {"provider": "noonnu", "provider_record_id": "613"},
+        "slug": "흰꼬리수리",
+        "name_ko": "흰꼬리수리",
+        "name_en": None,
+        "foundry": None,
+        "official_url": "https://instagram.com/wrong-old-link",
+        "status": "published",
+        "updated_at": "2026-07-22T09:00:00+00:00",
+        "download_url": None,
+        "download_status": "pending",
+        "download_evidence_id": None,
+        "license_status": "pending",
+        "license_verified": True,
+    }
+
+    snapshot_data = {
+        "id": str(snapshot_id),
+        "run_id": str(run_id),
+        "font_id": str(font_id),
+        "provider": "noonnu",
+        "provider_record_id": "613",
+        "source_kind": "official",
+        "document_kind": "download",
+        "request_url": "https://clova.ai/handwriting/list.html",
+        "final_url": "https://clova.ai/handwriting/list.html",
+        "http_status": 200,
+        "raw_text": "내부 원문은 정책 승인 전 내보내지 않는다.",
+        "raw_sha256": "b" * 64,
+        "normalized_sha256": "c" * 64,
+        "extracted": {"download_url": "https://clova.ai/font.zip"},
+        "evidence_locations": {"download_url": "a.download"},
+        "extraction_rule_id": "official-download-v1",
+        "parser_version": "audit-v1",
+        "collected_at": "2026-07-22T08:00:00+00:00",
+    }
+
+    fonts_response = _query([font_data])
+    snapshots_response = _query([snapshot_data])
+
+    schema = MagicMock()
+    schema.table.side_effect = [fonts_response, snapshots_response]
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+    results = store.get_current_fonts_with_snapshots(run_id)
+
+    assert len(results) == 1
+    font = results[0]
+    assert font["id"] == str(font_id)
+    assert font["slug"] == "흰꼬리수리"
+    assert font["source_key"] == {"provider": "noonnu", "provider_record_id": "613"}
+    assert "evidence_snapshots" in font
+    assert len(font["evidence_snapshots"]) == 1
+    assert font["evidence_snapshots"][0]["id"] == str(snapshot_id)
+    assert font["evidence_snapshots"][0]["document_kind"] == "download"

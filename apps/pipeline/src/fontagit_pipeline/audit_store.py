@@ -760,6 +760,98 @@ class SupabaseAuditStore:
         return None
 
 
+
+    def get_run(self, run_id: UUID) -> dict[str, object]:
+        """font_audit_runs 테이블에서 run_id로 레코드 조회.
+        
+        Args:
+            run_id: 조회할 감사 run의 UUID
+            
+        Returns:
+            audit run 레코드를 포함한 dict
+            
+        Raises:
+            ValueError: run을 찾을 수 없는 경우
+        """
+        result = (
+            self._schema.table("font_audit_runs")
+            .select("*")
+            .eq("id", str(run_id))
+            .execute()
+        )
+        data = result.data
+        if not isinstance(data, list) or len(data) == 0:
+            raise ValueError(f"Run {run_id} not found")
+        return data[0]
+
+    def get_approved_findings(self, run_id: UUID) -> list[dict[str, object]]:
+        """font_audit_findings 테이블에서 approved 상태 findings 조회.
+        
+        Args:
+            run_id: 조회할 감사 run의 UUID
+            
+        Returns:
+            approved 상태의 finding 레코드 리스트
+        """
+        result = (
+            self._schema.table("font_audit_findings")
+            .select("*")
+            .eq("run_id", str(run_id))
+            .eq("status", "approved")
+            .execute()
+        )
+        data = result.data
+        if not isinstance(data, list):
+            raise RuntimeError("approved findings 조회 결과가 올바르지 않습니다")
+        return data
+
+    def get_current_fonts_with_snapshots(
+        self, run_id: UUID
+    ) -> list[dict[str, object]]:
+        """fonts와 font_source_snapshots를 조회하여 evidence_snapshots 추가.
+        
+        Args:
+            run_id: 조회할 감사 run의 UUID
+            
+        Returns:
+            evidence_snapshots가 포함된 font 레코드 리스트
+        """
+        # fonts 조회
+        fonts_result = self._schema.table("fonts").select("*").execute()
+        fonts_data = fonts_result.data
+        if not isinstance(fonts_data, list):
+            raise RuntimeError("fonts 조회 결과가 올바르지 않습니다")
+
+        # snapshots 조회
+        snapshots_result = (
+            self._schema.table("font_source_snapshots")
+            .select("*")
+            .eq("run_id", str(run_id))
+            .execute()
+        )
+        snapshots_data = snapshots_result.data
+        if not isinstance(snapshots_data, list):
+            raise RuntimeError(
+                "font_source_snapshots 조회 결과가 올바르지 않습니다"
+            )
+
+        # fonts에 evidence_snapshots 추가
+        fonts_by_id: dict[str, dict[str, object]] = {}
+        for font in fonts_data:
+            font_id = font.get("id")
+            if font_id is not None:
+                font["evidence_snapshots"] = []
+                fonts_by_id[font_id] = font
+
+        # snapshots를 fonts에 매핑
+        for snapshot in snapshots_data:
+            font_id = snapshot.get("font_id")
+            if font_id in fonts_by_id:
+                fonts_by_id[font_id]["evidence_snapshots"].append(snapshot)
+
+        return list(fonts_by_id.values())
+
+
 def _report_count(report: Mapping[str, object], key: str) -> int:
     """DB 집계에는 JSON 객체가 아닌 정수만 허용한다."""
     value = report.get(key)
