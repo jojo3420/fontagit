@@ -363,7 +363,7 @@ def fetch_public_url(
 
             # 재시도 전 대기: Retry-After 헤더 또는 지수 backoff
             if retry_after is not None:
-                backoff_delay = float(retry_after)
+                backoff_delay = min(max(float(retry_after), 0.0), _RETRY_MAX_BACKOFF)
             else:
                 backoff_delay = min(_RETRY_BASE * (2 ** attempt), _RETRY_MAX_BACKOFF)
 

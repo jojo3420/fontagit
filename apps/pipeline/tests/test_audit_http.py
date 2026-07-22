@@ -461,3 +461,71 @@ def test_fetch_public_url_backoff_capped_at_30_seconds(
     # backoff: 1.0, 2.0, 4.0 (not capped)
     assert len(sleep_calls) == 3
     assert sleep_calls == [1.0, 2.0, 4.0]
+
+
+def test_fetch_public_url_retry_after_capped_at_30_seconds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Retry-After 헤더 값이 30초로 상한 클램프된다."""
+    fetch_count = [0]
+    sleep_calls: list[float] = []
+
+    def fake_getaddrinfo(host: str, port: int, **_: object) -> list[tuple[object, ...]]:
+        return _dns_result("93.184.216.34")
+
+    def fake_popen(argv: list[str], **_: object) -> _StreamingCurl:
+        fetch_count[0] += 1
+        header_path = Path(argv[argv.index("--dump-header") + 1])
+        if fetch_count[0] == 1:
+            header_path.write_bytes(b"HTTP/1.1 429 Too Many Requests\r\nRetry-After: 999999\r\n\r\n")
+        else:
+            header_path.write_bytes(b"HTTP/1.1 200 OK\r\n\r\n")
+        return _StreamingCurl([b"test"])
+
+    def fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    monkeypatch.setattr("time.sleep", fake_sleep)
+
+    result = fetch_public_url("https://example.com/test")
+
+    assert result.status == 200
+    assert fetch_count[0] == 2  # 1 initial + 1 retry
+    assert len(sleep_calls) == 1
+    assert sleep_calls[0] == 30.0  # capped at 30 seconds
+
+
+def test_fetch_public_url_retry_after_negative_clamped_to_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """음수 Retry-After 값이 0으로 클램프된다."""
+    fetch_count = [0]
+    sleep_calls: list[float] = []
+
+    def fake_getaddrinfo(host: str, port: int, **_: object) -> list[tuple[object, ...]]:
+        return _dns_result("93.184.216.34")
+
+    def fake_popen(argv: list[str], **_: object) -> _StreamingCurl:
+        fetch_count[0] += 1
+        header_path = Path(argv[argv.index("--dump-header") + 1])
+        if fetch_count[0] == 1:
+            header_path.write_bytes(b"HTTP/1.1 429 Too Many Requests\r\nRetry-After: -5\r\n\r\n")
+        else:
+            header_path.write_bytes(b"HTTP/1.1 200 OK\r\n\r\n")
+        return _StreamingCurl([b"test"])
+
+    def fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    monkeypatch.setattr("time.sleep", fake_sleep)
+
+    result = fetch_public_url("https://example.com/test")
+
+    assert result.status == 200
+    assert fetch_count[0] == 2  # 1 initial + 1 retry
+    assert len(sleep_calls) == 1
+    assert sleep_calls[0] == 0.0  # clamped to 0
