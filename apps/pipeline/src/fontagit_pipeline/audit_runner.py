@@ -436,6 +436,7 @@ def run_metadata_audit(
     finding_ids: list[UUID] = []
     verified = 0
     needs_review = 0
+    broken = 0
     errors: list[str] = []
     for target in targets:
         if dry_run:
@@ -535,7 +536,7 @@ def run_metadata_audit(
             else:
                 needs_review += 1
         except (FetchError, OSError, UnicodeError, ValueError) as exc:
-            needs_review += 1
+            broken += 1
             errors.append(f"{target.slug}: {type(exc).__name__}")
             finding = FindingDraft(
                 font_id=target.font_id,
@@ -556,6 +557,7 @@ def run_metadata_audit(
         finding_ids=finding_ids,
         verified_count=verified,
         needs_review_count=needs_review,
+        broken_count=broken,
         errors=errors,
     )
     if not dry_run:

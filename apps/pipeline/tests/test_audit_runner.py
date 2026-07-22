@@ -8,6 +8,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 import hashlib
 import json
+import sys
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -1241,4 +1242,120 @@ def test_assert_safe_script_stage_high_needs_review() -> None:
         pending_count=0,
     )
     with pytest.raises(AuditGateError, match="pilot review ratio exceeds 10%"):
+        report.assert_safe()
+
+
+def test_run_metadata_audit_broken_count_on_fetch_error() -> None:
+    """run_metadata_audit sets broken_count when FetchError occurs."""
+    from fontagit_pipeline.audit_http import FetchError
+    
+    store = InMemoryAuditStore()
+    targets = [
+        FontTarget(
+            font_id=uuid4(),
+            slug="font-fetch-fail",
+            name_ko="폰트페치실패",
+            name_en="FontFetchFail",
+            source_tier="B",
+            provider="google-fonts",
+            provider_record_id="test-id",
+            reference_url="https://fonts.google.com/specimen/Roboto",
+        ),
+        FontTarget(
+            font_id=uuid4(),
+            slug="font-fetch-success",
+            name_ko="폰트페치성공",
+            name_en="FontFetchSuccess",
+            source_tier="B",
+            provider="google-fonts",
+            provider_record_id="test-id-2",
+            reference_url="https://fonts.google.com/specimen/Arial",
+        ),
+    ]
+    
+    def failing_fetcher(url: str, *, delay_seconds: float = 0.0) -> FetchResult:
+        """Fetcher that throws FetchError for first target, succeeds for second."""
+        if "Roboto" in url:
+            raise FetchError(f"Connection failed for {url}")
+        return FetchResult(
+            url=url,
+            http_status=200,
+            final_url=url,
+            content_sha256="a" * 64,
+            content=b"test metadata",
+        )
+    
+    registry = {"version": 1, "entries": []}
+    
+    # Skip this test on non-Linux (metadata audit requires Linux)
+    if not sys.platform.startswith("linux"):
+        pytest.skip("metadata audit requires Linux")
+    
+    report = run_metadata_audit(
+        targets,
+        store,
+        registry,
+        dry_run=True,
+        fetcher=failing_fetcher,
+    )
+    
+    # Verify broken_count is > 0 (first target failed to fetch)
+    assert report.broken_count > 0, f"Expected broken_count > 0, got {report.broken_count}"
+    # Verify we still have verified/needs_review from second target
+    assert report.verified_count + report.needs_review_count > 0
+
+
+def test_metadata_audit_gate_rejects_high_broken_ratio() -> None:
+    """Metadata audit gate rejects when broken ratio exceeds 10%."""
+    from fontagit_pipeline.audit_http import FetchError
+    
+    store = InMemoryAuditStore()
+    # Create 20 targets, will fail 3 (15% broken)
+    targets = [
+        FontTarget(
+            font_id=uuid4(),
+            slug=f"font-{i}",
+            name_ko=f"폰트{i}",
+            name_en=f"Font{i}",
+            source_tier="B",
+            provider="google-fonts",
+            provider_record_id=str(i),
+            reference_url=f"https://fonts.google.com/specimen/Font{i}",
+        )
+        for i in range(20)
+    ]
+    
+    fail_count = 0
+    
+    def failing_fetcher(url: str, *, delay_seconds: float = 0.0) -> FetchResult:
+        """Fetcher that fails for first 3 targets."""
+        nonlocal fail_count
+        if fail_count < 3:
+            fail_count += 1
+            raise FetchError(f"Connection failed for {url}")
+        return FetchResult(
+            url=url,
+            http_status=200,
+            final_url=url,
+            content_sha256="b" * 64,
+            content=b"test metadata",
+        )
+    
+    registry = {"version": 1, "entries": []}
+    
+    if not sys.platform.startswith("linux"):
+        pytest.skip("metadata audit requires Linux")
+    
+    report = run_metadata_audit(
+        targets,
+        store,
+        registry,
+        dry_run=True,
+        fetcher=failing_fetcher,
+    )
+    
+    # Verify broken_count is 3 (15% of 20)
+    assert report.broken_count == 3
+    # Verify gate rejects
+    with pytest.raises(AuditGateError, match="broken ratio exceeds 10%"):
         report.assert_safe()
