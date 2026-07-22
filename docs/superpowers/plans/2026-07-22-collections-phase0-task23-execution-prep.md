@@ -1,5 +1,7 @@
 # 컬렉션 0단계 Task 2~3 실행 준비 Implementation Plan
 
+> ⚠️ **SUPERSEDED (2026-07-23)**: 이 plan의 실행 섹션(Task A~E, `--bootstrap output/tier-b-noonnu-seed.json`, `font-audit-manifest build --report ...` 등)은 실코드와 어긋남이 확인되어 **폐기**됐다. 실제 실행 경로는 `plans/2026-07-22-collections-phase0-execution-REVISED.md`(6단계 배선 + 갭 3종 해결)를 따를 것. **이 문서의 명령을 그대로 실행하지 말 것.** 준비 Task A(Docker)-C(크롤 backoff)는 PR #99로 구현 완료.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 눈누 Tier B 1,110종의 tags/weights를 도커(Linux) 환경에서 감사 실행 → manifest 생성 → dev fonts에 반영할 수 있도록, 선행 코드 준비 3건(Docker 이미지, manifest 생성 CLI, P0 안전장치)을 갖춘 뒤 파일럿부터 실행한다.

@@ -72,6 +72,9 @@ docker run --rm \
     --limit 50 \
     --out output/audit/pilot-metadata.json
 ```
+
+> ⚠️ **마운트-venv 주의(MF1)**: `-v $(pwd):/repo`는 이 PR의 Dockerfile 수정(venv를 `/opt/venv`로 이전)이 전제다. venv가 `/repo/apps/pipeline/.venv`에 있으면 이 마운트가 가려 파이프라인이 깨진다(실측 확인). `/opt/venv`면 마운트에도 살아남고 editable 설치라 호스트 최신 소스를 읽는다. 보수적 대안: repo 전체 대신 `-v $(pwd)/apps/pipeline/output:/repo/apps/pipeline/output`만 마운트 + 이미지 재빌드(dry-run으로 검증됨).
+
 **자격증명**:
 - `SUPABASE_DEV_URL`: dev 클라우드 RPC URL
 - `SUPABASE_DEV_SECRET_KEY`: dev service role secret
@@ -117,20 +120,16 @@ def assert_safe(self) -> None:
 
 **해결 방안** (최소-안전 변경):
 
-옵션 A: **stage별 게이트 완화** (권장)
-- metadata stage의 needs_review 임계값을 50% 이상으로 상향
-- legal/script stage는 기존 10% 유지
-- 근거: 메타데이터는 human review 의도 (auto_applicable=False 정책)
+> ⚠️ **폐기된 초안(임계값 50% 상향)**: needs_review가 80~100%로 예상되므로 50%로 올려도 여전히 차단된다. 게다가 한 폰트에서 tags-weights finding이 각각 나오면 needs_review 분자가 대상 폰트 수를 넘을 수도 있다. 임의 비율 완화는 근거도 없고 문제도 해결 못 함(Codex Should-fix 지적, 동의).
 
-옵션 B: **needs_review 카운트 제외**
-- needs_review를 "pending이 아닌 상태"로 정의 변경
-- 현재 로직: `status in {"needs_review", "broken"}` 카운트
-- 문제: 호출 경로 정확히 파악 필요 (audit_runner.py:1102)
-
-**설계 결정**: 옵션 A 채택
-- 파일: `audit_runner.py:231` 수정
-- 변경: `if self.stage == "metadata" and ...:` 조건 분기, 임계값 50%로 상향
-- 검증: 기존 legal/script 테스트 + 새 metadata 테스트 (needs_review 비율 80% 허용)
+**채택안: metadata stage는 needs_review 비율 게이트를 SKIP하고, 실제 위험 지표(수집 실패 비율)로 판정**
+- 근거: needs_review는 metadata에서 **설계된 정상 결과**(`auto_applicable=False` 정책)이지 위험 신호가 아니다. 위험 신호는 "크롤 실패/비정상 finding"(broken/error)이다.
+- 변경(`audit_runner.py` assert_safe):
+  - `target_count > 0`, `pending_count == 0` 체크는 유지.
+  - metadata stage: needs_review 비율 검사 **건너뜀**. 대신 `broken_count / target_count > 임계값`(예: 0.10)이면 차단(실제 수집 실패율 기준).
+  - legal/script stage: 기존 10% needs_review 게이트 유지.
+- ⚠️ **구현 전 확인 필수**: `auto_applicable=False` finding이 실제로 어떤 status로 집계되는지(`pending` vs `needs_review`). 만약 `pending`으로 잡히면 `pending_count == 0` 체크가 먼저 터지므로, 그 카운트 정의(`audit_runner.py`의 counts 산출부)도 함께 확인해 metadata의 정상 needs_review가 pending으로 오분류되지 않게 한다.
+- 검증: 기존 legal/script 게이트 테스트 유지 + metadata에서 needs_review 100%여도 통과하되 broken 과다면 차단하는 테스트 추가.
 
 ---
 
@@ -252,30 +251,48 @@ def assert_safe(self) -> None:
 
 ---
 
-### 갭 4: SupabaseAuditStore.approve_finding 추가
+### 갭 4: SupabaseAuditStore.approve_finding 추가 (⚠️ 검수 게이트 보존 필수)
+
+> **거버넌스 원칙(자동 일괄 승인 금지)**: 프로젝트 정책상 tags/weights finding은 `auto_applicable=False` 검수 게이트를 거친다([[project-font-audit-governance]]). 따라서 approve는 **명시적으로 지정된 finding-id 1건씩**만, **검증 후 조건부**로 처리한다. "run의 모든 finding 일괄 approved"는 게이트 우회이므로 금지.
+
 **파일**: `apps/pipeline/src/fontagit_pipeline/audit_store.py`
 
-**추가 메서드**:
+**추가 메서드** (검증 + 조건부 전이):
 ```python
-def approve_finding(self, finding_id: UUID) -> None:
-    """승인되지 않은 metadata/script finding을 승인 처리한다.
-    
-    이 메서드는 dev 환경 only. manifest build 전 호출.
+def approve_finding(self, finding_id: UUID, *, reviewed_by: str, stage: str) -> None:
+    """명시적으로 선택된 finding 1건을 검증 후 승인한다. dev 환경 only.
+
+    검증: finding이 존재하고, stage 일치, field_name in {tags, weights},
+    현재 status='needs_review' 여야 함. 위반 시 예외.
+    전이: status='needs_review' AND id=finding_id 조건부 UPDATE로만 approved
+    (조건 불충족 시 0건 갱신 → 재실행/동시성 안전).
     """
-    self._schema.table("font_audit_findings").update(
-        {
-            "status": "approved",
-            "reviewed_by": "metadata-system",
-            "reviewed_at": datetime.now(UTC).isoformat(),
-        }
-    ).eq("id", str(finding_id)).execute()
+    row = self._schema.table("font_audit_findings").select(
+        "id, stage, field_name, status"
+    ).eq("id", str(finding_id)).limit(1).execute().data
+    if not row:
+        raise ValueError("finding이 존재하지 않습니다")
+    f = row[0]
+    if f["stage"] != stage or f["field_name"] not in {"tags", "weights"}:
+        raise ValueError("승인 대상이 아닌 finding(stage/field 불일치)")
+    if f["status"] != "needs_review":
+        raise ValueError(f"needs_review 상태만 승인 가능(현재 {f['status']})")
+    updated = self._schema.table("font_audit_findings").update(
+        {"status": "approved", "reviewed_by": reviewed_by,
+         "reviewed_at": datetime.now(UTC).isoformat()},
+    ).eq("id", str(finding_id)).eq("status", "needs_review").execute().data
+    if not updated:
+        raise ValueError("조건부 승인 실패(상태가 바뀌었을 수 있음)")
 ```
 
-**테스트**:
-- `test_audit_store.py`에 `test_approve_finding_metadata_updates_status()` 추가
-- 실행 후 DB 조회로 status="approved" 확인
+**주의**:
+- `reviewed_by`는 CLI 인자(`--reviewed-by`)로 실제 검수자 식별자를 받는다. 하드코딩된 "system" 문자열로 사람 검수를 위장하지 않는다. 운영자가 검수 목록을 보고 승인하는 흐름(list → 선택 → approve)을 전제.
+- 승인은 **build CLI와 분리된 명시 단계**. build CLI(갭 5)는 이미 approved인 finding만 조회-조립하며, 스스로 승인하지 않는다.
 
-**커밋**: `feat: SupabaseAuditStore.approve_finding 메서드 추가 (metadata 승인용)`
+**테스트**:
+- `test_audit_store.py`: needs_review finding 승인 → approved 확인 / 이미 approved면 예외 / field_name이 허용 밖이면 예외 / stage 불일치 예외
+
+**커밋**: `feat: SupabaseAuditStore.approve_finding (검증+조건부 전이, 검수 게이트 보존)`
 
 ---
 

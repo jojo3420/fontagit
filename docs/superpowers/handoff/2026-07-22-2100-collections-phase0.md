@@ -1,5 +1,7 @@
 # 세션 핸드오프 — 2026-07-22 21:00 KST
 
+> ⚠️ **SUPERSEDED (2026-07-23)**: 이 핸드오프의 "미해결 상태"(Docker 이미지 없음, 크롤 backoff 미구현 등)는 이후 세션에서 해소됨 — 준비 Task A(Docker)-C(backoff)는 PR #99로 구현 완료. 실행 경로는 `execution-REVISED.md`로 정정됨. 최신 인계는 `handoff/2026-07-23-*-collections-phase0-execution.md` 참조. 이 문서는 역사 기록.
+
 > **모드**: superpowers-plan
 > **Feature**: collections-expansion (컬렉션 확장 0단계)
 > **이전 세션 종결 사유**: 0단계 코드(Task1) 완료+머지, Task2~3는 준비 plan까지 도달 후 사용자 인계 요청
