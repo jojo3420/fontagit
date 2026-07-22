@@ -228,8 +228,12 @@ class AuditReport:
             raise AuditGateError("target count must be greater than zero")
         if self.pending_count:
             raise AuditGateError("pending remains")
-        if self.target_count and self.needs_review_count / self.target_count > 0.10:
-            raise AuditGateError("pilot review ratio exceeds 10%")
+        if self.stage == "metadata":
+            if self.target_count and self.broken_count / self.target_count > 0.10:
+                raise AuditGateError("broken ratio exceeds 10%")
+        else:
+            if self.target_count and self.needs_review_count / self.target_count > 0.10:
+                raise AuditGateError("pilot review ratio exceeds 10%")
 
     def as_dict(self) -> dict[str, object]:
         domains: dict[str, int] = {}
