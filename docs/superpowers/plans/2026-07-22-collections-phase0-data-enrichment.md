@@ -13,8 +13,8 @@
 - fonts 쓰기는 오직 `apply_font_audit_manifest` RPC(migration 0018)로만. 직접 UPDATE/PATCH 금지.
 - tags/weights finding은 `auto_applicable=False`(needs_review). 자동 승인 금지 — 검수 후 manifest apply.
 - `category_ko`는 제약상 {고딕, 명조, 손글씨, 장식}만 허용(migration 0001 `fonts_cat_chk`). 이번 0단계는 category_ko를 바꾸지 않는다(tags/weights만).
-- published 폰트는 파이프라인이 건드리지 않는다(기존 안전장치 유지).
-- `run_metadata_audit()`는 Linux 전용. mac 개발 환경에서는 Task 1(코드+테스트)까지만 검증 가능, Task 2 이후 대량 실행은 Linux 환경에서 수행.
+- published 폰트의 status(발행 여부)는 변경하지 않는다. 단 tags/weights 같은 메타데이터는 apply RPC(migration 0018)로 published 행 포함 UPDATE된다 — 0단계의 목표가 곧 published 폰트의 tags/weights 채우기다. "건드리지 않는다"는 구 noonnu_import 경로의 draft-only 안전장치를 뜻하지 않으며, apply RPC 경로는 검수 게이트(auto_applicable=False) 하에 published 메타를 갱신한다.
+- `run_metadata_audit()`는 Linux 전용. mac에서는 Docker(Linux 컨테이너)로 Task 2 이후 대량 실행을 수행한다. Task 1(코드+테스트)은 호스트에서 직접 검증 가능.
 - dev 조회는 `Accept-Profile: fontagit`, 쓰기 RPC는 fontagit 스키마 대상. dev 타깃은 `zgxtfcpiokhkcrywlxmc.supabase.co`.
 - 이 plan은 0단계(데이터 정비)만 다룬다. B단계(자동 컬렉션)와 A단계(태그 컬렉션)는 별도 plan.
 

@@ -128,7 +128,7 @@
 - `apps/web/lib/db/mappers.ts` — `rowToFont` weights 기본값 `[400]` (굵기 결측 함정 지점)
 - `apps/web/lib/db/collections.ts` — `getAllCollections`, `getCollectionBySlug`
 - `apps/web/app/collections/` — 목록/상세 페이지(SSG)
-- `apps/pipeline/src/fontagit_pipeline/noonnu_enrich.py` — `extract_styles`(굵기), `build_proposal`. **`extract_tags()` 신규 구현 대상.**
+- `apps/pipeline/src/fontagit_pipeline/audit_noonnu.py` — `extract_noonnu_font`(tags/weights 추출, 이미 구현됨). `audit_runner.py`의 `_collect_metadata_evidence`가 눈누 tags를 metadata evidence에 연결(0단계 코드 갭, PR #98). 구 경로 `noonnu_enrich.py`는 이 작업에서 사용하지 않음.
 - `supabase/migrations/0001_fontagit_schema.sql`(collections 스키마), `0017_font_audit_schema.sql`(tags 컬럼)
 
 ## 11. 착수 전 확정 항목 (듀얼 리뷰 반영)
