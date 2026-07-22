@@ -2,6 +2,7 @@
 
 import hashlib
 import ipaddress
+import logging
 import socket
 import subprocess
 import tempfile
@@ -14,11 +15,16 @@ from urllib.parse import SplitResult, urljoin, urlsplit, urlunsplit
 
 from fontagit_pipeline.audit_models import DownloadStatus
 
+_logger = logging.getLogger(__name__)
+
 _MAX_BYTES = 1_048_576
 _MAX_BODY_BYTES = 32 * 1024 * 1024
 _MAX_REDIRECTS = 5
 _READ_CHUNK_SIZE = 64 * 1024
 _REDIRECT_STATUSES = {301, 302, 303, 307, 308}
+_RETRY_STATUSES = {429, 503}
+_RETRY_BASE = 1.0
+_RETRY_MAX_BACKOFF = 30.0
 _CURL_BASE = (
     "curl",
     "-q",
@@ -203,8 +209,8 @@ def _resolve_argument(target: _PublicTarget) -> str:
     return f"{display_host}:{target.port}:{addresses}"
 
 
-def _header_values(headers: bytes) -> tuple[int | None, str | None]:
-    """curl이 쓴 마지막 응답 헤더 블록에서 상태와 Location만 읽는다."""
+def _header_values(headers: bytes) -> tuple[int | None, str | None, int | None]:
+    """curl이 쓴 마지막 응답 헤더 블록에서 상태, Location, Retry-After를 읽는다."""
     blocks = headers.replace(b"\r\n", b"\n").split(b"\n\n")
     for block in reversed(blocks):
         lines = block.splitlines()
@@ -217,12 +223,21 @@ def _header_values(headers: bytes) -> tuple[int | None, str | None]:
             status = int(pieces[1])
         except ValueError:
             continue
+        location = None
+        retry_after = None
         for line in lines[1:]:
             key, separator, value = line.partition(b":")
-            if separator and key.strip().lower() == b"location":
-                return status, value.strip().decode("latin-1")
-        return status, None
-    return None, None
+            if separator:
+                key_lower = key.strip().lower()
+                if key_lower == b"location":
+                    location = value.strip().decode("latin-1")
+                elif key_lower == b"retry-after":
+                    try:
+                        retry_after = int(value.strip().decode("latin-1"))
+                    except ValueError:
+                        pass
+        return status, location, retry_after
+    return None, None, None
 
 
 def _stop_process(process: subprocess.Popen[bytes]) -> None:
@@ -256,7 +271,7 @@ def _read_limited_body(process: subprocess.Popen[bytes], max_bytes: int) -> byte
         raise
 
 
-def _fetch_once(target: _PublicTarget, max_bytes: int) -> tuple[int, str | None, bytes]:
+def _fetch_once(target: _PublicTarget, max_bytes: int) -> tuple[int, str | None, bytes, int | None]:
     with tempfile.TemporaryDirectory(prefix="fontagit-link-") as temporary_directory:
         directory = Path(temporary_directory)
         header_path = directory / "headers"
@@ -292,7 +307,7 @@ def _fetch_once(target: _PublicTarget, max_bytes: int) -> tuple[int, str | None,
         finally:
             _stop_process(process)
 
-        status, location = _header_values(header_path.read_bytes() if header_path.exists() else b"")
+        status, location, retry_after = _header_values(header_path.read_bytes() if header_path.exists() else b"")
         if returncode == 28:
             raise FetchTimeoutError("link observation timed out")
         if returncode == 63:
@@ -301,7 +316,7 @@ def _fetch_once(target: _PublicTarget, max_bytes: int) -> tuple[int, str | None,
             raise NetworkFetchError("curl request failed")
         if status is None or status == 0:
             raise NetworkFetchError("curl returned no HTTP response")
-        return status, location, content
+        return status, location, content, retry_after
 
 
 def fetch_public_url(
@@ -311,8 +326,9 @@ def fetch_public_url(
     max_body_bytes: int | None = None,
     max_redirects: int = _MAX_REDIRECTS,
     delay_seconds: float = 0.0,
+    max_retries: int = 3,
 ) -> FetchResult:
-    """공개 DNS 결과만 고정해 GET하고 리다이렉트마다 다시 검사한다."""
+    """공개 DNS 결과만 고정해 GET하고 리다이렉트마다 다시 검사한다. 429/503은 지수 backoff로 재시도한다."""
     if max_bytes is not None and max_body_bytes is not None:
         raise ValueError("link observation limits are outside the permitted range")
     body_limit = max_body_bytes if max_body_bytes is not None else max_bytes
@@ -326,6 +342,8 @@ def fetch_public_url(
         raise ValueError("link observation limits are outside the permitted range")
     if delay_seconds < 0:
         raise ValueError("delay_seconds must be non-negative")
+    if max_retries < 0:
+        raise ValueError("max_retries must be non-negative")
 
     if delay_seconds > 0:
         time.sleep(delay_seconds)
@@ -334,7 +352,48 @@ def fetch_public_url(
     redirect_count = 0
     while True:
         target = _resolve_public_target(current_url)
-        status, location, content = _fetch_once(target, body_limit)
+
+        # 429/503 재시도 루프
+        for attempt in range(max_retries + 1):
+            status, location, content, retry_after = _fetch_once(target, body_limit)
+
+            # 429/503이 아니거나 마지막 시도면 재시도 루프 탈출
+            if status not in _RETRY_STATUSES or attempt >= max_retries:
+                break
+
+            # 재시도 전 대기: Retry-After 헤더 또는 지수 backoff
+            if retry_after is not None:
+                backoff_delay = min(max(float(retry_after), 0.0), _RETRY_MAX_BACKOFF)
+            else:
+                backoff_delay = min(_RETRY_BASE * (2 ** attempt), _RETRY_MAX_BACKOFF)
+
+            # 429/503 구분 로깅
+            if status == 429:
+                _logger.info(
+                    "rate_limit_retry",
+                    extra={
+                        "url": target.url,
+                        "status": 429,
+                        "attempt": attempt + 1,
+                        "max_retries": max_retries,
+                        "backoff": backoff_delay,
+                    },
+                )
+            else:  # 503
+                _logger.info(
+                    "service_unavailable_retry",
+                    extra={
+                        "url": target.url,
+                        "status": 503,
+                        "attempt": attempt + 1,
+                        "max_retries": max_retries,
+                        "backoff": backoff_delay,
+                    },
+                )
+
+            time.sleep(backoff_delay)
+
+        # 리다이렉트 처리
         if status not in _REDIRECT_STATUSES or location is None:
             return FetchResult(
                 status=status,
