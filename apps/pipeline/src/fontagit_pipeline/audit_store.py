@@ -493,6 +493,67 @@ class SupabaseAuditStore:
             }
         ).eq("id", str(run_id)).execute()
 
+    def approve_finding(
+        self, finding_id: UUID, *, reviewed_by: str, stage: str
+    ) -> None:
+        """명시적 검증 후 metadata finding을 approved로 상태 전이.
+
+        Args:
+            finding_id: 승인할 finding UUID
+            reviewed_by: 검수자 식별자
+            stage: 요청 stage (DB와 일치 확인용)
+
+        Raises:
+            ValueError: finding 미존재, field 불허, stage 불일치, 이미 approved, 동시성 실패
+        """
+        # SELECT: finding 검색
+        query = self._schema.table("font_audit_findings").select("id", "field_name", "status", "stage").eq("id", str(finding_id)).limit(1)
+        response = query.execute()
+        data = response.data
+
+        # 검증 1: 존재 여부
+        if not isinstance(data, list) or len(data) == 0:
+            raise ValueError(f"존재하지 않는 finding: {finding_id}")
+
+        row = data[0]
+        if not isinstance(row, Mapping):
+            raise ValueError(f"invalid finding row: {finding_id}")
+
+        field_name = row.get("field_name")
+        current_status = row.get("status")
+        current_stage = row.get("stage")
+
+        # 검증 2: field_name (tags, weights만 승인 가능)
+        if field_name not in {"tags", "weights"}:
+            raise ValueError(f"field '{field_name}' 는 승인 대상이 아닙니다")
+
+        # 검증 3: stage 일치
+        if current_stage != stage:
+            raise ValueError(f"stage 불일치: 요청={stage}, DB={current_stage}")
+
+        # 검증 4: 현재 상태 (needs_review만)
+        if current_status != "needs_review":
+            raise ValueError(f"status={current_status}인 경우 승인 불가 (needs_review만 가능)")
+
+        # UPDATE: 조건부 승인 (status="needs_review"인 경우만)
+        update_response = (
+            self._schema.table("font_audit_findings")
+            .update(
+                {
+                    "status": "approved",
+                    "reviewed_by": reviewed_by,
+                    "reviewed_at": datetime.now(UTC).isoformat(),
+                }
+            )
+            .eq("id", str(finding_id))
+            .eq("status", "needs_review")  # 조건부: 동시성 보호
+            .execute()
+        )
+
+        update_data = update_response.data
+        if not isinstance(update_data, list) or len(update_data) == 0:
+            raise ValueError(f"finding 승인 실패 (동시성 충돌): {finding_id}")
+
     def approved_font_file_candidates(
         self,
         font_id: UUID,

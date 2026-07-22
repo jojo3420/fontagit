@@ -10,6 +10,9 @@ from fontagit_pipeline.audit_store import SupabaseAuditStore
 def _query(data: list[dict[str, object]]) -> MagicMock:
     query = MagicMock()
     query.select.return_value = query
+    query.update.return_value = query
+    query.insert.return_value = query
+    query.upsert.return_value = query
     query.eq.return_value = query
     query.limit.return_value = query
     query.execute.return_value = SimpleNamespace(data=data)
@@ -77,3 +80,169 @@ def test_supabase_candidates_require_approved_same_run_font_and_exact_url() -> N
     assert [(item.source_kind, item.url) for item in candidates] == [
         ("official", "https://official.example/font.woff2")
     ]
+
+
+def test_approve_finding_updates_status_on_valid_tags_finding() -> None:
+    """tags 필드, needs_review 상태인 finding을 approved로 변경."""
+    finding_id = "00000000-0000-0000-0000-000000000901"
+
+    # SELECT 응답: finding 존재, tags, needs_review, stage 일치
+    select_response = _query(
+        [
+            {
+                "id": finding_id,
+                "field_name": "tags",
+                "status": "needs_review",
+                "stage": "metadata",
+            }
+        ]
+    )
+
+    # UPDATE 응답: 1건 업데이트됨
+    update_response = _query([{"id": finding_id}])
+
+    # 호출 순서: SELECT 첫번째, UPDATE 두번째
+    schema = MagicMock()
+    schema.table.side_effect = [select_response, update_response]
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+    # 호출 시 ValueError 발생 안 함
+    store.approve_finding(UUID(finding_id), reviewed_by="test_user", stage="metadata")
+
+
+def test_approve_finding_raises_on_nonexistent_finding() -> None:
+    """finding이 존재하지 않으면 ValueError."""
+    finding_id = "00000000-0000-0000-0000-000000000902"
+
+    select_response = _query([])
+
+    schema = MagicMock()
+    schema.table.side_effect = [select_response]
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+    try:
+        store.approve_finding(UUID(finding_id), reviewed_by="test_user", stage="metadata")
+        assert False, "should raise ValueError"
+    except ValueError:
+        pass
+
+
+def test_approve_finding_raises_on_legal_field() -> None:
+    """download_url(legal) 필드는 승인 대상이 아님."""
+    finding_id = "00000000-0000-0000-0000-000000000903"
+
+    select_response = _query(
+        [
+            {
+                "id": finding_id,
+                "field_name": "download_url",  # legal field
+                "status": "needs_review",
+                "stage": "metadata",
+            }
+        ]
+    )
+
+    schema = MagicMock()
+    schema.table.side_effect = [select_response]
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+    try:
+        store.approve_finding(UUID(finding_id), reviewed_by="test_user", stage="metadata")
+        assert False, "should raise ValueError"
+    except ValueError:
+        pass
+
+
+def test_approve_finding_raises_on_stage_mismatch() -> None:
+    """stage가 일치하지 않으면 ValueError."""
+    finding_id = "00000000-0000-0000-0000-000000000904"
+
+    select_response = _query(
+        [
+            {
+                "id": finding_id,
+                "field_name": "tags",
+                "status": "needs_review",
+                "stage": "metadata",  # DB의 stage
+            }
+        ]
+    )
+
+    schema = MagicMock()
+    schema.table.side_effect = [select_response]
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+    try:
+        # 요청 stage: "audit" (불일치)
+        store.approve_finding(UUID(finding_id), reviewed_by="test_user", stage="audit")
+        assert False, "should raise ValueError"
+    except ValueError:
+        pass
+
+
+def test_approve_finding_raises_on_already_approved() -> None:
+    """이미 status="approved"면 ValueError."""
+    finding_id = "00000000-0000-0000-0000-000000000905"
+
+    select_response = _query(
+        [
+            {
+                "id": finding_id,
+                "field_name": "tags",
+                "status": "approved",  # 이미 approved
+                "stage": "metadata",
+            }
+        ]
+    )
+
+    schema = MagicMock()
+    schema.table.side_effect = [select_response]
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+    try:
+        store.approve_finding(UUID(finding_id), reviewed_by="test_user", stage="metadata")
+        assert False, "should raise ValueError"
+    except ValueError:
+        pass
+
+
+def test_approve_finding_raises_on_zero_affected_rows() -> None:
+    """UPDATE가 0건 반환하면 ValueError (동시성)."""
+    finding_id = "00000000-0000-0000-0000-000000000906"
+
+    # SELECT 응답: finding 존재, 조건 맞음
+    select_response = _query(
+        [
+            {
+                "id": finding_id,
+                "field_name": "weights",
+                "status": "needs_review",
+                "stage": "metadata",
+            }
+        ]
+    )
+
+    # UPDATE 응답: 0건 (다른 스레드가 이미 업데이트)
+    update_response = _query([])
+
+    schema = MagicMock()
+    schema.table.side_effect = [select_response, update_response]
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+    try:
+        store.approve_finding(UUID(finding_id), reviewed_by="test_user", stage="metadata")
+        assert False, "should raise ValueError"
+    except ValueError:
+        pass
