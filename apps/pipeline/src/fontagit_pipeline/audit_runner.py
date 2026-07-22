@@ -578,6 +578,7 @@ def _collect_metadata_evidence(
     source_kind: str
     source_page: str
     file_urls: list[str]
+    parsed: NoonnuFontSnapshot | None = None
     partial_file = False
     if approved_files:
         approved_candidate = approved_files[0]
@@ -669,7 +670,7 @@ def _collect_metadata_evidence(
         "font_file_count": len(fetched_files),
         "font_file_urls": file_urls,
     }
-    if source_kind == "noonnu" and parsed is not None:
+    if source_kind == "noonnu" and parsed is not None and parsed.tags:
         extracted["tags"] = list(parsed.tags)
     normalized_sha256 = hashlib.sha256(
         json.dumps(extracted, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(

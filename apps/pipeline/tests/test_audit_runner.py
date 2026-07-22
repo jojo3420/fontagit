@@ -298,6 +298,43 @@ def test_metadata_evidence_includes_noonnu_tags(monkeypatch: pytest.MonkeyPatch)
     assert snapshot.extracted.get("tags") == ["삐뚤빼뚤"]
 
 
+def test_metadata_evidence_omits_empty_noonnu_tags(monkeypatch: pytest.MonkeyPatch) -> None:
+    """눈누 메타데이터 증거에서 빈 태그는 extracted에 포함되지 않아야 한다."""
+    fixture = Path(__file__).parent / "fixtures" / "audit" / "noonnu-white-tailed-eagle.html"
+    # 기존 fixture에서 태그 링크를 제거한 버전 생성
+    original_html = fixture.read_text(encoding="utf-8")
+    # 태그 링크 제거: <a href="/index?search=%EC%82%90%EB%9A%A4%EB%B9%BC%EB%9A%A4">삐뚤빼뚤</a>
+    empty_tags_html = original_html.replace(
+        '<a href="/index?search=%EC%82%90%EB%9A%A4%EB%B9%BC%EB%9A%A4">삐뚤빼뚤</a>',
+        ""
+    ).encode("utf-8")
+
+    def noonnu_fetch(url: str) -> FetchResult:
+        content = empty_tags_html if url.endswith("/613") else b"<html><body>cta</body></html>"
+        return FetchResult(200, url, content, "1" * 64, 0)
+
+    def font_fetch(url: str, max_bytes: int = 32 * 1024 * 1024) -> FetchResult:
+        return _fetched(url)
+
+    monkeypatch.setattr("fontagit_pipeline.audit_runner.sys.platform", "linux")
+
+    noonnu_target = replace(
+        _targets()[0], name_ko="흰꼬리수리", foundry=None, candidates=()
+    )
+    store = InMemoryAuditStore()
+    report = run_metadata_audit(
+        [noonnu_target],
+        store,
+        registry={"version": 1, "entries": []},
+        fetcher=noonnu_fetch,
+        font_fetcher=font_fetch,
+    )
+
+    # 스냅샷에서 extracted에 "tags" 키가 없어야 한다.
+    _, snapshot = store.snapshot_draft(report.snapshot_ids[0])
+    assert "tags" not in snapshot.extracted
+
+
 def test_dry_run_writes_artifacts_without_calling_store(tmp_path: Path) -> None:
     """dry-run은 자격증명이나 DB 저장 없이 원자적 산출물과 SHA만 남긴다."""
     store = InMemoryAuditStore(fail_on_write=True)
