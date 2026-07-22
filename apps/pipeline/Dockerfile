@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python -m pip install --no-cache-dir uv
 WORKDIR /repo/apps/pipeline
 COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-install-project
 COPY src ./src
 RUN uv sync --frozen
 ENV PATH="/repo/apps/pipeline/.venv/bin:$PATH"
