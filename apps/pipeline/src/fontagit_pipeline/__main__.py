@@ -810,11 +810,12 @@ def main_audit_manifest_build(args: argparse.Namespace) -> int:
 
         if target_store is not None:
             # 대상 DB 문맥 재바인딩: finding.font_id를 evidence가 붙은 대상 폰트로 치환
-            evidence_to_font = {
-                str(s.get("id")): str(row.get("id"))
-                for row in current_rows
-                for s in row.get("evidence_snapshots", [])
-            }
+            evidence_to_font: dict[str, str] = {}
+            for row in current_rows:
+                row_snapshots = row.get("evidence_snapshots")
+                if isinstance(row_snapshots, list):
+                    for snap in row_snapshots:
+                        evidence_to_font[str(snap.get("id"))] = str(row.get("id"))
             for finding in approved_findings:
                 target_font_id = evidence_to_font.get(str(finding.get("evidence_id")))
                 if target_font_id is None:
