@@ -396,6 +396,11 @@ def run_legal_audit(
     return report
 
 
+def _default_font_fetcher(url: str, *, max_bytes: int) -> FetchResult:
+    """기본 폰트 파일 fetcher — 호출부의 max_bytes 키워드 계약을 fetch_public_url로 전달한다."""
+    return fetch_public_url(url, max_body_bytes=max_bytes, delay_seconds=_CRAWL_DELAY_SECONDS)
+
+
 def run_metadata_audit(
     targets: Sequence[FontTarget],
     store: AuditStore,
@@ -417,9 +422,7 @@ def run_metadata_audit(
         effective_font_fetcher: AuditFetcher = font_fetcher
     else:
         effective_font_fetcher = (
-            (lambda url: fetch_public_url(url, max_body_bytes=32 * 1024 * 1024, delay_seconds=_CRAWL_DELAY_SECONDS))
-            if fetcher is fetch_public_url
-            else fetcher
+            _default_font_fetcher if fetcher is fetch_public_url else fetcher
         )
     baseline_sha256 = _baseline_sha256(targets)
     run_id = (

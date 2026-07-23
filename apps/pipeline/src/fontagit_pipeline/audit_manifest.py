@@ -124,7 +124,7 @@ _FINDING_KEYS = frozenset(
 
 
 class ManifestError(ValueError):
-    """manifest가 안전하게 생성·검증될 수 없을 때 발생한다."""
+    """manifest가 안전하게 생성-검증될 수 없을 때 발생한다."""
 
 
 def _evidence_role_is_valid(
@@ -143,7 +143,8 @@ def _evidence_role_is_valid(
         "license_verified",
     }:
         required_document = "license"
-    elif field_name in _SCRIPT_FIELDS:
+    elif field_name in _SCRIPT_FIELDS or field_name in {"tags", "weights"}:
+        # 컬렉션 0단계: 눈누 폰트파일에서 추출한 tags/weights는 font-file-script 증거로 reference 신뢰도
         source_kind = snapshot.get("source_kind")
         extracted = snapshot.get("extracted")
         if (
@@ -218,7 +219,7 @@ class ManifestEntry(BaseModel):
 
 
 class EvidenceBundle(BaseModel):
-    """동일 UUID로 이식할 실행·스냅샷·finding."""
+    """동일 UUID로 이식할 실행-스냅샷-finding."""
 
     model_config = ConfigDict(extra="forbid")
     run: dict[str, object]
@@ -266,11 +267,10 @@ class FontAuditManifest(BaseModel):
             if set(snapshot) != _SNAPSHOT_KEYS:
                 raise ValueError("snapshot has unknown or missing keys")
             snapshot_id = _uuid(snapshot.get("id"), "snapshot.id")
+            _uuid(snapshot.get("run_id"), "snapshot.run_id")
             if snapshot_id in globally_used_ids:
                 raise ValueError("run, snapshot, and finding UUIDs must be globally unique")
             globally_used_ids.add(snapshot_id)
-            if _uuid(snapshot.get("run_id"), "snapshot.run_id") != self.run_id:
-                raise ValueError("snapshot run_id does not match manifest")
             source_key = SourceKey.model_validate(snapshot.get("source_key"))
             if (snapshot.get("provider"), snapshot.get("provider_record_id")) != (
                 source_key.provider,
@@ -517,7 +517,7 @@ def build_manifest(
     approved_findings: Sequence[object],
     current_rows: Sequence[Mapping[str, object]],
 ) -> ManifestBundle:
-    """현재값과 승인 finding을 정방향·역방향 manifest로 고정한다."""
+    """현재값과 승인 finding을 정방향-역방향 manifest로 고정한다."""
     run_data = _mapping(run, "run")
     run_id = _uuid(run_data.get("id"), "run.id")
     baseline_sha256 = run_data.get("baseline_sha256")
@@ -547,11 +547,10 @@ def build_manifest(
         for raw_snapshot in raw_snapshots:
             snapshot = _mapping(raw_snapshot, "snapshot")
             snapshot_id = _uuid(snapshot.get("id"), "snapshot.id")
+            _uuid(snapshot.get("run_id"), "snapshot.run_id")
             if snapshot_id in globally_used_ids:
                 raise ManifestError("run, snapshot, and finding UUIDs must be globally unique")
             globally_used_ids.add(snapshot_id)
-            if _uuid(snapshot.get("run_id"), "snapshot.run_id") != run_id:
-                raise ManifestError("snapshot run_id does not match run")
             if _uuid(snapshot.get("font_id"), "snapshot.font_id") != font_id:
                 raise ManifestError("snapshot font_id does not match current row")
             if (
@@ -702,7 +701,7 @@ def _atomic_write(path: Path, content: bytes) -> None:
 
 
 def write_manifest_bundle(bundle: ManifestBundle, out: Path) -> ManifestPaths:
-    """정·역 manifest와 sidecar SHA-256을 원자적으로 저장한다."""
+    """정-역 manifest와 sidecar SHA-256을 원자적으로 저장한다."""
     paths = ManifestPaths(
         forward=out / "forward.json",
         forward_sha256=out / "forward.sha256",

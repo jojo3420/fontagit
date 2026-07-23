@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 from unittest.mock import MagicMock
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -88,17 +88,16 @@ def test_supabase_candidates_require_approved_same_run_font_and_exact_url() -> N
 
 
 def test_approve_finding_updates_status_on_valid_tags_finding() -> None:
-    """tags 필드, needs_review 상태인 finding을 approved로 변경."""
+    """tags 필드, proposed 상태인 finding을 approved로 변경."""
     finding_id = "00000000-0000-0000-0000-000000000901"
 
-    # SELECT 응답: finding 존재, tags, needs_review, stage 일치
+    # SELECT 응답: finding 존재, tags, proposed
     select_response = _query(
         [
             {
                 "id": finding_id,
                 "field_name": "tags",
-                "status": "needs_review",
-                "stage": "metadata",
+                "status": "proposed",
             }
         ]
     )
@@ -114,7 +113,7 @@ def test_approve_finding_updates_status_on_valid_tags_finding() -> None:
 
     store = SupabaseAuditStore(client)
     # 호출 시 ValueError 발생 안 함
-    store.approve_finding(UUID(finding_id), reviewed_by="test_user", stage="metadata")
+    store.approve_finding(UUID(finding_id), reviewed_by="test_user")
 
 
 def test_approve_finding_raises_on_empty_reviewed_by() -> None:
@@ -126,8 +125,7 @@ def test_approve_finding_raises_on_empty_reviewed_by() -> None:
             {
                 "id": finding_id,
                 "field_name": "tags",
-                "status": "needs_review",
-                "stage": "metadata",
+                "status": "proposed",
             }
         ]
     )
@@ -139,7 +137,7 @@ def test_approve_finding_raises_on_empty_reviewed_by() -> None:
 
     store = SupabaseAuditStore(client)
     with pytest.raises(ValueError, match="reviewed_by는 필수"):
-        store.approve_finding(UUID(finding_id), reviewed_by="", stage="metadata")
+        store.approve_finding(UUID(finding_id), reviewed_by="")
 
 
 def test_approve_finding_raises_on_nonexistent_finding() -> None:
@@ -155,7 +153,7 @@ def test_approve_finding_raises_on_nonexistent_finding() -> None:
 
     store = SupabaseAuditStore(client)
     with pytest.raises(ValueError, match="존재하지 않는 finding"):
-        store.approve_finding(UUID(finding_id), reviewed_by="test_user", stage="metadata")
+        store.approve_finding(UUID(finding_id), reviewed_by="test_user")
 
 
 def test_approve_finding_raises_on_legal_field() -> None:
@@ -167,8 +165,7 @@ def test_approve_finding_raises_on_legal_field() -> None:
             {
                 "id": finding_id,
                 "field_name": "download_url",  # legal field
-                "status": "needs_review",
-                "stage": "metadata",
+                "status": "proposed",
             }
         ]
     )
@@ -180,37 +177,11 @@ def test_approve_finding_raises_on_legal_field() -> None:
 
     store = SupabaseAuditStore(client)
     with pytest.raises(ValueError, match="승인 대상이 아닙니다"):
-        store.approve_finding(UUID(finding_id), reviewed_by="test_user", stage="metadata")
-
-
-def test_approve_finding_raises_on_stage_mismatch() -> None:
-    """stage가 일치하지 않으면 ValueError."""
-    finding_id = "00000000-0000-0000-0000-000000000904"
-
-    select_response = _query(
-        [
-            {
-                "id": finding_id,
-                "field_name": "tags",
-                "status": "needs_review",
-                "stage": "metadata",  # DB의 stage
-            }
-        ]
-    )
-
-    schema = MagicMock()
-    schema.table.side_effect = [select_response]
-    client = MagicMock()
-    client.schema.return_value = schema
-
-    store = SupabaseAuditStore(client)
-    with pytest.raises(ValueError, match="stage 불일치"):
-        # 요청 stage: "audit" (불일치)
-        store.approve_finding(UUID(finding_id), reviewed_by="test_user", stage="audit")
+        store.approve_finding(UUID(finding_id), reviewed_by="test_user")
 
 
 def test_approve_finding_raises_on_already_approved() -> None:
-    """이미 status="approved"면 ValueError."""
+    """status가 proposed가 아니면 ValueError."""
     finding_id = "00000000-0000-0000-0000-000000000905"
 
     select_response = _query(
@@ -218,8 +189,7 @@ def test_approve_finding_raises_on_already_approved() -> None:
             {
                 "id": finding_id,
                 "field_name": "tags",
-                "status": "approved",  # 이미 approved
-                "stage": "metadata",
+                "status": "rejected",  # proposed가 아님
             }
         ]
     )
@@ -231,7 +201,7 @@ def test_approve_finding_raises_on_already_approved() -> None:
 
     store = SupabaseAuditStore(client)
     with pytest.raises(ValueError, match="승인 불가"):
-        store.approve_finding(UUID(finding_id), reviewed_by="test_user", stage="metadata")
+        store.approve_finding(UUID(finding_id), reviewed_by="test_user")
 
 
 def test_approve_finding_raises_on_zero_affected_rows() -> None:
@@ -244,8 +214,7 @@ def test_approve_finding_raises_on_zero_affected_rows() -> None:
             {
                 "id": finding_id,
                 "field_name": "weights",
-                "status": "needs_review",
-                "stage": "metadata",
+                "status": "proposed",
             }
         ]
     )
@@ -260,7 +229,7 @@ def test_approve_finding_raises_on_zero_affected_rows() -> None:
 
     store = SupabaseAuditStore(client)
     with pytest.raises(ValueError, match="동시성 충돌"):
-        store.approve_finding(UUID(finding_id), reviewed_by="test_user", stage="metadata")
+        store.approve_finding(UUID(finding_id), reviewed_by="test_user")
 
 
 def test_get_run_returns_correct_audit_run() -> None:
@@ -363,6 +332,16 @@ def test_get_current_fonts_with_snapshots_returns_fonts_with_evidence() -> None:
     font_id = UUID("00000000-0000-0000-0000-000000000810")
     snapshot_id = UUID("00000000-0000-0000-0000-000000000813")
 
+    # approved finding
+    finding_data = {
+        "id": str(uuid4()),
+        "run_id": str(run_id),
+        "font_id": str(font_id),
+        "field_name": "tags",
+        "status": "approved",
+        "evidence_id": str(snapshot_id),
+    }
+
     font_data = {
         "id": str(font_id),
         "source_key": {"provider": "noonnu", "provider_record_id": "613"},
@@ -401,11 +380,13 @@ def test_get_current_fonts_with_snapshots_returns_fonts_with_evidence() -> None:
         "collected_at": "2026-07-22T08:00:00+00:00",
     }
 
-    fonts_response = _query([font_data])
+    # Mock 응답 순서: get_approved_findings → snapshots .in_("id",...) → fonts .in_("id",...)
+    findings_response = _query([finding_data])
     snapshots_response = _query([snapshot_data])
+    fonts_response = _query([font_data])
 
     schema = MagicMock()
-    schema.table.side_effect = [snapshots_response, fonts_response]
+    schema.table.side_effect = [findings_response, snapshots_response, fonts_response]
     client = MagicMock()
     client.schema.return_value = schema
 
@@ -421,3 +402,244 @@ def test_get_current_fonts_with_snapshots_returns_fonts_with_evidence() -> None:
     assert len(font["evidence_snapshots"]) == 1
     assert font["evidence_snapshots"][0]["id"] == str(snapshot_id)
     assert font["evidence_snapshots"][0]["document_kind"] == "download"
+
+
+def test_get_current_fonts_with_snapshots_includes_other_run_snapshots() -> None:
+    """스냅샷이 타 run 귀속이어도 current rows에 정상 포함 (dedup 재사용 대응)."""
+    run_id = UUID("00000000-0000-0000-0000-000000000909")
+    other_run_id = UUID("00000000-0000-0000-0000-000000000908")
+    font_id = UUID("00000000-0000-0000-0000-000000000810")
+    snapshot_id = UUID("00000000-0000-0000-0000-000000000813")
+
+    # 현재 run의 approved finding이 다른 run 귀속 스냅샷을 가리킴 (dedup 때문)
+    finding_data = {
+        "id": str(uuid4()),
+        "run_id": str(run_id),
+        "font_id": str(font_id),
+        "field_name": "tags",
+        "status": "approved",
+        "evidence_id": str(snapshot_id),
+    }
+
+    font_data = {
+        "id": str(font_id),
+        "source_key": {"provider": "noonnu", "provider_record_id": "613"},
+        "slug": "흰꼬리수리",
+    }
+
+    # 스냅샷이 다른 run_id를 가짐
+    snapshot_data = {
+        "id": str(snapshot_id),
+        "run_id": str(other_run_id),  # 다른 run
+        "font_id": str(font_id),
+        "provider": "noonnu",
+        "provider_record_id": "613",
+        "document_kind": "download",
+    }
+
+    findings_response = _query([finding_data])
+    snapshots_response = _query([snapshot_data])
+    fonts_response = _query([font_data])
+
+    schema = MagicMock()
+    schema.table.side_effect = [findings_response, snapshots_response, fonts_response]
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+    results = store.get_current_fonts_with_snapshots(run_id)
+
+    # 다른 run 귀속이어도 포함되어야 함
+    assert len(results) == 1
+    font = results[0]
+    assert font["id"] == str(font_id)
+    assert len(font["evidence_snapshots"]) == 1
+    assert font["evidence_snapshots"][0]["id"] == str(snapshot_id)
+    # run_id가 다르지만 정상 동작
+    assert font["evidence_snapshots"][0]["run_id"] == str(other_run_id)
+
+
+def test_get_current_fonts_with_snapshots_raises_on_missing_evidence_id() -> None:
+    """evidence_id가 None인 approved finding 존재 시 RuntimeError."""
+    run_id = UUID("00000000-0000-0000-0000-000000000909")
+    font_id = UUID("00000000-0000-0000-0000-000000000810")
+
+    # evidence_id가 None
+    finding_data = {
+        "id": str(uuid4()),
+        "run_id": str(run_id),
+        "font_id": str(font_id),
+        "field_name": "tags",
+        "status": "approved",
+        "evidence_id": None,  # 결측
+    }
+
+    findings_response = _query([finding_data])
+
+    schema = MagicMock()
+    schema.table.side_effect = [findings_response]
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+    with pytest.raises(RuntimeError, match="has no evidence_id"):
+        store.get_current_fonts_with_snapshots(run_id)
+
+
+def test_get_current_fonts_with_snapshots_with_target_store() -> None:
+    """target_store 지정 시 fonts와 font_sources를 대상 스토어에서 조회."""
+    run_id = UUID("00000000-0000-0000-0000-000000000909")
+    font_id = UUID("00000000-0000-0000-0000-000000000810")
+    target_font_id = UUID("00000000-0000-0000-0000-000000000811")
+    snapshot_id = UUID("00000000-0000-0000-0000-000000000813")
+
+    # dev: approved finding, snapshot
+    finding_data = {
+        "id": str(uuid4()),
+        "run_id": str(run_id),
+        "font_id": str(font_id),
+        "field_name": "tags",
+        "status": "approved",
+        "evidence_id": str(snapshot_id),
+    }
+
+    snapshot_data = {
+        "id": str(snapshot_id),
+        "run_id": str(run_id),
+        "font_id": str(font_id),
+        "provider": "noonnu",
+        "provider_record_id": "613",
+        "source_kind": "official",
+        "document_kind": "download",
+        "request_url": "https://clova.ai/handwriting/list.html",
+        "final_url": "https://clova.ai/handwriting/list.html",
+        "http_status": 200,
+        "raw_text": "내부 원문은 정책 승인 전 내보내지 않는다.",
+        "raw_sha256": "b" * 64,
+        "normalized_sha256": "c" * 64,
+        "extracted": {"download_url": "https://clova.ai/font.zip"},
+        "evidence_locations": {"download_url": "a.download"},
+        "extraction_rule_id": "official-download-v1",
+        "parser_version": "audit-v1",
+        "collected_at": "2026-07-22T08:00:00+00:00",
+    }
+
+    # prod: font_sources, fonts with target updated_at
+    font_source_data = {
+        "font_id": str(target_font_id),
+        "provider": "noonnu",
+        "provider_record_id": "613",
+    }
+
+    target_font_data = {
+        "id": str(target_font_id),
+        "source_key": {"provider": "noonnu", "provider_record_id": "613"},
+        "slug": "흰꼬리수리",
+        "name_ko": "흰꼬리수리",
+        "name_en": None,
+        "foundry": None,
+        "official_url": "https://updated.example/link",
+        "status": "published",
+        "updated_at": "2026-07-23T12:00:00+00:00",  # target 값
+        "download_url": None,
+        "download_status": "pending",
+        "download_evidence_id": None,
+        "license_status": "pending",
+        "license_verified": True,
+    }
+
+    # dev schema: findings, snapshots, fonts는 여기서 조회 안함
+    dev_findings_response = _query([finding_data])
+    dev_snapshots_response = _query([snapshot_data])
+
+    dev_schema = MagicMock()
+    dev_schema.table.side_effect = [dev_findings_response, dev_snapshots_response]
+    dev_client = MagicMock()
+    dev_client.schema.return_value = dev_schema
+
+    dev_store = SupabaseAuditStore(dev_client)
+
+    # prod schema: font_sources, fonts
+    prod_font_sources_response = _query([font_source_data])
+    prod_fonts_response = _query([target_font_data])
+
+    prod_schema = MagicMock()
+    prod_schema.table.side_effect = [prod_font_sources_response, prod_fonts_response]
+    prod_client = MagicMock()
+    prod_client.schema.return_value = prod_schema
+
+    target_store = SupabaseAuditStore(prod_client)
+
+    # 호출: target_store 지정
+    results = dev_store.get_current_fonts_with_snapshots(run_id, target_store=target_store)
+
+    assert len(results) == 1
+    font = results[0]
+    assert font["id"] == str(target_font_id)
+    assert font["updated_at"] == "2026-07-23T12:00:00+00:00"  # prod 값
+    assert font["source_key"] == {"provider": "noonnu", "provider_record_id": "613"}
+    assert "evidence_snapshots" in font
+    assert len(font["evidence_snapshots"]) == 1
+
+
+def test_get_current_fonts_with_snapshots_font_sources_no_match() -> None:
+    """font_sources 매칭 0건 → RuntimeError."""
+    run_id = UUID("00000000-0000-0000-0000-000000000909")
+    font_id = UUID("00000000-0000-0000-0000-000000000810")
+    snapshot_id = UUID("00000000-0000-0000-0000-000000000813")
+
+    # dev: approved finding, snapshot
+    finding_data = {
+        "id": str(uuid4()),
+        "run_id": str(run_id),
+        "font_id": str(font_id),
+        "field_name": "tags",
+        "status": "approved",
+        "evidence_id": str(snapshot_id),
+    }
+
+    snapshot_data = {
+        "id": str(snapshot_id),
+        "run_id": str(run_id),
+        "font_id": str(font_id),
+        "provider": "noonnu",
+        "provider_record_id": "999",  # prod에 없는 id
+        "source_kind": "official",
+        "document_kind": "download",
+        "request_url": "https://clova.ai/handwriting/list.html",
+        "final_url": "https://clova.ai/handwriting/list.html",
+        "http_status": 200,
+        "raw_text": "내부 원문은 정책 승인 전 내보내지 않는다.",
+        "raw_sha256": "b" * 64,
+        "normalized_sha256": "c" * 64,
+        "extracted": {"download_url": "https://clova.ai/font.zip"},
+        "evidence_locations": {"download_url": "a.download"},
+        "extraction_rule_id": "official-download-v1",
+        "parser_version": "audit-v1",
+        "collected_at": "2026-07-22T08:00:00+00:00",
+    }
+
+    # dev schema
+    dev_findings_response = _query([finding_data])
+    dev_snapshots_response = _query([snapshot_data])
+
+    dev_schema = MagicMock()
+    dev_schema.table.side_effect = [dev_findings_response, dev_snapshots_response]
+    dev_client = MagicMock()
+    dev_client.schema.return_value = dev_schema
+
+    dev_store = SupabaseAuditStore(dev_client)
+
+    # prod schema: font_sources 조회 결과 0건
+    prod_empty_response = _query([])
+
+    prod_schema = MagicMock()
+    prod_schema.table.return_value = prod_empty_response
+    prod_client = MagicMock()
+    prod_client.schema.return_value = prod_schema
+
+    target_store = SupabaseAuditStore(prod_client)
+
+    # 호출: RuntimeError 발생
+    with pytest.raises(RuntimeError, match="font_sources 매칭 실패"):
+        dev_store.get_current_fonts_with_snapshots(run_id, target_store=target_store)
