@@ -728,6 +728,11 @@ def main_audit_review(args: argparse.Namespace) -> int:
     - 결과를 요약하여 로깅
 
     실패한 findings는 continue하고, 최종 결과를 기반으로 exit code 결정.
+
+    Exit codes:
+    - 0: 승인 성공 또는 대상 findings 없음
+    - 1: 입력값 오류 (invalid run-id 등)
+    - 3: 개별 finding 승인 실패 또는 DB 오류
     """
     from uuid import UUID
 
@@ -770,8 +775,14 @@ def main_audit_review(args: argparse.Namespace) -> int:
                 stage_str = stage if isinstance(stage, str) else "metadata"
                 store.approve_finding(UUID(finding_id), reviewed_by=reviewed_by, stage=stage_str)
                 approved_count += 1
-            except ValueError as exc:
-                logger.warning("finding 승인 실패: id=%s field=%s reason=%s", finding_id, field_name, exc)
+            except Exception as exc:  # DB 호출 경계: APIError, RuntimeError, ValueError 등
+                logger.warning(
+                    "finding 승인 실패: id=%s field=%s type=%s reason=%s",
+                    finding_id,
+                    field_name,
+                    exc.__class__.__name__,
+                    exc,
+                )
                 failed_findings.append(finding)
 
         # 4. 요약 로깅
@@ -794,11 +805,8 @@ def main_audit_review(args: argparse.Namespace) -> int:
     except ValueError as exc:
         logger.error("입력값 오류: %s", exc)
         return 1
-    except Exception as exc:  # 외부 DB 경계, settings 오류
-        if isinstance(exc, Exception) and "SUPABASE" in str(exc.__class__.__name__).upper():
-            logger.error("설정 오류: %s", exc)
-            return 2
-        logger.error("metadata 승인 실패: %s", exc.__class__.__name__)
+    except Exception as exc:  # settings 로드 또는 상위 DB 경계 오류
+        logger.error("metadata 승인 실패: %s", exc)
         return 3
 
 

@@ -111,3 +111,54 @@ def test_audit_review_partial_approval_failure() -> None:
 
         assert result == 3, f"Expected exit code 3 but got {result}"
         assert mock_store.approve_finding.call_count == 2  # 계속 진행해야 함
+
+
+def test_audit_review_invalid_run_id() -> None:
+    """비정상: invalid run-id 문자열("not-a-uuid")은 UUID 파싱에서 실패하여 exit 1."""
+    args = argparse.Namespace(
+        action="auto-approve",
+        run_id="not-a-uuid",  # 유효하지 않은 UUID
+        reviewed_by="auto",
+    )
+
+    with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials"):
+        result = main_audit_review(args)
+
+        assert result == 1, f"Expected exit code 1 but got {result}"
+
+
+def test_audit_review_runtime_error_mixed_with_success() -> None:
+    """비정상: approve_finding이 RuntimeError를 던지는 finding이 있어도 루프가 계속되고 exit 3."""
+    run = _mock_run()
+    findings = [
+        _mock_finding(run["id"], "tags"),
+        _mock_finding(run["id"], "weights"),
+        _mock_finding(run["id"], "tags"),
+    ]
+
+    args = argparse.Namespace(
+        action="auto-approve",
+        run_id=run["id"],
+        reviewed_by="auto",
+    )
+
+    with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_store_ctor:
+        mock_store = MagicMock()
+        mock_store.get_run.return_value = run
+        mock_store.get_needs_review_findings.return_value = findings
+
+        # 첫 번째: 성공, 두 번째: RuntimeError, 세 번째: 성공
+        mock_store.approve_finding.side_effect = [
+            None,
+            RuntimeError("DB 연결 오류"),
+            None,
+        ]
+        mock_store_ctor.return_value = mock_store
+
+        result = main_audit_review(args)
+
+        assert result == 3, f"Expected exit code 3 but got {result}"
+        # 루프가 계속되었으므로 모든 findings에 대해 approve_finding이 호출됨
+        assert mock_store.approve_finding.call_count == 3
+        # 실패는 1건, 성공은 2건
+        assert len([f for f in findings]) == 3  # 모든 finding 처리 검증
