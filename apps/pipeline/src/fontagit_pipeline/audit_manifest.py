@@ -517,7 +517,13 @@ def build_manifest(
     approved_findings: Sequence[object],
     current_rows: Sequence[Mapping[str, object]],
 ) -> ManifestBundle:
-    """현재값과 승인 finding을 정방향-역방향 manifest로 고정한다."""
+    """현재값과 승인 finding을 정방향-역방향 manifest로 고정한다.
+
+    계약:
+    - 한 (source_key, field) 조합에는 최대 1개 승인 finding만 포함 가능
+      (중복 field 거부: "finding field is duplicated")
+    - 각 evidence_id는 정확히 1개 스냅샷만 참조 (고유성 보장)
+    """
     run_data = _mapping(run, "run")
     run_id = _uuid(run_data.get("id"), "run.id")
     baseline_sha256 = run_data.get("baseline_sha256")
