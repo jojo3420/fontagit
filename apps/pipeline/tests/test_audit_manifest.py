@@ -12,6 +12,7 @@ import pytest
 
 from fontagit_pipeline.audit_manifest import (
     ManifestError,
+    _evidence_role_is_valid,
     build_manifest,
     verify_manifest_bytes,
     verify_manifest_file,
@@ -235,10 +236,10 @@ def test_manifest_rejects_unapproved_forbidden_stale_or_unbound_evidence(
     script_finding["confidence"] = "reference"
     assert build_manifest(_run(), [script_finding], [noonnu_script_row]).forward.entries
 
+    # 컬렉션 0단계: tags/weights도 noonnu metadata font-file-script reference 허용
     weight_finding = _finding("weights", [400], [700])
     weight_finding["confidence"] = "reference"
-    with pytest.raises(ManifestError, match="document/source kind"):
-        build_manifest(_run(), [weight_finding], [noonnu_script_row])
+    assert build_manifest(_run(), [weight_finding], [noonnu_script_row]).forward.entries
 
     license_finding = _finding("license_status", "pending", "needs_review")
     license_finding["evidence_id"] = str(SNAPSHOT_ID)
@@ -282,3 +283,34 @@ def test_manifest_rejects_unapproved_forbidden_stale_or_unbound_evidence(
     )
     with pytest.raises(ManifestError, match="manifest JSON"):
         verify_manifest_file(paths.forward, paths.forward_sha256)
+
+
+def test_evidence_role_is_valid_tags_noonnu_font_file_script_reference() -> None:
+    """컬렉션 0단계: tags + noonnu metadata font-file-script → reference 신뢰도 허용."""
+    snapshot = {
+        "source_kind": "noonnu",
+        "document_kind": "metadata",
+        "extracted": {
+            "evidence_role": "font-file-script",
+        },
+    }
+    assert _evidence_role_is_valid("tags", snapshot, "reference") is True
+
+
+def test_evidence_role_is_valid_tags_noonnu_missing_evidence_role() -> None:
+    """tags + noonnu metadata이지만 evidence_role 없으면 False."""
+    snapshot = {
+        "source_kind": "noonnu",
+        "document_kind": "metadata",
+        "extracted": {},  # evidence_role 없음
+    }
+    assert _evidence_role_is_valid("tags", snapshot, "reference") is False
+
+
+def test_build_manifest_snapshot_run_id_invalid_uuid() -> None:
+    """비정상: snapshot run_id가 유효한 UUID가 아니면 ManifestError."""
+    row = deepcopy(_row())
+    row["evidence_snapshots"][0]["run_id"] = "not-a-uuid"  # 유효하지 않은 UUID
+
+    with pytest.raises(ManifestError, match="snapshot.run_id"):
+        build_manifest(_run(), [_finding("download_url", None, "https://clova.ai/font.zip")], [row])

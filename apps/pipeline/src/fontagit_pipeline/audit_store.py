@@ -493,6 +493,66 @@ class SupabaseAuditStore:
             }
         ).eq("id", str(run_id)).execute()
 
+    def approve_finding(
+        self, finding_id: UUID, *, reviewed_by: str
+    ) -> None:
+        """명시적 검증 후 metadata tags/weights finding을 approved로 상태 전이.
+
+        Args:
+            finding_id: 승인할 finding UUID
+            reviewed_by: 검수자 식별자
+
+        Raises:
+            ValueError: finding 미존재, field 불허, status 불일치, 동시성 실패, reviewed_by 비어있음
+        """
+        # 검증 0: reviewed_by 필수
+        if not reviewed_by or not str(reviewed_by).strip():
+            raise ValueError("reviewed_by는 필수 입력입니다")
+
+        # SELECT: finding 검색
+        query = self._schema.table("font_audit_findings").select("id", "field_name", "status").eq("id", str(finding_id)).limit(1)
+        response = query.execute()
+        data = response.data
+
+        # 검증 1: 존재 여부
+        if not isinstance(data, list) or len(data) == 0:
+            raise ValueError(f"존재하지 않는 finding: {finding_id}")
+
+        row = data[0]
+        if not isinstance(row, Mapping):
+            raise ValueError(f"invalid finding row: {finding_id}")
+
+        field_name = row.get("field_name")
+        current_status = row.get("status")
+
+        # 검증 2: field_name (tags, weights만 승인 가능)
+        if field_name not in {"tags", "weights"}:
+            raise ValueError(f"field '{field_name}' 는 승인 대상이 아닙니다")
+
+        # 검증 3: 현재 상태 (proposed만)
+        if current_status != "proposed":
+            raise ValueError(f"status={current_status}인 경우 승인 불가 (proposed만 가능)")
+
+        # UPDATE: 조건부 승인 (id+status+field_name 조합)
+        update_response = (
+            self._schema.table("font_audit_findings")
+            .update(
+                {
+                    "status": "approved",
+                    "reviewed_by": reviewed_by,
+                    "reviewed_at": datetime.now(UTC).isoformat(),
+                }
+            )
+            .eq("id", str(finding_id))
+            .eq("status", "proposed")
+            .eq("field_name", field_name)
+            .execute()
+        )
+
+        update_data = update_response.data
+        if not isinstance(update_data, list) or len(update_data) == 0:
+            raise ValueError(f"finding 승인 실패 (동시성 충돌): {finding_id}")
+
     def approved_font_file_candidates(
         self,
         font_id: UUID,
@@ -697,6 +757,337 @@ class SupabaseAuditStore:
         if len(candidates) == 1:
             return candidates[0]
         return None
+
+
+
+    def get_run(self, run_id: UUID) -> dict[str, object]:
+        """font_audit_runs 테이블에서 run_id로 레코드 조회.
+        
+        Args:
+            run_id: 조회할 감사 run의 UUID
+            
+        Returns:
+            audit run 레코드를 포함한 dict
+            
+        Raises:
+            ValueError: run을 찾을 수 없는 경우
+        """
+        result = (
+            self._schema.table("font_audit_runs")
+            .select("*")
+            .eq("id", str(run_id))
+            .execute()
+        )
+        data = result.data
+        if not isinstance(data, list) or len(data) == 0:
+            raise ValueError(f"Run {run_id} not found")
+        return data[0]
+
+    def get_approved_findings(self, run_id: UUID) -> list[dict[str, object]]:
+        """font_audit_findings 테이블에서 승인 기록 findings 조회 (페이지네이션).
+
+        applied는 approved+반영 마커라 다른 타깃(build --target prod) 재조립을 위해 포함하고,
+        번들 계약(승인 기록)에 맞춰 status를 approved로 정규화해 돌려준다.
+
+        Args:
+            run_id: 조회할 감사 run의 UUID
+
+        Returns:
+            approved 상태의 finding 레코드 리스트
+
+        Raises:
+            RuntimeError: 부분 조회 실패(1,000행 제한 초과 가능성)
+        """
+        all_findings: list[dict[str, object]] = []
+        page_size = 1000
+        offset = 0
+
+        while True:
+            result = (
+                self._schema.table("font_audit_findings")
+                .select("*")
+                .eq("run_id", str(run_id))
+                .in_("status", ["approved", "applied"])
+                .order("id", desc=False)
+                .range(offset, offset + page_size - 1)
+                .execute()
+            )
+            data = result.data
+            if not isinstance(data, list):
+                raise RuntimeError("approved findings 조회 결과가 올바르지 않습니다")
+
+            for row in data:
+                if row.get("status") == "applied":
+                    row["status"] = "approved"
+            all_findings.extend(data)
+
+            if len(data) < page_size:
+                break
+
+            offset += page_size
+
+        return all_findings
+
+    def get_proposed_findings(self, run_id: UUID) -> list[dict[str, object]]:
+        """font_audit_findings 테이블에서 proposed 상태의 tags/weights findings 조회 (페이지네이션).
+
+        Args:
+            run_id: 조회할 감사 run의 UUID
+
+        Returns:
+            proposed 상태이고 field_name이 tags 또는 weights인 finding 레코드 리스트
+
+        Raises:
+            RuntimeError: 부분 조회 실패(1,000행 제한 초과 가능성)
+        """
+        all_findings: list[dict[str, object]] = []
+        page_size = 1000
+        offset = 0
+
+        while True:
+            result = (
+                self._schema.table("font_audit_findings")
+                .select("*")
+                .eq("run_id", str(run_id))
+                .eq("status", "proposed")
+                .in_("field_name", ["tags", "weights"])
+                .order("id", desc=False)
+                .range(offset, offset + page_size - 1)
+                .execute()
+            )
+            data = result.data
+            if not isinstance(data, list):
+                raise RuntimeError("proposed findings 조회 결과가 올바르지 않습니다")
+
+            all_findings.extend(data)
+
+            if len(data) < page_size:
+                break
+
+            offset += page_size
+
+        return all_findings
+
+    def get_current_fonts_with_snapshots(
+        self, run_id: UUID, target_store: "SupabaseAuditStore | None" = None
+    ) -> list[dict[str, object]]:
+        """현재 run의 approved findings 증거 스냅샷과 폰트를 조회 (evidence_id 기준).
+
+        스냅샷은 (font_id, provider, provider_record_id, document_kind, normalized_sha256) on-conflict
+        중복 제거되어 과거 run의 기존 행이 재사용됨. finding.evidence_id가 가리키는 행들을 직접 조회하여
+        current rows를 구성한다. 이를 통해 타 run 귀속 스냅샷도 포함되며, 스냅샷 결측 오류를 사전 감지.
+
+        현재 상태 단언은 적용 대상 DB를 기준으로 한다. target_store가 지정되면 fonts와 font_sources는
+        그곳에서 조회하며, 감사 증거 스냅샷은 항상 self(dev)에서 조회한다.
+
+        Args:
+            run_id: 조회할 감사 run의 UUID
+            target_store: fonts/font_sources를 조회할 대상 스토어 (None이면 self 사용)
+
+        Returns:
+            font_source_snapshots가 포함된 font 레코드 리스트
+
+        Raises:
+            RuntimeError: evidence_id 결측, evidence 스냅샷 결측, fonts 결측, source_key 중복
+        """
+        # 1. approved findings 조회 (evidence_id 기준)
+        approved_findings = self.get_approved_findings(run_id)
+        if not approved_findings:
+            return []
+
+        # evidence_ids와 font_ids 추출
+        evidence_ids: set[str] = set()
+        font_ids: set[str] = set()
+
+        for finding in approved_findings:
+            evidence_id = finding.get("evidence_id")
+            if evidence_id is None:
+                raise RuntimeError(f"finding {finding.get('id')} has no evidence_id (계약 위반)")
+            if isinstance(evidence_id, str):
+                evidence_ids.add(evidence_id)
+
+            font_id = finding.get("font_id")
+            if isinstance(font_id, str):
+                font_ids.add(font_id)
+
+        if not evidence_ids or not font_ids:
+            return []
+
+        # 2. snapshots를 id in-list 청크 조회 (100단위, 502 대응)
+        all_snapshots: list[dict[str, object]] = []
+        chunk_size = 100
+        evidence_ids_list = list(evidence_ids)
+
+        for i in range(0, len(evidence_ids_list), chunk_size):
+            chunk = evidence_ids_list[i : i + chunk_size]
+            snapshots_result = (
+                self._schema.table("font_source_snapshots")
+                .select("*")
+                .in_("id", chunk)
+                .execute()
+            )
+            snapshots_data = snapshots_result.data
+            if not isinstance(snapshots_data, list):
+                raise RuntimeError("font_source_snapshots 조회 결과가 올바르지 않습니다")
+
+            all_snapshots.extend(snapshots_data)
+
+        # 결측 검증
+        if len(all_snapshots) != len(evidence_ids):
+            raise RuntimeError(
+                f"evidence 스냅샷 결측: 예상 {len(evidence_ids)}, 조회 {len(all_snapshots)}"
+            )
+
+        # 3. (provider, provider_record_id) 유일성 검증
+        source_keys_seen: dict[tuple[str, str], bool] = {}
+
+        for snapshot in all_snapshots:
+            provider = snapshot.get("provider")
+            provider_record_id = snapshot.get("provider_record_id")
+            if provider and provider_record_id:
+                key = (str(provider), str(provider_record_id))
+                if key in source_keys_seen:
+                    raise RuntimeError(
+                        f"중복된 source_key ({provider}, {provider_record_id})"
+                    )
+                source_keys_seen[key] = True
+
+        # 4. fonts를 id in-list 청크 조회 (target_store가 있으면 그곳에서, 없으면 self에서)
+        fonts_by_id: dict[str, dict[str, object]] = {}
+        query_store = target_store if target_store is not None else self
+        font_ids_list = list(font_ids)
+
+        if target_store is not None:
+            # 스냅샷을 (provider, provider_record_id) 그룹으로 묶어서 font_sources 조회
+            source_groups: dict[tuple[str, str], list[dict[str, object]]] = {}
+            for snapshot in all_snapshots:
+                provider = snapshot.get("provider")
+                provider_record_id = snapshot.get("provider_record_id")
+                if provider and provider_record_id:
+                    key = (str(provider), str(provider_record_id))
+                    source_groups.setdefault(key, []).append(snapshot)
+
+            # 각 (provider, provider_record_id)를 target_store의 font_sources에서 조회
+            target_font_ids: set[str] = set()
+            source_key_to_target_font_id: dict[tuple[str, str], str] = {}
+            for (provider, provider_record_id), snapshots in source_groups.items():
+                source_result = (
+                    target_store._schema.table("font_sources")
+                    .select("*")
+                    .eq("provider", provider)
+                    .eq("provider_record_id", provider_record_id)
+                    .execute()
+                )
+                source_data = source_result.data
+                if not isinstance(source_data, list):
+                    raise RuntimeError("font_sources 조회 결과가 올바르지 않습니다")
+
+                if len(source_data) != 1:
+                    raise RuntimeError(
+                        f"font_sources 매칭 실패: provider={provider} provider_record_id={provider_record_id} "
+                        f"조회 결과 {len(source_data)}건 (예상 1건)"
+                    )
+
+                source_row = source_data[0]
+                font_id = source_row.get("font_id")
+                if font_id is not None:
+                    target_font_ids.add(str(font_id))
+                    source_key_to_target_font_id[(provider, provider_record_id)] = str(font_id)
+
+            # target_store에서 fonts를 id in-list 청크 조회
+            target_font_ids_list = list(target_font_ids)
+            for i in range(0, len(target_font_ids_list), chunk_size):
+                chunk = target_font_ids_list[i : i + chunk_size]
+                fonts_result = (
+                    target_store._schema.table("fonts")
+                    .select("*")
+                    .in_("id", chunk)
+                    .execute()
+                )
+                fonts_data = fonts_result.data
+                if not isinstance(fonts_data, list):
+                    raise RuntimeError("fonts 조회 결과가 올바르지 않습니다")
+
+                for font in fonts_data:
+                    font_id = font.get("id")
+                    if font_id is not None:
+                        fonts_by_id[font_id] = font
+
+            # fonts 결측 검증
+            if len(fonts_by_id) != len(target_font_ids):
+                raise RuntimeError(
+                    f"fonts 결측: 예상 {len(target_font_ids)}, 조회 {len(fonts_by_id)}"
+                )
+        else:
+            # 기존 로직: self에서 조회
+            for i in range(0, len(font_ids_list), chunk_size):
+                chunk = font_ids_list[i : i + chunk_size]
+                fonts_result = (
+                    self._schema.table("fonts")
+                    .select("*")
+                    .in_("id", chunk)
+                    .execute()
+                )
+                fonts_data = fonts_result.data
+                if not isinstance(fonts_data, list):
+                    raise RuntimeError("fonts 조회 결과가 올바르지 않습니다")
+
+                for font in fonts_data:
+                    font_id = font.get("id")
+                    if font_id is not None:
+                        fonts_by_id[font_id] = font
+
+            # fonts 결측 검증
+            if len(fonts_by_id) != len(font_ids):
+                raise RuntimeError(
+                    f"fonts 결측: 예상 {len(font_ids)}, 조회 {len(fonts_by_id)}"
+                )
+
+        # 5. snapshots를 fonts에 매핑하고 source_key 파생
+        snapshots_by_font: dict[object, list[dict[str, object]]] = {}
+
+        if target_store is not None:
+            # target_store 사용: source_key_to_target_font_id 매핑을 통해 스냅샷 매핑
+            for snapshot in all_snapshots:
+                provider = snapshot.get("provider")
+                provider_record_id = snapshot.get("provider_record_id")
+                if provider and provider_record_id:
+                    key = (str(provider), str(provider_record_id))
+                    if key in source_key_to_target_font_id:
+                        target_font_id = source_key_to_target_font_id[key]
+                        if target_font_id in fonts_by_id:
+                            # 대상 DB 문맥으로 재바인딩(export 시 pop되며 source_key가 신원)
+                            snapshot["font_id"] = target_font_id
+                            snapshot["source_key"] = {
+                                "provider": provider,
+                                "provider_record_id": provider_record_id,
+                            }
+
+                            if "source_key" not in fonts_by_id[target_font_id]:
+                                fonts_by_id[target_font_id]["source_key"] = snapshot["source_key"]
+
+                            snapshots_by_font.setdefault(target_font_id, []).append(snapshot)
+        else:
+            # 기존 로직: dev 폰트 ID로 직접 매핑
+            for snapshot in all_snapshots:
+                font_id = snapshot.get("font_id")
+                if font_id in fonts_by_id:
+                    provider = snapshot.get("provider")
+                    provider_record_id = snapshot.get("provider_record_id")
+                    snapshot["source_key"] = {
+                        "provider": provider,
+                        "provider_record_id": provider_record_id,
+                    }
+
+                    if "source_key" not in fonts_by_id[font_id]:
+                        fonts_by_id[font_id]["source_key"] = snapshot["source_key"]
+
+                    snapshots_by_font.setdefault(font_id, []).append(snapshot)
+
+        for font_id, font_row in fonts_by_id.items():
+            font_row["evidence_snapshots"] = snapshots_by_font.get(font_id, [])
+
+        return list(fonts_by_id.values())
 
 
 def _report_count(report: Mapping[str, object], key: str) -> int:

@@ -25,6 +25,7 @@ from fontagit_pipeline.writer import write_output
 logger = logging.getLogger(__name__)
 _OUTPUT_PATH = Path("output") / "tier-a.json"
 _SOURCE = "google-fonts-webfonts-api"
+_BROKEN_RATIO_THRESHOLD = 0.10
 
 
 def build_document(
@@ -393,23 +394,28 @@ def main_audit_policy_check(args: argparse.Namespace) -> int:
 
 
 def main_audit_export_baseline(args: argparse.Namespace) -> int:
-    """공개 anon API만 사용해 prod 기준선을 내보낸다."""
+    """prod 공개 또는 dev 서비스 기준선을 내보낸다."""
     from fontagit_pipeline.audit_bootstrap import (
         BootstrapError,
         calculate_baseline_content_sha256,
+        fetch_dev_service_rows,
         fetch_prod_public_rows,
         write_prod_baseline,
     )
     from fontagit_pipeline.config import load_audit_settings
 
-    if args.source != "prod-public":
+    if args.source not in ("prod-public", "dev-service"):
         logger.error("허용되지 않은 기준선 출처입니다: %s", args.source)
         return 2
     try:
         settings = load_audit_settings()
-        if not settings.supabase_url or not settings.supabase_anon_key:
-            raise BootstrapError("SUPABASE_URL과 SUPABASE_ANON_KEY가 필요합니다")
-        rows = fetch_prod_public_rows(settings.supabase_url, settings.supabase_anon_key)
+        if args.source == "prod-public":
+            if not settings.supabase_url or not settings.supabase_anon_key:
+                raise BootstrapError("SUPABASE_URL과 SUPABASE_ANON_KEY가 필요합니다")
+            rows = fetch_prod_public_rows(settings.supabase_url, settings.supabase_anon_key)
+        else:  # dev-service
+            dev_url, dev_secret = settings.dev_write_credentials()
+            rows = fetch_dev_service_rows(dev_url, dev_secret)
         baseline_content_sha256 = calculate_baseline_content_sha256(rows)
         file_sha256 = write_prod_baseline(rows, args.out)
     except (BootstrapError, OSError, httpx.HTTPError) as exc:
@@ -424,6 +430,111 @@ def main_audit_export_baseline(args: argparse.Namespace) -> int:
         file_sha256,
     )
     return 0
+
+
+def main_audit_bootstrap_apply(args: argparse.Namespace) -> int:
+    """bootstrap manifest를 RPC로 dev 또는 prod에 적용한다 (신형 22필드 산출물 → 구형 7필드 RPC로 투영)."""
+    import hashlib
+    import json
+    import os
+
+    from fontagit_pipeline.audit_store import SupabaseAuditStore
+    from fontagit_pipeline.config import load_audit_settings
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    try:
+        # 1. 원본 파일 SHA256 검증
+        manifest_bytes = args.manifest.read_bytes()
+        file_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
+        if file_sha256 != args.confirm_hash:
+            logger.error("bootstrap manifest SHA-256 불일치")
+            return 3
+
+        # 2. 원본 payload 로드
+        manifest_dict = json.loads(manifest_bytes.decode("utf-8"))
+        if not isinstance(manifest_dict.get("entries"), list):
+            raise ValueError("entries가 배열이 아닙니다")
+
+        # 3. RPC 계약으로 투영: 신형 22필드 → 구형 7필드
+        # (current 키 제거, before에서 7필드만 선별)
+        projected_entries = []
+        for entry in manifest_dict["entries"]:
+            before = entry.get("before", {})
+            if not isinstance(before, dict):
+                raise ValueError("before가 dict가 아닙니다")
+
+            # before 필드 검증 및 선별
+            before_keys = ("foundry", "name_en", "name_ko", "official_url", "slug", "source_tier", "updated_at")
+            projected_before = {}
+            for key in before_keys:
+                if key not in before:
+                    raise ValueError(f"before에 필수 키 '{key}'가 없습니다 (계약 위반)")
+                projected_before[key] = before[key]
+
+            projected_entry = {
+                "font_id": entry.get("font_id"),
+                "provider": entry.get("provider"),
+                "provider_record_id": entry.get("provider_record_id"),
+                "slug": entry.get("slug"),
+                "source_url": entry.get("source_url"),
+                "public_updates": entry.get("public_updates", {}),
+                "before": projected_before,
+            }
+            projected_entries.append(projected_entry)
+
+        # 4. 투영 payload 구성
+        projected_payload = {
+            "schema_version": manifest_dict.get("schema_version", 1),
+            "matched": manifest_dict.get("matched"),
+            "unmatched": manifest_dict.get("unmatched"),
+            "conflicts": manifest_dict.get("conflicts"),
+            "review_rows": manifest_dict.get("review_rows"),
+            "entries": projected_entries,
+        }
+
+        # 5. 투영 payload SHA256 계산
+        projected_text = json.dumps(projected_payload, sort_keys=True, ensure_ascii=False)
+        projected_sha256 = hashlib.sha256(projected_text.encode("utf-8")).hexdigest()
+
+        logger.info("bootstrap manifest 투영: file_sha=%s projected_sha=%s", file_sha256, projected_sha256)
+
+        # 6. 대상 환경 RPC 호출
+        settings = load_audit_settings()
+        if args.target == "prod":
+            if os.environ.get("FONTAGIT_PROD_MANIFEST_ENABLED") != "true":
+                logger.error("prod bootstrap 적용은 FONTAGIT_PROD_MANIFEST_ENABLED=true 필수")
+                return 3
+            if not settings.supabase_prod_url or not settings.supabase_prod_secret_key:
+                logger.error("prod credentials 미설정")
+                return 3
+            url, secret = settings.supabase_prod_url, settings.supabase_prod_secret_key
+        else:
+            url, secret = settings.dev_write_credentials()
+
+        store = SupabaseAuditStore.from_dev_credentials(url, secret)
+
+        result = store._schema.rpc(
+            "apply_font_source_bootstrap",
+            {
+                "p_manifest_text": projected_text,
+                "p_expected_sha256": projected_sha256,
+                "p_schema_version": 1,
+            },
+        ).execute()
+
+        if isinstance(result.data, int) and result.data > 0:
+            logger.info("bootstrap manifest 적용 완료: %d건", result.data)
+            return 0
+        else:
+            logger.error("bootstrap manifest RPC 실패: %s", result.data)
+            return 3
+
+    except (ValueError, OSError) as exc:
+        logger.error("bootstrap manifest 적용 실패 (입력): %s", exc)
+        return 3
+    except Exception as exc:
+        logger.error("bootstrap manifest 적용 실패 (DB): %s", exc)
+        return 3
 
 
 def main_audit_bootstrap(args: argparse.Namespace) -> int:
@@ -480,6 +591,9 @@ def main_audit_run(args: argparse.Namespace) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     try:
         targets = load_bootstrap_targets(args.bootstrap)
+        # metadata 감사는 눈누 파일 cmap 검사 기반이라 Tier A는 파일 후보가 없음
+        if args.stage == "metadata":
+            targets = [t for t in targets if t.source_tier == "B"]
         selected = select_pilot(targets, size=args.limit, require_slugs=args.require_slug)
         registry = load_source_registry()
         if args.stage == "metadata" and not args.dry_run and not sys.platform.startswith("linux"):
@@ -597,6 +711,7 @@ def main_audit_manifest_apply(args: argparse.Namespace) -> int:
     from fontagit_pipeline.audit_manifest import ManifestError, verify_manifest_bytes
     from fontagit_pipeline.config import load_audit_settings
 
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     try:
         manifest_bytes = args.manifest.read_bytes()
         expected_hash = args.sha256.read_text(encoding="ascii")
@@ -640,6 +755,272 @@ def main_audit_manifest_apply(args: argparse.Namespace) -> int:
         return 3
     except Exception as exc:  # 외부 DB 경계
         logger.error("감사 manifest RPC 실패: %s", exc.__class__.__name__)
+        return 3
+
+
+def main_audit_manifest_build(args: argparse.Namespace) -> int:
+    """approved findings를 조회하여 manifest 번들을 생성한다.
+
+    - run_id로 기준 run을 조회
+    - 해당 run의 approved findings 조회
+    - 현재 font 스냅샷 조회
+    - build_manifest로 번들 생성
+    - write_manifest_bundle로 파일 저장
+
+    build는 approve를 하지 않는다 — 이미 approved인 finding만 조회한다.
+    """
+    from uuid import UUID
+
+    from fontagit_pipeline.audit_manifest import ManifestError, build_manifest, write_manifest_bundle
+    from fontagit_pipeline.audit_store import SupabaseAuditStore
+    from fontagit_pipeline.config import load_audit_settings
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    try:
+        run_id = UUID(args.run_id)
+        settings = load_audit_settings()
+        dev_url, dev_secret = settings.dev_write_credentials()
+        store = SupabaseAuditStore.from_dev_credentials(dev_url, dev_secret)
+
+        # target_store 초기화 (prod 대상 시)
+        target_store: SupabaseAuditStore | None = None
+        target = getattr(args, "target", "dev")
+        if target == "prod":
+            if not settings.supabase_prod_url or not settings.supabase_prod_secret_key:
+                logger.error("prod credentials 미설정")
+                return 3
+            target_store = SupabaseAuditStore.from_dev_credentials(
+                settings.supabase_prod_url, settings.supabase_prod_secret_key
+            )
+            logger.info("manifest build target: prod")
+        else:
+            logger.info("manifest build target: dev")
+
+        # 1. run 조회
+        run = store.get_run(run_id)
+        logger.info("감사 run 조회: run_id=%s", run_id)
+
+        # 2. approved findings 조회
+        approved_findings = store.get_approved_findings(run_id)
+        if not approved_findings:
+            logger.error("승인된 findings가 없습니다: run_id=%s", run_id)
+            return 1
+        logger.info("승인된 findings 조회: count=%d", len(approved_findings))
+
+        # 3. 현재 font 스냅샷 조회
+        current_rows = store.get_current_fonts_with_snapshots(run_id, target_store=target_store)
+        logger.info("현재 font 스냅샷 조회: count=%d", len(current_rows))
+
+        if target_store is not None:
+            # 대상 DB 문맥 재바인딩: finding.font_id를 evidence가 붙은 대상 폰트로 치환
+            evidence_to_font: dict[str, str] = {}
+            for row in current_rows:
+                row_snapshots = row.get("evidence_snapshots")
+                if isinstance(row_snapshots, list):
+                    for snap in row_snapshots:
+                        evidence_to_font[str(snap.get("id"))] = str(row.get("id"))
+            for finding in approved_findings:
+                target_font_id = evidence_to_font.get(str(finding.get("evidence_id")))
+                if target_font_id is None:
+                    raise ManifestError(
+                        f"finding evidence가 대상 현재행에 없습니다: {finding.get('id')}"
+                    )
+                finding["font_id"] = target_font_id
+
+        # 4. manifest 번들 생성
+        bundle = build_manifest(run, approved_findings, current_rows)
+        logger.info(
+            "manifest 번들 생성: forward_sha256=%s reverse_sha256=%s",
+            bundle.forward_sha256[:8] + "...",
+            bundle.reverse_sha256[:8] + "...",
+        )
+
+        # 5. 파일 저장
+        paths = write_manifest_bundle(bundle, args.out)
+        logger.info(
+            "manifest 번들 저장: forward=%s reverse=%s",
+            paths.forward,
+            paths.reverse,
+        )
+
+        return 0
+    except ValueError as exc:
+        logger.error("입력값 오류: %s", exc)
+        return 1
+    except (ManifestError, OSError) as exc:
+        logger.error("manifest 생성 중단: %s", exc)
+        return 2
+    except Exception as exc:  # 외부 DB 경계
+        logger.error("manifest 생성 실패: %s", exc.__class__.__name__)
+        return 3
+
+
+def _summarize_findings_by_field(findings: list[dict[str, object]]) -> dict[str, int]:
+    """findings를 field_name으로 그룹화하여 개수 반환."""
+    summary: dict[str, int] = {}
+    for finding in findings:
+        field_name = finding.get("field_name")
+        if isinstance(field_name, str):
+            summary[field_name] = summary.get(field_name, 0) + 1
+    return summary
+
+
+def main_audit_review(args: argparse.Namespace) -> int:
+    """metadata findings을 무인 승인한다.
+
+    - run_id로 기준 run을 조회
+    - 해당 run의 needs_review metadata findings을 조회
+    - 각 finding을 전건 auto-approve
+    - 결과를 요약하여 로깅
+
+    실패한 findings는 continue하고, 최종 결과를 기반으로 exit code 결정.
+
+    Exit codes:
+    - 0: 승인 성공 또는 대상 findings 없음
+    - 1: 입력값 오류 (invalid run-id 등)
+    - 3: 개별 finding 승인 실패 또는 DB 오류
+    """
+    from uuid import UUID
+
+    from fontagit_pipeline.audit_store import SupabaseAuditStore
+    from fontagit_pipeline.config import load_audit_settings
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    try:
+        if args.action != "auto-approve":
+            raise ValueError(f"지원하지 않는 action: {args.action}")
+
+        run_id = UUID(args.run_id)
+        reviewed_by = "auto"
+        settings = load_audit_settings()
+        dev_url, dev_secret = settings.dev_write_credentials()
+        store = SupabaseAuditStore.from_dev_credentials(dev_url, dev_secret)
+
+        # 1. run 조회 및 stage 검증
+        run = store.get_run(run_id)
+        run_stage = run.get("stage")
+        logger.info("감사 run 조회: run_id=%s stage=%s", run_id, run_stage)
+
+        if run_stage != "metadata":
+            logger.error("run stage는 metadata여야 합니다: stage=%s", run_stage)
+            return 1
+
+        # run status 검증: completed 상태 확인
+        run_status = run.get("status")
+        if run_status != "completed":
+            logger.error("run status는 completed여야 합니다: status=%s", run_status)
+            return 1
+
+        # broken ratio 검증: 10% 초과 금지
+        from typing import cast
+
+        broken_count = cast(int, run.get("broken_count")) or 0
+        target_count = cast(int, run.get("target_count")) or 0
+        if target_count and broken_count / target_count > _BROKEN_RATIO_THRESHOLD:
+            logger.error(
+                "broken ratio 10%% 초과: broken=%d target=%d ratio=%.1f%%",
+                broken_count,
+                target_count,
+                100 * broken_count / target_count,
+            )
+            return 1
+
+        # 2. proposed findings 조회 (tags/weights만)
+        proposed_findings = store.get_proposed_findings(run_id)
+        if not proposed_findings:
+            logger.warning("승인 대상 findings가 없습니다: run_id=%s", run_id)
+            return 0
+        logger.info("승인 대상 findings 조회: count=%d", len(proposed_findings))
+
+        # 2.5. 증거 스냅샷 조회 (values-evidence 대조용)
+        from fontagit_pipeline.audit_metadata import derive_proposed_value
+
+        evidence_ids: set[str] = set()
+        for finding in proposed_findings:
+            evidence_id = finding.get("evidence_id")
+            if isinstance(evidence_id, str):
+                evidence_ids.add(evidence_id)
+
+        evidence_by_id: dict[str, dict[str, object]] = {}
+        chunk_size = 100
+        evidence_ids_list = list(evidence_ids)
+
+        for i in range(0, len(evidence_ids_list), chunk_size):
+            chunk = evidence_ids_list[i : i + chunk_size]
+            snapshots_result = (
+                store._schema.table("font_source_snapshots")
+                .select("id, extracted")
+                .in_("id", chunk)
+                .execute()
+            )
+            snapshots_data = snapshots_result.data
+            if not isinstance(snapshots_data, list):
+                raise RuntimeError("font_source_snapshots 조회 결과가 올바르지 않습니다")
+
+            for snapshot in snapshots_data:
+                snapshot_id = snapshot.get("id")
+                extracted = snapshot.get("extracted")
+                if isinstance(snapshot_id, str) and isinstance(extracted, dict):
+                    evidence_by_id[snapshot_id] = extracted
+
+        # 3. 각 finding 승인 (개별 실패는 수집)
+        approved_count = 0
+        failed_findings: list[dict[str, object]] = []
+
+        for finding in proposed_findings:
+            finding_id = finding.get("id")
+            field_name = finding.get("field_name")
+            evidence_id = finding.get("evidence_id")
+            proposed_value = finding.get("proposed_value")
+
+            try:
+                if not isinstance(finding_id, str):
+                    raise ValueError(f"invalid finding_id: {finding_id}")
+
+                # values-evidence 대조 (tags/weights 전용)
+                if field_name in {"tags", "weights"} and evidence_id and isinstance(evidence_id, str):
+                    extracted = evidence_by_id.get(evidence_id)
+                    if extracted:
+                        expected = derive_proposed_value(field_name, extracted)
+                        if expected != proposed_value:
+                            raise ValueError(
+                                f"evidence mismatch: field={field_name} expected={expected} proposed={proposed_value}"
+                            )
+
+                store.approve_finding(UUID(finding_id), reviewed_by=reviewed_by)
+                approved_count += 1
+            except Exception as exc:  # DB 호출 경계: APIError, RuntimeError, ValueError 등
+                logger.warning(
+                    "finding 승인 실패: id=%s field=%s type=%s reason=%s",
+                    finding_id,
+                    field_name,
+                    exc.__class__.__name__,
+                    exc,
+                )
+                failed_findings.append(finding)
+
+        # 4. 요약 로깅
+        summary = _summarize_findings_by_field(proposed_findings)
+        logger.info(
+            "승인 완료: approved=%d failed=%d total=%d field_distribution=%s",
+            approved_count,
+            len(failed_findings),
+            len(proposed_findings),
+            summary,
+        )
+
+        # 5. exit code 결정
+        if failed_findings:
+            logger.error("일부 findings 승인 실패: 수동 검수 필요")
+            return 3
+
+        return 0
+
+    except ValueError as exc:
+        logger.error("입력값 오류: %s", exc)
+        return 1
+    except Exception as exc:  # settings 로드 또는 상위 DB 경계 오류
+        logger.error("metadata 승인 실패: %s", exc)
         return 3
 
 
@@ -822,9 +1203,9 @@ if __name__ == "__main__":
     )
     baseline_parser.add_argument(
         "--source",
-        choices=["prod-public"],
+        choices=["prod-public", "dev-service"],
         required=True,
-        help="읽기 전용 공개 prod 출처",
+        help="기준선 출처: prod-public=prod 공개 API, dev-service=dev published 한정",
     )
     baseline_parser.add_argument(
         "--out", type=Path, required=True, help="기준선 JSON 출력 경로"
@@ -842,6 +1223,21 @@ if __name__ == "__main__":
         "--out", type=Path, required=True, help="bootstrap JSON 출력 경로"
     )
     bootstrap_parser.set_defaults(func=main_audit_bootstrap)
+
+    bootstrap_apply_parser = subparsers.add_parser(
+        "font-audit-bootstrap-apply",
+        help="bootstrap manifest를 적용",
+    )
+    bootstrap_apply_parser.add_argument(
+        "--manifest", type=Path, required=True, help="bootstrap-manifest.json 경로"
+    )
+    bootstrap_apply_parser.add_argument(
+        "--target", choices=["dev", "prod"], required=True, help="대상 환경"
+    )
+    bootstrap_apply_parser.add_argument(
+        "--confirm-hash", required=True, help="manifest SHA-256 확인"
+    )
+    bootstrap_apply_parser.set_defaults(func=main_audit_bootstrap_apply)
 
     audit_run_parser = subparsers.add_parser(
         "font-audit-run",
@@ -894,6 +1290,26 @@ if __name__ == "__main__":
     manifest_apply_parser.add_argument("--approved-hash")
     manifest_apply_parser.add_argument("--approval-id")
     manifest_apply_parser.set_defaults(func=main_audit_manifest_apply)
+
+    manifest_build_parser = manifest_subparsers.add_parser("build")
+    manifest_build_parser.add_argument("--run-id", required=True, help="조회할 감사 run의 UUID")
+    manifest_build_parser.add_argument("--target", choices=["dev", "prod"], default="dev", help="현재 상태 조회 대상")
+    manifest_build_parser.add_argument("--out", type=Path, required=True, help="manifest 번들 저장 디렉터리")
+    manifest_build_parser.set_defaults(func=main_audit_manifest_build)
+
+    review_parser = subparsers.add_parser(
+        "font-audit-review",
+        help="metadata findings 무인 승인",
+    )
+    review_parser.add_argument(
+        "action",
+        choices=["auto-approve"],
+        help="실행 액션",
+    )
+    review_parser.add_argument(
+        "--run-id", required=True, help="조회할 감사 run의 UUID"
+    )
+    review_parser.set_defaults(func=main_audit_review)
 
     crawl_all_parser = subparsers.add_parser(
         "font-audit-crawl-all",

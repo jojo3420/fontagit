@@ -11,7 +11,7 @@ from fontagit_pipeline.licenses import LicenseFetchError
 
 
 def test_prod_manifest_apply_requires_every_extra_gate_without_second_file_read() -> None:
-    """prod는 enable·승인 ID·승인 SHA 중 하나라도 없으면 RPC 전에 멈춘다."""
+    """prod는 enable-승인 ID-승인 SHA 중 하나라도 없으면 RPC 전에 멈춘다."""
     manifest_bytes = b"{}"
     digest = hashlib.sha256(manifest_bytes).hexdigest()
     manifest_path = MagicMock(read_bytes=MagicMock(return_value=manifest_bytes))
@@ -259,7 +259,145 @@ def test_main_returns_3_on_supabase_config_mismatch(tmp_path):
 
                         result = main()
 
-                        # write_output은 호출되어야 함 (JSON 저장)
                         mock_write.assert_called_once()
-                        # exit code는 3이어야 함 (설정 불완전)
                         assert result == 3
+"""Task 4: font-audit-manifest build CLI 테스트."""
+
+import argparse
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+from uuid import uuid4
+
+from fontagit_pipeline.__main__ import main_audit_manifest_build
+from fontagit_pipeline.audit_manifest import ManifestBundle, ManifestPaths
+
+
+def _mock_run() -> dict:
+    """build_manifest가 기대하는 run 구조."""
+    return {
+        "id": str(uuid4()),
+        "baseline_sha256": "a" * 64,
+        "finished_at": "2026-07-23T00:00:00Z",
+        "started_at": "2026-07-22T00:00:00Z",
+        "target_count": 10,
+    }
+
+
+def _mock_finding(run_id: str) -> dict:
+    """build_manifest가 기대하는 finding 구조."""
+    return {
+        "id": str(uuid4()),
+        "run_id": run_id,
+        "font_id": str(uuid4()),
+        "field_name": "tags",
+        "before_value": ["old-tag"],
+        "proposed_value": ["new-tag"],
+        "evidence_id": str(uuid4()),
+        "confidence": 0.95,
+        "reviewed_by": "tester@example.com",
+        "reviewed_at": "2026-07-23T00:00:00Z",
+        "source_key": {"provider": "noonnu", "provider_record_id": "12345"},
+        "status": "approved",
+    }
+
+
+def _mock_font_row(font_id: str) -> dict:
+    """build_manifest가 기대하는 current font row 구조."""
+    return {
+        "id": font_id,
+        "family": "Test Font",
+        "tags": ["new-tag"],
+        "weights": [400, 700],
+        "evidence_snapshots": [
+            {
+                "id": str(uuid4()),
+                "font_id": font_id,
+                "provider": "noonnu",
+                "provider_record_id": "12345",
+                "captured_at": "2026-07-23T00:00:00Z",
+                "tags": ["new-tag"],
+                "weights": [400, 700],
+            }
+        ],
+    }
+
+
+def test_manifest_build_with_approved_findings() -> None:
+    """정상: approved findings가 있으면 manifest 번들을 생성한다."""
+    run = _mock_run()
+    finding = _mock_finding(run["id"])
+    font_row = _mock_font_row(finding["font_id"])
+
+    out_dir = Path("/tmp/test_manifest_build")
+    args = argparse.Namespace(
+        out=out_dir,
+        run_id=run["id"],
+    )
+
+    mock_bundle = MagicMock(spec=ManifestBundle)
+    mock_bundle.forward_sha256 = "f" * 64
+    mock_bundle.reverse_sha256 = "r" * 64
+
+    mock_paths = MagicMock(spec=ManifestPaths)
+    mock_paths.forward = out_dir / "forward.json"
+    mock_paths.forward_sha256 = out_dir / "forward.sha256"
+    mock_paths.reverse = out_dir / "reverse.json"
+    mock_paths.reverse_sha256 = out_dir / "reverse.sha256"
+
+    # Store와 헬퍼 함수들만 mock, load_audit_settings는 실제 사용
+    with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_store_ctor, patch(
+        "fontagit_pipeline.audit_manifest.build_manifest", return_value=mock_bundle
+    ) as mock_build, patch(
+        "fontagit_pipeline.audit_manifest.write_manifest_bundle", return_value=mock_paths
+    ) as mock_write:
+        mock_store = MagicMock()
+        mock_store.get_run.return_value = run
+        mock_store.get_approved_findings.return_value = [finding]
+        mock_store.get_current_fonts_with_snapshots.return_value = [font_row]
+        mock_store_ctor.return_value = mock_store
+
+        result = main_audit_manifest_build(args)
+
+        assert result == 0, f"Expected exit code 0 but got {result}"
+        mock_store.get_run.assert_called_once()
+        mock_store.get_approved_findings.assert_called_once()
+        mock_store.get_current_fonts_with_snapshots.assert_called_once()
+        mock_build.assert_called_once_with(run, [finding], [font_row])
+        mock_write.assert_called_once_with(mock_bundle, out_dir)
+
+
+def test_manifest_build_no_approved_findings_exits_nonzero() -> None:
+    """비정상: approved findings가 0건이면 비정상 종료한다."""
+    run = _mock_run()
+    args = argparse.Namespace(
+        out=Path("/tmp/test_manifest_build"),
+        run_id=run["id"],
+    )
+
+    with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_store_ctor:
+        mock_store = MagicMock()
+        mock_store.get_run.return_value = run
+        mock_store.get_approved_findings.return_value = []  # 빈 목록
+        mock_store_ctor.return_value = mock_store
+
+        result = main_audit_manifest_build(args)
+
+        assert result == 1, f"Expected exit code 1 but got {result}"
+
+
+def test_manifest_build_run_not_found_exits_nonzero() -> None:
+    """비정상: run을 찾을 수 없으면 비정상 종료한다."""
+    run_id = str(uuid4())
+    args = argparse.Namespace(
+        out=Path("/tmp/test_manifest_build"),
+        run_id=run_id,
+    )
+
+    with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_store_ctor:
+        mock_store = MagicMock()
+        mock_store.get_run.side_effect = ValueError(f"Run {run_id} not found")
+        mock_store_ctor.return_value = mock_store
+
+        result = main_audit_manifest_build(args)
+
+        assert result == 1, f"Expected exit code 1 but got {result}"

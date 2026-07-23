@@ -228,8 +228,12 @@ class AuditReport:
             raise AuditGateError("target count must be greater than zero")
         if self.pending_count:
             raise AuditGateError("pending remains")
-        if self.target_count and self.needs_review_count / self.target_count > 0.10:
-            raise AuditGateError("pilot review ratio exceeds 10%")
+        if self.stage == "metadata":
+            if self.target_count and self.broken_count / self.target_count > 0.10:
+                raise AuditGateError("broken ratio exceeds 10%")
+        else:
+            if self.target_count and self.needs_review_count / self.target_count > 0.10:
+                raise AuditGateError("pilot review ratio exceeds 10%")
 
     def as_dict(self) -> dict[str, object]:
         domains: dict[str, int] = {}
@@ -392,6 +396,11 @@ def run_legal_audit(
     return report
 
 
+def _default_font_fetcher(url: str, *, max_bytes: int) -> FetchResult:
+    """기본 폰트 파일 fetcher — 호출부의 max_bytes 키워드 계약을 fetch_public_url로 전달한다."""
+    return fetch_public_url(url, max_body_bytes=max_bytes, delay_seconds=_CRAWL_DELAY_SECONDS)
+
+
 def run_metadata_audit(
     targets: Sequence[FontTarget],
     store: AuditStore,
@@ -413,9 +422,7 @@ def run_metadata_audit(
         effective_font_fetcher: AuditFetcher = font_fetcher
     else:
         effective_font_fetcher = (
-            (lambda url: fetch_public_url(url, max_body_bytes=32 * 1024 * 1024, delay_seconds=_CRAWL_DELAY_SECONDS))
-            if fetcher is fetch_public_url
-            else fetcher
+            _default_font_fetcher if fetcher is fetch_public_url else fetcher
         )
     baseline_sha256 = _baseline_sha256(targets)
     run_id = (
@@ -432,6 +439,7 @@ def run_metadata_audit(
     finding_ids: list[UUID] = []
     verified = 0
     needs_review = 0
+    broken = 0
     errors: list[str] = []
     for target in targets:
         if dry_run:
@@ -531,7 +539,7 @@ def run_metadata_audit(
             else:
                 needs_review += 1
         except (FetchError, OSError, UnicodeError, ValueError) as exc:
-            needs_review += 1
+            broken += 1
             errors.append(f"{target.slug}: {type(exc).__name__}")
             finding = FindingDraft(
                 font_id=target.font_id,
@@ -552,6 +560,7 @@ def run_metadata_audit(
         finding_ids=finding_ids,
         verified_count=verified,
         needs_review_count=needs_review,
+        broken_count=broken,
         errors=errors,
     )
     if not dry_run:
@@ -578,6 +587,7 @@ def _collect_metadata_evidence(
     source_kind: str
     source_page: str
     file_urls: list[str]
+    parsed: NoonnuFontSnapshot | None = None
     partial_file = False
     if approved_files:
         approved_candidate = approved_files[0]
@@ -669,6 +679,8 @@ def _collect_metadata_evidence(
         "font_file_count": len(fetched_files),
         "font_file_urls": file_urls,
     }
+    if source_kind == "noonnu" and parsed is not None and parsed.tags:
+        extracted["tags"] = list(parsed.tags)
     normalized_sha256 = hashlib.sha256(
         json.dumps(extracted, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(
             "utf-8"

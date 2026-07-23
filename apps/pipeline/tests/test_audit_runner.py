@@ -8,6 +8,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 import hashlib
 import json
+import sys
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -15,6 +16,7 @@ import pytest
 
 from fontagit_pipeline.audit_runner import (
     AuditGateError,
+    AuditReport,
     CandidateUrl,
     FontTarget,
     AuditInputError,
@@ -265,6 +267,74 @@ def test_findings_are_immutable_per_run_and_urls_use_safe_priority() -> None:
         fetcher=noonnu_fetch,
     )
     assert mismatch_report.finding_ids == []
+
+
+def test_metadata_evidence_includes_noonnu_tags(monkeypatch: pytest.MonkeyPatch) -> None:
+    """눈누 메타데이터 증거에 추출된 태그가 포함되어야 한다."""
+    fixture = Path(__file__).parent / "fixtures" / "audit" / "noonnu-white-tailed-eagle.html"
+    reference_html = fixture.read_bytes()
+
+    def noonnu_fetch(url: str) -> FetchResult:
+        content = reference_html if url.endswith("/613") else b"<html><body>cta</body></html>"
+        return FetchResult(200, url, content, "1" * 64, 0)
+
+    def font_fetch(url: str, max_bytes: int = 32 * 1024 * 1024) -> FetchResult:
+        return _fetched(url)
+
+    monkeypatch.setattr("fontagit_pipeline.audit_runner.sys.platform", "linux")
+
+    noonnu_target = replace(
+        _targets()[0], name_ko="흰꼬리수리", foundry=None, candidates=()
+    )
+    store = InMemoryAuditStore()
+    report = run_metadata_audit(
+        [noonnu_target],
+        store,
+        registry={"version": 1, "entries": []},
+        fetcher=noonnu_fetch,
+        font_fetcher=font_fetch,
+    )
+
+    # 스냅샷에서 extracted["tags"]를 검증한다.
+    _, snapshot = store.snapshot_draft(report.snapshot_ids[0])
+    assert snapshot.extracted.get("tags") == ["삐뚤빼뚤"]
+
+
+def test_metadata_evidence_omits_empty_noonnu_tags(monkeypatch: pytest.MonkeyPatch) -> None:
+    """눈누 메타데이터 증거에서 빈 태그는 extracted에 포함되지 않아야 한다."""
+    fixture = Path(__file__).parent / "fixtures" / "audit" / "noonnu-white-tailed-eagle.html"
+    # 기존 fixture에서 태그 링크를 제거한 버전 생성
+    original_html = fixture.read_text(encoding="utf-8")
+    # 태그 링크 제거: <a href="/index?search=%EC%82%90%EB%9A%A4%EB%B9%BC%EB%9A%A4">삐뚤빼뚤</a>
+    empty_tags_html = original_html.replace(
+        '<a href="/index?search=%EC%82%90%EB%9A%A4%EB%B9%BC%EB%9A%A4">삐뚤빼뚤</a>',
+        ""
+    ).encode("utf-8")
+
+    def noonnu_fetch(url: str) -> FetchResult:
+        content = empty_tags_html if url.endswith("/613") else b"<html><body>cta</body></html>"
+        return FetchResult(200, url, content, "1" * 64, 0)
+
+    def font_fetch(url: str, max_bytes: int = 32 * 1024 * 1024) -> FetchResult:
+        return _fetched(url)
+
+    monkeypatch.setattr("fontagit_pipeline.audit_runner.sys.platform", "linux")
+
+    noonnu_target = replace(
+        _targets()[0], name_ko="흰꼬리수리", foundry=None, candidates=()
+    )
+    store = InMemoryAuditStore()
+    report = run_metadata_audit(
+        [noonnu_target],
+        store,
+        registry={"version": 1, "entries": []},
+        fetcher=noonnu_fetch,
+        font_fetcher=font_fetch,
+    )
+
+    # 스냅샷에서 extracted에 "tags" 키가 없어야 한다.
+    _, snapshot = store.snapshot_draft(report.snapshot_ids[0])
+    assert "tags" not in snapshot.extracted
 
 
 def test_dry_run_writes_artifacts_without_calling_store(tmp_path: Path) -> None:
@@ -935,3 +1005,381 @@ def test_batch_crawl_dry_run() -> None:
 
     assert report.dry_run is True
     assert len(report.targets) == 3
+
+
+# Stage-aware assert_safe gate tests
+def test_assert_safe_legal_stage_needs_review_ratio_10_percent() -> None:
+    """Legal stage: needs_review ratio <= 10% passes."""
+    targets = [
+        FontTarget(
+            font_id=uuid4(),
+            slug=f"f-{i}",
+            name_ko=f"폰트{i}",
+            source_tier="A",
+            provider="google-fonts",
+            provider_record_id=str(i),
+            reference_url=f"https://ex.com/{i}",
+        )
+        for i in range(10)
+    ]
+    report = AuditReport(
+        run_id=uuid4(),
+        stage="legal",
+        dry_run=True,
+        targets=targets,
+        snapshot_ids=[],
+        finding_ids=[],
+        verified_count=9,
+        needs_review_count=1,  # 10% of 10
+        broken_count=0,
+        pending_count=0,
+    )
+    report.assert_safe()
+
+
+def test_assert_safe_legal_stage_needs_review_ratio_exceeds_10_percent() -> None:
+    """Legal stage: needs_review ratio > 10% raises AuditGateError."""
+    targets = [
+        FontTarget(
+            font_id=uuid4(),
+            slug=f"f-{i}",
+            name_ko=f"폰트{i}",
+            source_tier="A",
+            provider="google-fonts",
+            provider_record_id=str(i),
+            reference_url=f"https://ex.com/{i}",
+        )
+        for i in range(10)
+    ]
+    report = AuditReport(
+        run_id=uuid4(),
+        stage="legal",
+        dry_run=True,
+        targets=targets,
+        snapshot_ids=[],
+        finding_ids=[],
+        verified_count=8,
+        needs_review_count=2,  # 20% of 10
+        broken_count=0,
+        pending_count=0,
+    )
+    with pytest.raises(AuditGateError, match="pilot review ratio exceeds 10%"):
+        report.assert_safe()
+
+
+def test_assert_safe_metadata_stage_ignores_needs_review_ratio() -> None:
+    """Metadata stage: needs_review ratio is ignored, should pass even with 80% needs_review."""
+    targets = [
+        FontTarget(
+            font_id=uuid4(),
+            slug=f"f-{i}",
+            name_ko=f"폰트{i}",
+            source_tier="A",
+            provider="google-fonts",
+            provider_record_id=str(i),
+            reference_url=f"https://ex.com/{i}",
+        )
+        for i in range(10)
+    ]
+    report = AuditReport(
+        run_id=uuid4(),
+        stage="metadata",
+        dry_run=True,
+        targets=targets,
+        snapshot_ids=[],
+        finding_ids=[],
+        verified_count=2,
+        needs_review_count=8,  # 80% of 10, would fail legal stage
+        broken_count=0,
+        pending_count=0,
+    )
+    report.assert_safe()
+
+
+def test_assert_safe_metadata_stage_broken_ratio_check() -> None:
+    """Metadata stage: broken ratio is checked instead of needs_review."""
+    targets = [
+        FontTarget(
+            font_id=uuid4(),
+            slug=f"f-{i}",
+            name_ko=f"폰트{i}",
+            source_tier="A",
+            provider="google-fonts",
+            provider_record_id=str(i),
+            reference_url=f"https://ex.com/{i}",
+        )
+        for i in range(100)
+    ]
+    report = AuditReport(
+        run_id=uuid4(),
+        stage="metadata",
+        dry_run=True,
+        targets=targets,
+        snapshot_ids=[],
+        finding_ids=[],
+        verified_count=10,
+        needs_review_count=85,  # 85% needs_review (would fail legal)
+        broken_count=5,  # 5% broken (low, should pass)
+        pending_count=0,
+    )
+    report.assert_safe()
+
+
+def test_assert_safe_metadata_stage_high_broken_ratio_fails() -> None:
+    """Metadata stage: high broken ratio should raise AuditGateError."""
+    targets = [
+        FontTarget(
+            font_id=uuid4(),
+            slug=f"f-{i}",
+            name_ko=f"폰트{i}",
+            source_tier="A",
+            provider="google-fonts",
+            provider_record_id=str(i),
+            reference_url=f"https://ex.com/{i}",
+        )
+        for i in range(100)
+    ]
+    report = AuditReport(
+        run_id=uuid4(),
+        stage="metadata",
+        dry_run=True,
+        targets=targets,
+        snapshot_ids=[],
+        finding_ids=[],
+        verified_count=50,
+        needs_review_count=35,
+        broken_count=15,  # 15% broken, exceeds threshold
+        pending_count=0,
+    )
+    with pytest.raises(AuditGateError, match="broken ratio exceeds 10%"):
+        report.assert_safe()
+
+
+def test_assert_safe_all_stages_pending_blocked() -> None:
+    """All stages: pending must be 0."""
+    targets = [
+        FontTarget(
+            font_id=uuid4(),
+            slug=f"f-{i}",
+            name_ko=f"폰트{i}",
+            source_tier="A",
+            provider="google-fonts",
+            provider_record_id=str(i),
+            reference_url=f"https://ex.com/{i}",
+        )
+        for i in range(10)
+    ]
+    for stage in ["legal", "metadata", "script"]:
+        report = AuditReport(
+            run_id=uuid4(),
+            stage=stage,
+            dry_run=True,
+            targets=targets,
+            snapshot_ids=[],
+            finding_ids=[],
+            verified_count=9,
+            needs_review_count=0,
+            broken_count=0,
+            pending_count=1,  # Non-zero pending
+        )
+        with pytest.raises(AuditGateError, match="pending remains"):
+            report.assert_safe()
+
+
+def test_assert_safe_script_stage_needs_review_ratio() -> None:
+    """Script stage: should enforce 10% needs_review ratio like legal."""
+    targets = [
+        FontTarget(
+            font_id=uuid4(),
+            slug=f"f-{i}",
+            name_ko=f"폰트{i}",
+            source_tier="A",
+            provider="google-fonts",
+            provider_record_id=str(i),
+            reference_url=f"https://ex.com/{i}",
+        )
+        for i in range(10)
+    ]
+    report = AuditReport(
+        run_id=uuid4(),
+        stage="script",
+        dry_run=True,
+        targets=targets,
+        snapshot_ids=[],
+        finding_ids=[],
+        verified_count=9,
+        needs_review_count=1,  # 10% of 10
+        broken_count=0,
+        pending_count=0,
+    )
+    report.assert_safe()
+
+
+def test_assert_safe_script_stage_high_needs_review() -> None:
+    """Script stage: should enforce 10% needs_review ratio like legal."""
+    targets = [
+        FontTarget(
+            font_id=uuid4(),
+            slug=f"f-{i}",
+            name_ko=f"폰트{i}",
+            source_tier="A",
+            provider="google-fonts",
+            provider_record_id=str(i),
+            reference_url=f"https://ex.com/{i}",
+        )
+        for i in range(10)
+    ]
+    report = AuditReport(
+        run_id=uuid4(),
+        stage="script",
+        dry_run=True,
+        targets=targets,
+        snapshot_ids=[],
+        finding_ids=[],
+        verified_count=8,
+        needs_review_count=2,  # 20% of 10
+        broken_count=0,
+        pending_count=0,
+    )
+    with pytest.raises(AuditGateError, match="pilot review ratio exceeds 10%"):
+        report.assert_safe()
+
+
+def test_run_metadata_audit_broken_count_on_fetch_error() -> None:
+    """run_metadata_audit sets broken_count when FetchError occurs."""
+    from fontagit_pipeline.audit_http import FetchError
+    
+    store = InMemoryAuditStore()
+    targets = [
+        FontTarget(
+            font_id=uuid4(),
+            slug="font-fetch-fail",
+            name_ko="폰트페치실패",
+            name_en="FontFetchFail",
+            source_tier="B",
+            provider="google-fonts",
+            provider_record_id="test-id",
+            reference_url="https://fonts.google.com/specimen/Roboto",
+        ),
+        FontTarget(
+            font_id=uuid4(),
+            slug="font-fetch-success",
+            name_ko="폰트페치성공",
+            name_en="FontFetchSuccess",
+            source_tier="B",
+            provider="google-fonts",
+            provider_record_id="test-id-2",
+            reference_url="https://fonts.google.com/specimen/Arial",
+        ),
+    ]
+    
+    def failing_fetcher(url: str, *, delay_seconds: float = 0.0) -> FetchResult:
+        """Fetcher that throws FetchError for first target, succeeds for second."""
+        if "Roboto" in url:
+            raise FetchError(f"Connection failed for {url}")
+        return FetchResult(
+            url=url,
+            http_status=200,
+            final_url=url,
+            content_sha256="a" * 64,
+            content=b"test metadata",
+        )
+    
+    registry = {"version": 1, "entries": []}
+    
+    # Skip this test on non-Linux (metadata audit requires Linux)
+    if not sys.platform.startswith("linux"):
+        pytest.skip("metadata audit requires Linux")
+    
+    report = run_metadata_audit(
+        targets,
+        store,
+        registry,
+        dry_run=True,
+        fetcher=failing_fetcher,
+    )
+    
+    # Verify broken_count is > 0 (first target failed to fetch)
+    assert report.broken_count > 0, f"Expected broken_count > 0, got {report.broken_count}"
+    # Verify we still have verified/needs_review from second target
+    assert report.verified_count + report.needs_review_count > 0
+
+
+def test_metadata_audit_gate_rejects_high_broken_ratio() -> None:
+    """Metadata audit gate rejects when broken ratio exceeds 10%."""
+    from fontagit_pipeline.audit_http import FetchError
+    
+    store = InMemoryAuditStore()
+    # Create 20 targets, will fail 3 (15% broken)
+    targets = [
+        FontTarget(
+            font_id=uuid4(),
+            slug=f"font-{i}",
+            name_ko=f"폰트{i}",
+            name_en=f"Font{i}",
+            source_tier="B",
+            provider="google-fonts",
+            provider_record_id=str(i),
+            reference_url=f"https://fonts.google.com/specimen/Font{i}",
+        )
+        for i in range(20)
+    ]
+    
+    fail_count = 0
+    
+    def failing_fetcher(url: str, *, delay_seconds: float = 0.0) -> FetchResult:
+        """Fetcher that fails for first 3 targets."""
+        nonlocal fail_count
+        if fail_count < 3:
+            fail_count += 1
+            raise FetchError(f"Connection failed for {url}")
+        return FetchResult(
+            url=url,
+            http_status=200,
+            final_url=url,
+            content_sha256="b" * 64,
+            content=b"test metadata",
+        )
+    
+    registry = {"version": 1, "entries": []}
+    
+    if not sys.platform.startswith("linux"):
+        pytest.skip("metadata audit requires Linux")
+    
+    report = run_metadata_audit(
+        targets,
+        store,
+        registry,
+        dry_run=True,
+        fetcher=failing_fetcher,
+    )
+    
+    # Verify broken_count is 3 (15% of 20)
+    assert report.broken_count == 3
+    # Verify gate rejects
+    with pytest.raises(AuditGateError, match="broken ratio exceeds 10%"):
+        report.assert_safe()
+
+
+def test_default_font_fetcher_accepts_max_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """회귀: 기본 font_fetcher는 호출부의 max_bytes 키워드 계약을 fetch_public_url로 전달한다.
+
+    2026-07-23 파일럿에서 기본 lambda가 max_bytes를 안 받아 TypeError로 크래시.
+    이 경로는 리눅스 라이브에서만 실행돼 mock 주입 테스트가 못 잡았다.
+    """
+    from fontagit_pipeline import audit_runner
+
+    captured: dict[str, object] = {}
+
+    def _fake_fetch(url: str, **kwargs: object) -> FetchResult:
+        captured["url"] = url
+        captured.update(kwargs)
+        return _fetched(url)
+
+    monkeypatch.setattr(audit_runner, "fetch_public_url", _fake_fetch)
+    result = audit_runner._default_font_fetcher("https://example.com/a.woff2", max_bytes=1234)
+
+    assert result.status == 200
+    assert captured["url"] == "https://example.com/a.woff2"
+    assert captured["max_body_bytes"] == 1234
+    assert captured["delay_seconds"] == audit_runner._CRAWL_DELAY_SECONDS
