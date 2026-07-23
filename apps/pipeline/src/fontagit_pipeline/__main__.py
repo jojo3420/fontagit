@@ -432,32 +432,80 @@ def main_audit_export_baseline(args: argparse.Namespace) -> int:
 
 
 def main_audit_bootstrap_apply(args: argparse.Namespace) -> int:
-    """bootstrap manifest를 RPC로 dev에 적용한다."""
+    """bootstrap manifest를 RPC로 dev에 적용한다 (신형 22필드 산출물 → 구형 7필드 RPC로 투영)."""
     import hashlib
+    import json
 
     from fontagit_pipeline.audit_store import SupabaseAuditStore
     from fontagit_pipeline.config import load_audit_settings
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     try:
-        # SHA256 검증
+        # 1. 원본 파일 SHA256 검증
         manifest_bytes = args.manifest.read_bytes()
         file_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
         if file_sha256 != args.confirm_hash:
             logger.error("bootstrap manifest SHA-256 불일치")
             return 3
 
-        # dev RPC 호출
+        # 2. 원본 payload 로드
+        manifest_dict = json.loads(manifest_bytes.decode("utf-8"))
+        if not isinstance(manifest_dict.get("entries"), list):
+            raise ValueError("entries가 배열이 아닙니다")
+
+        # 3. RPC 계약으로 투영: 신형 22필드 → 구형 7필드
+        # (current 키 제거, before에서 7필드만 선별)
+        projected_entries = []
+        for entry in manifest_dict["entries"]:
+            before = entry.get("before", {})
+            if not isinstance(before, dict):
+                raise ValueError("before가 dict가 아닙니다")
+
+            # before 필드 검증 및 선별
+            before_keys = {"foundry", "name_en", "name_ko", "official_url", "slug", "source_tier", "updated_at"}
+            projected_before = {}
+            for key in before_keys:
+                if key not in before:
+                    raise ValueError(f"before에 필수 키 '{key}'가 없습니다 (계약 위반)")
+                projected_before[key] = before[key]
+
+            projected_entry = {
+                "font_id": entry.get("font_id"),
+                "provider": entry.get("provider"),
+                "provider_record_id": entry.get("provider_record_id"),
+                "slug": entry.get("slug"),
+                "source_url": entry.get("source_url"),
+                "public_updates": entry.get("public_updates", {}),
+                "before": projected_before,
+            }
+            projected_entries.append(projected_entry)
+
+        # 4. 투영 payload 구성
+        projected_payload = {
+            "schema_version": manifest_dict.get("schema_version", 1),
+            "matched": manifest_dict.get("matched"),
+            "unmatched": manifest_dict.get("unmatched"),
+            "conflicts": manifest_dict.get("conflicts"),
+            "review_rows": manifest_dict.get("review_rows"),
+            "entries": projected_entries,
+        }
+
+        # 5. 투영 payload SHA256 계산
+        projected_text = json.dumps(projected_payload, ensure_ascii=False)
+        projected_sha256 = hashlib.sha256(projected_text.encode("utf-8")).hexdigest()
+
+        logger.info("bootstrap manifest 투영: file_sha=%s projected_sha=%s", file_sha256, projected_sha256)
+
+        # 6. dev RPC 호출
         settings = load_audit_settings()
         dev_url, dev_secret = settings.dev_write_credentials()
         store = SupabaseAuditStore.from_dev_credentials(dev_url, dev_secret)
 
-        # RPC 호출
         result = store._schema.rpc(
             "apply_font_source_bootstrap",
             {
-                "p_manifest_text": manifest_bytes.decode("utf-8"),
-                "p_expected_sha256": args.confirm_hash,
+                "p_manifest_text": projected_text,
+                "p_expected_sha256": projected_sha256,
                 "p_schema_version": 1,
             },
         ).execute()
