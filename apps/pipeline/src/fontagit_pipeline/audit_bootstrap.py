@@ -402,6 +402,8 @@ def fetch_dev_service_rows(supabase_url: str, service_key: str) -> list[dict[str
                 params={
                     "select": _PUBLIC_FONT_COLUMNS,
                     "order": "slug.asc",
+                    # service 키는 RLS를 우회하므로 공개 카탈로그(published)만 명시 필터
+                    "status": "eq.published",
                 },
             )
             response.raise_for_status()
