@@ -143,7 +143,7 @@ def classify_scripts(codepoints: Iterable[int]) -> ScriptCoverage:
 
 
 def classify_face_scripts(cmaps: Sequence[Iterable[int]]) -> ScriptCoverage:
-    """같은 family·weight·style로 확인된 분할 cmap을 먼저 합친다."""
+    """같은 family-weight-style로 확인된 분할 cmap을 먼저 합친다."""
     union: set[int] = set()
     for cmap in cmaps:
         union.update(cmap)
@@ -276,7 +276,7 @@ def compare_metadata(
     official_snapshot: _MetadataSnapshot,
     file_metadata: FontFileMetadata,
 ) -> list[FindingDraft]:
-    """공식·공공기관 파일의 exact identity가 맞을 때만 자동 후보를 만든다."""
+    """공식-공공기관 파일의 exact identity가 맞을 때만 자동 후보를 만든다."""
     coverage = classify_scripts(file_metadata.codepoints)
     target_names = {
         normalized
@@ -562,3 +562,17 @@ def _parse_face(font: Any) -> dict[str, object]:
         "units_per_em": getattr(head, "unitsPerEm", None),
         "italic_angle": float(italic_angle) if isinstance(italic_angle, (int, float)) else None,
     }
+
+
+def derive_proposed_value(
+    field_name: str,
+    extracted: Mapping[str, object],
+) -> object:
+    """증거에서 기대되는 proposed_value를 파생한다 (tags/weights 전용)."""
+    if field_name == "tags":
+        return extracted.get("tags")
+    if field_name == "weights":
+        weight = extracted.get("weight")
+        if weight is not None:
+            return [weight]
+    return None

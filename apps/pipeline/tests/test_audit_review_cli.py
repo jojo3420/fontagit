@@ -13,7 +13,9 @@ def _mock_run(stage: str = "metadata") -> dict:
     return {
         "id": str(uuid4()),
         "stage": stage,
-        "status": "running",
+        "status": "completed",
+        "broken_count": 0,
+        "target_count": 50,
     }
 
 

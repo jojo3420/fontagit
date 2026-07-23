@@ -463,7 +463,7 @@ def main_audit_bootstrap_apply(args: argparse.Namespace) -> int:
                 raise ValueError("before가 dict가 아닙니다")
 
             # before 필드 검증 및 선별
-            before_keys = {"foundry", "name_en", "name_ko", "official_url", "slug", "source_tier", "updated_at"}
+            before_keys = ("foundry", "name_en", "name_ko", "official_url", "slug", "source_tier", "updated_at")
             projected_before = {}
             for key in before_keys:
                 if key not in before:
@@ -492,7 +492,7 @@ def main_audit_bootstrap_apply(args: argparse.Namespace) -> int:
         }
 
         # 5. 투영 payload SHA256 계산
-        projected_text = json.dumps(projected_payload, ensure_ascii=False)
+        projected_text = json.dumps(projected_payload, sort_keys=True, ensure_ascii=False)
         projected_sha256 = hashlib.sha256(projected_text.encode("utf-8")).hexdigest()
 
         logger.info("bootstrap manifest 투영: file_sha=%s projected_sha=%s", file_sha256, projected_sha256)
@@ -710,6 +710,7 @@ def main_audit_manifest_apply(args: argparse.Namespace) -> int:
     from fontagit_pipeline.audit_manifest import ManifestError, verify_manifest_bytes
     from fontagit_pipeline.config import load_audit_settings
 
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     try:
         manifest_bytes = args.manifest.read_bytes()
         expected_hash = args.sha256.read_text(encoding="ascii")
@@ -773,6 +774,7 @@ def main_audit_manifest_build(args: argparse.Namespace) -> int:
     from fontagit_pipeline.audit_store import SupabaseAuditStore
     from fontagit_pipeline.config import load_audit_settings
 
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     try:
         run_id = UUID(args.run_id)
         settings = load_audit_settings()
@@ -882,12 +884,13 @@ def main_audit_review(args: argparse.Namespace) -> int:
     from fontagit_pipeline.audit_store import SupabaseAuditStore
     from fontagit_pipeline.config import load_audit_settings
 
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     try:
         if args.action != "auto-approve":
             raise ValueError(f"지원하지 않는 action: {args.action}")
 
         run_id = UUID(args.run_id)
-        reviewed_by = args.reviewed_by or "auto"
+        reviewed_by = "auto"
         settings = load_audit_settings()
         dev_url, dev_secret = settings.dev_write_credentials()
         store = SupabaseAuditStore.from_dev_credentials(dev_url, dev_secret)
@@ -901,12 +904,63 @@ def main_audit_review(args: argparse.Namespace) -> int:
             logger.error("run stage는 metadata여야 합니다: stage=%s", run_stage)
             return 1
 
+        # run status 검증: completed 상태 확인
+        run_status = run.get("status")
+        if run_status != "completed":
+            logger.error("run status는 completed여야 합니다: status=%s", run_status)
+            return 1
+
+        # broken ratio 검증: 10% 초과 금지
+        from typing import cast
+
+        broken_count = cast(int, run.get("broken_count")) or 0
+        target_count = cast(int, run.get("target_count")) or 0
+        if target_count and broken_count / target_count > 0.10:
+            logger.error(
+                "broken ratio 10%% 초과: broken=%d target=%d ratio=%.1f%%",
+                broken_count,
+                target_count,
+                100 * broken_count / target_count,
+            )
+            return 1
+
         # 2. proposed findings 조회 (tags/weights만)
         proposed_findings = store.get_proposed_findings(run_id)
         if not proposed_findings:
             logger.warning("승인 대상 findings가 없습니다: run_id=%s", run_id)
             return 0
         logger.info("승인 대상 findings 조회: count=%d", len(proposed_findings))
+
+        # 2.5. 증거 스냅샷 조회 (values-evidence 대조용)
+        from fontagit_pipeline.audit_metadata import derive_proposed_value
+
+        evidence_ids: set[str] = set()
+        for finding in proposed_findings:
+            evidence_id = finding.get("evidence_id")
+            if isinstance(evidence_id, str):
+                evidence_ids.add(evidence_id)
+
+        evidence_by_id: dict[str, dict[str, object]] = {}
+        chunk_size = 100
+        evidence_ids_list = list(evidence_ids)
+
+        for i in range(0, len(evidence_ids_list), chunk_size):
+            chunk = evidence_ids_list[i : i + chunk_size]
+            snapshots_result = (
+                store._schema.table("font_source_snapshots")
+                .select("id, extracted")
+                .in_("id", chunk)
+                .execute()
+            )
+            snapshots_data = snapshots_result.data
+            if not isinstance(snapshots_data, list):
+                raise RuntimeError("font_source_snapshots 조회 결과가 올바르지 않습니다")
+
+            for snapshot in snapshots_data:
+                snapshot_id = snapshot.get("id")
+                extracted = snapshot.get("extracted")
+                if isinstance(snapshot_id, str) and isinstance(extracted, dict):
+                    evidence_by_id[snapshot_id] = extracted
 
         # 3. 각 finding 승인 (개별 실패는 수집)
         approved_count = 0
@@ -915,10 +969,23 @@ def main_audit_review(args: argparse.Namespace) -> int:
         for finding in proposed_findings:
             finding_id = finding.get("id")
             field_name = finding.get("field_name")
+            evidence_id = finding.get("evidence_id")
+            proposed_value = finding.get("proposed_value")
 
             try:
                 if not isinstance(finding_id, str):
                     raise ValueError(f"invalid finding_id: {finding_id}")
+
+                # values-evidence 대조 (tags/weights 전용)
+                if field_name in {"tags", "weights"} and evidence_id and isinstance(evidence_id, str):
+                    extracted = evidence_by_id.get(evidence_id)
+                    if extracted:
+                        expected = derive_proposed_value(field_name, extracted)
+                        if expected != proposed_value:
+                            raise ValueError(
+                                f"evidence mismatch: field={field_name} expected={expected} proposed={proposed_value}"
+                            )
+
                 store.approve_finding(UUID(finding_id), reviewed_by=reviewed_by)
                 approved_count += 1
             except Exception as exc:  # DB 호출 경계: APIError, RuntimeError, ValueError 등
@@ -1137,7 +1204,7 @@ if __name__ == "__main__":
         "--source",
         choices=["prod-public", "dev-service"],
         required=True,
-        help="기준선 출처: prod-public=prod 공개 API, dev-service=dev 전체",
+        help="기준선 출처: prod-public=prod 공개 API, dev-service=dev published 한정",
     )
     baseline_parser.add_argument(
         "--out", type=Path, required=True, help="기준선 JSON 출력 경로"
@@ -1158,7 +1225,7 @@ if __name__ == "__main__":
 
     bootstrap_apply_parser = subparsers.add_parser(
         "font-audit-bootstrap-apply",
-        help="bootstrap manifest를 dev에 적용",
+        help="bootstrap manifest를 적용",
     )
     bootstrap_apply_parser.add_argument(
         "--manifest", type=Path, required=True, help="bootstrap-manifest.json 경로"
@@ -1240,9 +1307,6 @@ if __name__ == "__main__":
     )
     review_parser.add_argument(
         "--run-id", required=True, help="조회할 감사 run의 UUID"
-    )
-    review_parser.add_argument(
-        "--reviewed-by", default="auto", help="검수자 식별자 (기본값: auto)"
     )
     review_parser.set_defaults(func=main_audit_review)
 
