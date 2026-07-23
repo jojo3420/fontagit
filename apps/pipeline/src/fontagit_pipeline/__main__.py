@@ -643,6 +643,72 @@ def main_audit_manifest_apply(args: argparse.Namespace) -> int:
         return 3
 
 
+def main_audit_manifest_build(args: argparse.Namespace) -> int:
+    """approved findings를 조회하여 manifest 번들을 생성한다.
+
+    - run_id로 기준 run을 조회
+    - 해당 run의 approved findings 조회
+    - 현재 font 스냅샷 조회
+    - build_manifest로 번들 생성
+    - write_manifest_bundle로 파일 저장
+
+    build는 approve를 하지 않는다 — 이미 approved인 finding만 조회한다.
+    """
+    from uuid import UUID
+
+    from fontagit_pipeline.audit_manifest import ManifestError, build_manifest, write_manifest_bundle
+    from fontagit_pipeline.audit_store import SupabaseAuditStore
+    from fontagit_pipeline.config import load_audit_settings
+
+    try:
+        run_id = UUID(args.run_id)
+        settings = load_audit_settings()
+        dev_url, dev_secret = settings.dev_write_credentials()
+        store = SupabaseAuditStore.from_dev_credentials(dev_url, dev_secret)
+
+        # 1. run 조회
+        run = store.get_run(run_id)
+        logger.info("감사 run 조회: run_id=%s", run_id)
+
+        # 2. approved findings 조회
+        approved_findings = store.get_approved_findings(run_id)
+        if not approved_findings:
+            logger.error("승인된 findings가 없습니다: run_id=%s", run_id)
+            return 1
+        logger.info("승인된 findings 조회: count=%d", len(approved_findings))
+
+        # 3. 현재 font 스냅샷 조회
+        current_rows = store.get_current_fonts_with_snapshots(run_id)
+        logger.info("현재 font 스냅샷 조회: count=%d", len(current_rows))
+
+        # 4. manifest 번들 생성
+        bundle = build_manifest(run, approved_findings, current_rows)
+        logger.info(
+            "manifest 번들 생성: forward_sha256=%s reverse_sha256=%s",
+            bundle.forward_sha256[:8] + "...",
+            bundle.reverse_sha256[:8] + "...",
+        )
+
+        # 5. 파일 저장
+        paths = write_manifest_bundle(bundle, args.out)
+        logger.info(
+            "manifest 번들 저장: forward=%s reverse=%s",
+            paths.forward,
+            paths.reverse,
+        )
+
+        return 0
+    except ValueError as exc:
+        logger.error("입력값 오류: %s", exc)
+        return 1
+    except (ManifestError, OSError) as exc:
+        logger.error("manifest 생성 중단: %s", exc)
+        return 2
+    except Exception as exc:  # 외부 DB 경계
+        logger.error("manifest 생성 실패: %s", exc.__class__.__name__)
+        return 3
+
+
 def main_audit_crawl_all(args: argparse.Namespace) -> int:
     """전수 배치 크롤링을 실행하고 체크포인트로 재개를 지원한다."""
     from fontagit_pipeline.audit_license import _load_rules
@@ -894,6 +960,11 @@ if __name__ == "__main__":
     manifest_apply_parser.add_argument("--approved-hash")
     manifest_apply_parser.add_argument("--approval-id")
     manifest_apply_parser.set_defaults(func=main_audit_manifest_apply)
+
+    manifest_build_parser = manifest_subparsers.add_parser("build")
+    manifest_build_parser.add_argument("--run-id", required=True, help="조회할 감사 run의 UUID")
+    manifest_build_parser.add_argument("--out", type=Path, required=True, help="manifest 번들 저장 디렉터리")
+    manifest_build_parser.set_defaults(func=main_audit_manifest_build)
 
     crawl_all_parser = subparsers.add_parser(
         "font-audit-crawl-all",
