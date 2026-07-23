@@ -863,7 +863,7 @@ class SupabaseAuditStore:
         return all_findings
 
     def get_current_fonts_with_snapshots(
-        self, run_id: UUID
+        self, run_id: UUID, target_store: "SupabaseAuditStore | None" = None
     ) -> list[dict[str, object]]:
         """현재 run의 approved findings 증거 스냅샷과 폰트를 조회 (evidence_id 기준).
 
@@ -871,8 +871,12 @@ class SupabaseAuditStore:
         중복 제거되어 과거 run의 기존 행이 재사용됨. finding.evidence_id가 가리키는 행들을 직접 조회하여
         current rows를 구성한다. 이를 통해 타 run 귀속 스냅샷도 포함되며, 스냅샷 결측 오류를 사전 감지.
 
+        현재 상태 단언은 적용 대상 DB를 기준으로 한다. target_store가 지정되면 fonts와 font_sources는
+        그곳에서 조회하며, 감사 증거 스냅샷은 항상 self(dev)에서 조회한다.
+
         Args:
             run_id: 조회할 감사 run의 UUID
+            target_store: fonts/font_sources를 조회할 대상 스토어 (None이면 self 사용)
 
         Returns:
             font_source_snapshots가 포함된 font 레코드 리스트
@@ -942,49 +946,135 @@ class SupabaseAuditStore:
                     )
                 source_keys_seen[key] = True
 
-        # 4. fonts를 id in-list 청크 조회
+        # 4. fonts를 id in-list 청크 조회 (target_store가 있으면 그곳에서, 없으면 self에서)
         fonts_by_id: dict[str, dict[str, object]] = {}
+        query_store = target_store if target_store is not None else self
         font_ids_list = list(font_ids)
 
-        for i in range(0, len(font_ids_list), chunk_size):
-            chunk = font_ids_list[i : i + chunk_size]
-            fonts_result = (
-                self._schema.table("fonts")
-                .select("*")
-                .in_("id", chunk)
-                .execute()
-            )
-            fonts_data = fonts_result.data
-            if not isinstance(fonts_data, list):
-                raise RuntimeError("fonts 조회 결과가 올바르지 않습니다")
+        if target_store is not None:
+            # 스냅샷을 (provider, provider_record_id) 그룹으로 묶어서 font_sources 조회
+            source_groups: dict[tuple[str, str], list[dict[str, object]]] = {}
+            for snapshot in all_snapshots:
+                provider = snapshot.get("provider")
+                provider_record_id = snapshot.get("provider_record_id")
+                if provider and provider_record_id:
+                    key = (str(provider), str(provider_record_id))
+                    source_groups.setdefault(key, []).append(snapshot)
 
-            for font in fonts_data:
-                font_id = font.get("id")
+            # 각 (provider, provider_record_id)를 target_store의 font_sources에서 조회
+            target_font_ids: set[str] = set()
+            source_key_to_target_font_id: dict[tuple[str, str], str] = {}
+            for (provider, provider_record_id), snapshots in source_groups.items():
+                source_result = (
+                    target_store._schema.table("font_sources")
+                    .select("*")
+                    .eq("provider", provider)
+                    .eq("provider_record_id", provider_record_id)
+                    .execute()
+                )
+                source_data = source_result.data
+                if not isinstance(source_data, list):
+                    raise RuntimeError("font_sources 조회 결과가 올바르지 않습니다")
+
+                if len(source_data) != 1:
+                    raise RuntimeError(
+                        f"font_sources 매칭 실패: provider={provider} provider_record_id={provider_record_id} "
+                        f"조회 결과 {len(source_data)}건 (예상 1건)"
+                    )
+
+                source_row = source_data[0]
+                font_id = source_row.get("font_id")
                 if font_id is not None:
-                    fonts_by_id[font_id] = font
+                    target_font_ids.add(str(font_id))
+                    source_key_to_target_font_id[(provider, provider_record_id)] = str(font_id)
 
-        # fonts 결측 검증
-        if len(fonts_by_id) != len(font_ids):
-            raise RuntimeError(
-                f"fonts 결측: 예상 {len(font_ids)}, 조회 {len(fonts_by_id)}"
-            )
+            # target_store에서 fonts를 id in-list 청크 조회
+            target_font_ids_list = list(target_font_ids)
+            for i in range(0, len(target_font_ids_list), chunk_size):
+                chunk = target_font_ids_list[i : i + chunk_size]
+                fonts_result = (
+                    target_store._schema.table("fonts")
+                    .select("*")
+                    .in_("id", chunk)
+                    .execute()
+                )
+                fonts_data = fonts_result.data
+                if not isinstance(fonts_data, list):
+                    raise RuntimeError("fonts 조회 결과가 올바르지 않습니다")
+
+                for font in fonts_data:
+                    font_id = font.get("id")
+                    if font_id is not None:
+                        fonts_by_id[font_id] = font
+
+            # fonts 결측 검증
+            if len(fonts_by_id) != len(target_font_ids):
+                raise RuntimeError(
+                    f"fonts 결측: 예상 {len(target_font_ids)}, 조회 {len(fonts_by_id)}"
+                )
+        else:
+            # 기존 로직: self에서 조회
+            for i in range(0, len(font_ids_list), chunk_size):
+                chunk = font_ids_list[i : i + chunk_size]
+                fonts_result = (
+                    self._schema.table("fonts")
+                    .select("*")
+                    .in_("id", chunk)
+                    .execute()
+                )
+                fonts_data = fonts_result.data
+                if not isinstance(fonts_data, list):
+                    raise RuntimeError("fonts 조회 결과가 올바르지 않습니다")
+
+                for font in fonts_data:
+                    font_id = font.get("id")
+                    if font_id is not None:
+                        fonts_by_id[font_id] = font
+
+            # fonts 결측 검증
+            if len(fonts_by_id) != len(font_ids):
+                raise RuntimeError(
+                    f"fonts 결측: 예상 {len(font_ids)}, 조회 {len(fonts_by_id)}"
+                )
 
         # 5. snapshots를 fonts에 매핑하고 source_key 파생
         snapshots_by_font: dict[object, list[dict[str, object]]] = {}
-        for snapshot in all_snapshots:
-            font_id = snapshot.get("font_id")
-            if font_id in fonts_by_id:
+
+        if target_store is not None:
+            # target_store 사용: source_key_to_target_font_id 매핑을 통해 스냅샷 매핑
+            for snapshot in all_snapshots:
                 provider = snapshot.get("provider")
                 provider_record_id = snapshot.get("provider_record_id")
-                snapshot["source_key"] = {
-                    "provider": provider,
-                    "provider_record_id": provider_record_id,
-                }
+                if provider and provider_record_id:
+                    key = (str(provider), str(provider_record_id))
+                    if key in source_key_to_target_font_id:
+                        target_font_id = source_key_to_target_font_id[key]
+                        if target_font_id in fonts_by_id:
+                            snapshot["source_key"] = {
+                                "provider": provider,
+                                "provider_record_id": provider_record_id,
+                            }
 
-                if "source_key" not in fonts_by_id[font_id]:
-                    fonts_by_id[font_id]["source_key"] = snapshot["source_key"]
+                            if "source_key" not in fonts_by_id[target_font_id]:
+                                fonts_by_id[target_font_id]["source_key"] = snapshot["source_key"]
 
-                snapshots_by_font.setdefault(font_id, []).append(snapshot)
+                            snapshots_by_font.setdefault(target_font_id, []).append(snapshot)
+        else:
+            # 기존 로직: dev 폰트 ID로 직접 매핑
+            for snapshot in all_snapshots:
+                font_id = snapshot.get("font_id")
+                if font_id in fonts_by_id:
+                    provider = snapshot.get("provider")
+                    provider_record_id = snapshot.get("provider_record_id")
+                    snapshot["source_key"] = {
+                        "provider": provider,
+                        "provider_record_id": provider_record_id,
+                    }
+
+                    if "source_key" not in fonts_by_id[font_id]:
+                        fonts_by_id[font_id]["source_key"] = snapshot["source_key"]
+
+                    snapshots_by_font.setdefault(font_id, []).append(snapshot)
 
         for font_id, font_row in fonts_by_id.items():
             font_row["evidence_snapshots"] = snapshots_by_font.get(font_id, [])

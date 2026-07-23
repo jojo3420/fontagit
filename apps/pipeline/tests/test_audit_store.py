@@ -484,3 +484,162 @@ def test_get_current_fonts_with_snapshots_raises_on_missing_evidence_id() -> Non
     store = SupabaseAuditStore(client)
     with pytest.raises(RuntimeError, match="has no evidence_id"):
         store.get_current_fonts_with_snapshots(run_id)
+
+
+def test_get_current_fonts_with_snapshots_with_target_store() -> None:
+    """target_store 지정 시 fonts와 font_sources를 대상 스토어에서 조회."""
+    run_id = UUID("00000000-0000-0000-0000-000000000909")
+    font_id = UUID("00000000-0000-0000-0000-000000000810")
+    target_font_id = UUID("00000000-0000-0000-0000-000000000811")
+    snapshot_id = UUID("00000000-0000-0000-0000-000000000813")
+
+    # dev: approved finding, snapshot
+    finding_data = {
+        "id": str(uuid4()),
+        "run_id": str(run_id),
+        "font_id": str(font_id),
+        "field_name": "tags",
+        "status": "approved",
+        "evidence_id": str(snapshot_id),
+    }
+
+    snapshot_data = {
+        "id": str(snapshot_id),
+        "run_id": str(run_id),
+        "font_id": str(font_id),
+        "provider": "noonnu",
+        "provider_record_id": "613",
+        "source_kind": "official",
+        "document_kind": "download",
+        "request_url": "https://clova.ai/handwriting/list.html",
+        "final_url": "https://clova.ai/handwriting/list.html",
+        "http_status": 200,
+        "raw_text": "내부 원문은 정책 승인 전 내보내지 않는다.",
+        "raw_sha256": "b" * 64,
+        "normalized_sha256": "c" * 64,
+        "extracted": {"download_url": "https://clova.ai/font.zip"},
+        "evidence_locations": {"download_url": "a.download"},
+        "extraction_rule_id": "official-download-v1",
+        "parser_version": "audit-v1",
+        "collected_at": "2026-07-22T08:00:00+00:00",
+    }
+
+    # prod: font_sources, fonts with target updated_at
+    font_source_data = {
+        "font_id": str(target_font_id),
+        "provider": "noonnu",
+        "provider_record_id": "613",
+    }
+
+    target_font_data = {
+        "id": str(target_font_id),
+        "source_key": {"provider": "noonnu", "provider_record_id": "613"},
+        "slug": "흰꼬리수리",
+        "name_ko": "흰꼬리수리",
+        "name_en": None,
+        "foundry": None,
+        "official_url": "https://updated.example/link",
+        "status": "published",
+        "updated_at": "2026-07-23T12:00:00+00:00",  # target 값
+        "download_url": None,
+        "download_status": "pending",
+        "download_evidence_id": None,
+        "license_status": "pending",
+        "license_verified": True,
+    }
+
+    # dev schema: findings, snapshots, fonts는 여기서 조회 안함
+    dev_findings_response = _query([finding_data])
+    dev_snapshots_response = _query([snapshot_data])
+
+    dev_schema = MagicMock()
+    dev_schema.table.side_effect = [dev_findings_response, dev_snapshots_response]
+    dev_client = MagicMock()
+    dev_client.schema.return_value = dev_schema
+
+    dev_store = SupabaseAuditStore(dev_client)
+
+    # prod schema: font_sources, fonts
+    prod_font_sources_response = _query([font_source_data])
+    prod_fonts_response = _query([target_font_data])
+
+    prod_schema = MagicMock()
+    prod_schema.table.side_effect = [prod_font_sources_response, prod_fonts_response]
+    prod_client = MagicMock()
+    prod_client.schema.return_value = prod_schema
+
+    target_store = SupabaseAuditStore(prod_client)
+
+    # 호출: target_store 지정
+    results = dev_store.get_current_fonts_with_snapshots(run_id, target_store=target_store)
+
+    assert len(results) == 1
+    font = results[0]
+    assert font["id"] == str(target_font_id)
+    assert font["updated_at"] == "2026-07-23T12:00:00+00:00"  # prod 값
+    assert font["source_key"] == {"provider": "noonnu", "provider_record_id": "613"}
+    assert "evidence_snapshots" in font
+    assert len(font["evidence_snapshots"]) == 1
+
+
+def test_get_current_fonts_with_snapshots_font_sources_no_match() -> None:
+    """font_sources 매칭 0건 → RuntimeError."""
+    run_id = UUID("00000000-0000-0000-0000-000000000909")
+    font_id = UUID("00000000-0000-0000-0000-000000000810")
+    snapshot_id = UUID("00000000-0000-0000-0000-000000000813")
+
+    # dev: approved finding, snapshot
+    finding_data = {
+        "id": str(uuid4()),
+        "run_id": str(run_id),
+        "font_id": str(font_id),
+        "field_name": "tags",
+        "status": "approved",
+        "evidence_id": str(snapshot_id),
+    }
+
+    snapshot_data = {
+        "id": str(snapshot_id),
+        "run_id": str(run_id),
+        "font_id": str(font_id),
+        "provider": "noonnu",
+        "provider_record_id": "999",  # prod에 없는 id
+        "source_kind": "official",
+        "document_kind": "download",
+        "request_url": "https://clova.ai/handwriting/list.html",
+        "final_url": "https://clova.ai/handwriting/list.html",
+        "http_status": 200,
+        "raw_text": "내부 원문은 정책 승인 전 내보내지 않는다.",
+        "raw_sha256": "b" * 64,
+        "normalized_sha256": "c" * 64,
+        "extracted": {"download_url": "https://clova.ai/font.zip"},
+        "evidence_locations": {"download_url": "a.download"},
+        "extraction_rule_id": "official-download-v1",
+        "parser_version": "audit-v1",
+        "collected_at": "2026-07-22T08:00:00+00:00",
+    }
+
+    # dev schema
+    dev_findings_response = _query([finding_data])
+    dev_snapshots_response = _query([snapshot_data])
+
+    dev_schema = MagicMock()
+    dev_schema.table.side_effect = [dev_findings_response, dev_snapshots_response]
+    dev_client = MagicMock()
+    dev_client.schema.return_value = dev_schema
+
+    dev_store = SupabaseAuditStore(dev_client)
+
+    # prod schema: font_sources 조회 결과 0건
+    prod_empty_response = _query([])
+
+    prod_schema = MagicMock()
+    prod_schema.table.return_value = prod_empty_response
+    prod_client = MagicMock()
+    prod_client.schema.return_value = prod_schema
+
+    target_store = SupabaseAuditStore(prod_client)
+
+    # 호출: RuntimeError 발생
+    with pytest.raises(RuntimeError, match="font_sources 매칭 실패"):
+        dev_store.get_current_fonts_with_snapshots(run_id, target_store=target_store)

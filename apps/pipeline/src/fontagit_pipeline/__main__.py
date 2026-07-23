@@ -779,6 +779,20 @@ def main_audit_manifest_build(args: argparse.Namespace) -> int:
         dev_url, dev_secret = settings.dev_write_credentials()
         store = SupabaseAuditStore.from_dev_credentials(dev_url, dev_secret)
 
+        # target_store 초기화 (prod 대상 시)
+        target_store: SupabaseAuditStore | None = None
+        target = getattr(args, "target", "dev")
+        if target == "prod":
+            if not settings.supabase_prod_url or not settings.supabase_prod_secret_key:
+                logger.error("prod credentials 미설정")
+                return 3
+            target_store = SupabaseAuditStore.from_dev_credentials(
+                settings.supabase_prod_url, settings.supabase_prod_secret_key
+            )
+            logger.info("manifest build target: prod")
+        else:
+            logger.info("manifest build target: dev")
+
         # 1. run 조회
         run = store.get_run(run_id)
         logger.info("감사 run 조회: run_id=%s", run_id)
@@ -791,7 +805,7 @@ def main_audit_manifest_build(args: argparse.Namespace) -> int:
         logger.info("승인된 findings 조회: count=%d", len(approved_findings))
 
         # 3. 현재 font 스냅샷 조회
-        current_rows = store.get_current_fonts_with_snapshots(run_id)
+        current_rows = store.get_current_fonts_with_snapshots(run_id, target_store=target_store)
         logger.info("현재 font 스냅샷 조회: count=%d", len(current_rows))
 
         # 4. manifest 번들 생성
