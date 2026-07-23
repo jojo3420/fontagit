@@ -808,6 +808,21 @@ def main_audit_manifest_build(args: argparse.Namespace) -> int:
         current_rows = store.get_current_fonts_with_snapshots(run_id, target_store=target_store)
         logger.info("현재 font 스냅샷 조회: count=%d", len(current_rows))
 
+        if target_store is not None:
+            # 대상 DB 문맥 재바인딩: finding.font_id를 evidence가 붙은 대상 폰트로 치환
+            evidence_to_font = {
+                str(s.get("id")): str(row.get("id"))
+                for row in current_rows
+                for s in row.get("evidence_snapshots", [])
+            }
+            for finding in approved_findings:
+                target_font_id = evidence_to_font.get(str(finding.get("evidence_id")))
+                if target_font_id is None:
+                    raise ManifestError(
+                        f"finding evidence가 대상 현재행에 없습니다: {finding.get('id')}"
+                    )
+                finding["font_id"] = target_font_id
+
         # 4. manifest 번들 생성
         bundle = build_manifest(run, approved_findings, current_rows)
         logger.info(
