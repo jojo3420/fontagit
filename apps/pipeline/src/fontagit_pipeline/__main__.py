@@ -413,11 +413,19 @@ def main_audit_export_baseline(args: argparse.Namespace) -> int:
             if not settings.supabase_url or not settings.supabase_anon_key:
                 raise BootstrapError("SUPABASE_URL과 SUPABASE_ANON_KEY가 필요합니다")
             rows = fetch_prod_public_rows(settings.supabase_url, settings.supabase_anon_key)
+            # prod 기준선: 고정 개수/tier 기대치 검증
+            baseline_content_sha256 = calculate_baseline_content_sha256(rows)
+            file_sha256 = write_prod_baseline(rows, args.out)
         else:  # dev-service
             dev_url, dev_secret = settings.dev_write_credentials()
             rows = fetch_dev_service_rows(dev_url, dev_secret)
-        baseline_content_sha256 = calculate_baseline_content_sha256(rows)
-        file_sha256 = write_prod_baseline(rows, args.out)
+            # dev 기준선: 구조 검증만 (개수/tier 기대치 없음)
+            baseline_content_sha256 = calculate_baseline_content_sha256(
+                rows, expected_record_count=None, expected_tier_counts=None
+            )
+            file_sha256 = write_prod_baseline(
+                rows, args.out, expected_record_count=None, expected_tier_counts=None
+            )
     except (BootstrapError, OSError, httpx.HTTPError) as exc:
         logger.error("prod 공개 기준선 내보내기 실패: %s", exc)
         return 3
