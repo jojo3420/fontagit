@@ -301,12 +301,11 @@ begin
       script_status=case when v_entry->'after'?'script_status' then v_entry#>>'{after,script_status}' else f.script_status end,
       script_checked_at=case when v_entry->'after'?'script_checked_at' then nullif(v_entry#>>'{after,script_checked_at}','')::timestamptz else f.script_checked_at end,
       script_evidence_id=case when v_entry->'after'?'script_evidence_id' then nullif(v_entry#>>'{after,script_evidence_id}','')::uuid else f.script_evidence_id end,
-      updated_at=now()
-    where f.id=v_font_id;
-    get diagnostics v_rows = row_count;
-    v_updated := v_updated + v_rows;
+      updated_at=now() where f.id=v_font_id;
+    get diagnostics v_rows = row_count; v_updated := v_updated + v_rows;
   end loop;
 
+  if not v_rollback then update fontagit.font_audit_findings set status='applied' where run_id=(v_manifest->>'run_id')::uuid and id in (select jsonb_array_elements_text(entry->'finding_ids')::uuid from pg_temp.font_audit_targets); end if;
   return v_updated;
 end;
 $$;
