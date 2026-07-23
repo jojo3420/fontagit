@@ -432,9 +432,10 @@ def main_audit_export_baseline(args: argparse.Namespace) -> int:
 
 
 def main_audit_bootstrap_apply(args: argparse.Namespace) -> int:
-    """bootstrap manifest를 RPC로 dev에 적용한다 (신형 22필드 산출물 → 구형 7필드 RPC로 투영)."""
+    """bootstrap manifest를 RPC로 dev 또는 prod에 적용한다 (신형 22필드 산출물 → 구형 7필드 RPC로 투영)."""
     import hashlib
     import json
+    import os
 
     from fontagit_pipeline.audit_store import SupabaseAuditStore
     from fontagit_pipeline.config import load_audit_settings
@@ -496,10 +497,20 @@ def main_audit_bootstrap_apply(args: argparse.Namespace) -> int:
 
         logger.info("bootstrap manifest 투영: file_sha=%s projected_sha=%s", file_sha256, projected_sha256)
 
-        # 6. dev RPC 호출
+        # 6. 대상 환경 RPC 호출
         settings = load_audit_settings()
-        dev_url, dev_secret = settings.dev_write_credentials()
-        store = SupabaseAuditStore.from_dev_credentials(dev_url, dev_secret)
+        if args.target == "prod":
+            if os.environ.get("FONTAGIT_PROD_MANIFEST_ENABLED") != "true":
+                logger.error("prod bootstrap 적용은 FONTAGIT_PROD_MANIFEST_ENABLED=true 필수")
+                return 3
+            if not settings.supabase_prod_url or not settings.supabase_prod_secret_key:
+                logger.error("prod credentials 미설정")
+                return 3
+            url, secret = settings.supabase_prod_url, settings.supabase_prod_secret_key
+        else:
+            url, secret = settings.dev_write_credentials()
+
+        store = SupabaseAuditStore.from_dev_credentials(url, secret)
 
         result = store._schema.rpc(
             "apply_font_source_bootstrap",
@@ -1123,7 +1134,7 @@ if __name__ == "__main__":
         "--manifest", type=Path, required=True, help="bootstrap-manifest.json 경로"
     )
     bootstrap_apply_parser.add_argument(
-        "--target", choices=["dev"], required=True, help="대상 환경"
+        "--target", choices=["dev", "prod"], required=True, help="대상 환경"
     )
     bootstrap_apply_parser.add_argument(
         "--confirm-hash", required=True, help="manifest SHA-256 확인"
@@ -1184,6 +1195,7 @@ if __name__ == "__main__":
 
     manifest_build_parser = manifest_subparsers.add_parser("build")
     manifest_build_parser.add_argument("--run-id", required=True, help="조회할 감사 run의 UUID")
+    manifest_build_parser.add_argument("--target", choices=["dev", "prod"], default="dev", help="현재 상태 조회 대상")
     manifest_build_parser.add_argument("--out", type=Path, required=True, help="manifest 번들 저장 디렉터리")
     manifest_build_parser.set_defaults(func=main_audit_manifest_build)
 
