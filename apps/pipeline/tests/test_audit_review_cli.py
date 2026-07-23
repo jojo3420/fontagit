@@ -8,24 +8,23 @@ from uuid import uuid4
 from fontagit_pipeline.__main__ import main_audit_review
 
 
-def _mock_run() -> dict:
+def _mock_run(stage: str = "metadata") -> dict:
     """audit_review 테스트용 mock run 객체."""
     return {
         "id": str(uuid4()),
-        "stage": "metadata",
+        "stage": stage,
         "status": "running",
     }
 
 
 def _mock_finding(run_id: str, field_name: str = "tags") -> dict:
-    """metadata findings 구조를 따르는 mock."""
+    """metadata findings 구조를 따르는 mock (실스키마: no stage, status=proposed)."""
     return {
         "id": str(uuid4()),
         "run_id": run_id,
         "font_id": str(uuid4()),
         "field_name": field_name,
-        "stage": "metadata",
-        "status": "needs_review",
+        "status": "proposed",
         "before_value": None,
         "proposed_value": ["tag1", "tag2"],
         "confidence": "high",
@@ -47,7 +46,7 @@ def test_audit_review_auto_approve_all_findings_success() -> None:
     with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_store_ctor:
         mock_store = MagicMock()
         mock_store.get_run.return_value = run
-        mock_store.get_needs_review_findings.return_value = findings
+        mock_store.get_proposed_findings.return_value = findings
         mock_store.approve_finding.return_value = None  # 성공 시 None 반환
         mock_store_ctor.return_value = mock_store
 
@@ -55,7 +54,7 @@ def test_audit_review_auto_approve_all_findings_success() -> None:
 
         assert result == 0, f"Expected exit code 0 but got {result}"
         mock_store.get_run.assert_called_once()
-        mock_store.get_needs_review_findings.assert_called_once()
+        mock_store.get_proposed_findings.assert_called_once()
         # 각 finding에 대해 approve_finding이 호출되어야 함
         assert mock_store.approve_finding.call_count == 2
 
@@ -72,7 +71,7 @@ def test_audit_review_no_needs_review_findings() -> None:
     with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_store_ctor:
         mock_store = MagicMock()
         mock_store.get_run.return_value = run
-        mock_store.get_needs_review_findings.return_value = []  # 빈 목록
+        mock_store.get_proposed_findings.return_value = []  # 빈 목록
         mock_store_ctor.return_value = mock_store
 
         result = main_audit_review(args)
@@ -98,7 +97,7 @@ def test_audit_review_partial_approval_failure() -> None:
     with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_store_ctor:
         mock_store = MagicMock()
         mock_store.get_run.return_value = run
-        mock_store.get_needs_review_findings.return_value = findings
+        mock_store.get_proposed_findings.return_value = findings
 
         # 첫 번째 호출은 성공, 두 번째는 실패
         mock_store.approve_finding.side_effect = [
@@ -145,7 +144,7 @@ def test_audit_review_runtime_error_mixed_with_success() -> None:
     with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_store_ctor:
         mock_store = MagicMock()
         mock_store.get_run.return_value = run
-        mock_store.get_needs_review_findings.return_value = findings
+        mock_store.get_proposed_findings.return_value = findings
 
         # 첫 번째: 성공, 두 번째: RuntimeError, 세 번째: 성공
         mock_store.approve_finding.side_effect = [
@@ -162,3 +161,24 @@ def test_audit_review_runtime_error_mixed_with_success() -> None:
         assert mock_store.approve_finding.call_count == 3
         # 실패는 1건, 성공은 2건
         assert len([f for f in findings]) == 3  # 모든 finding 처리 검증
+
+
+def test_audit_review_run_stage_not_metadata() -> None:
+    """비정상: run stage가 'metadata'이 아니면 exit 1."""
+    run = _mock_run(stage="legal")  # stage를 'legal'로 설정
+    args = argparse.Namespace(
+        action="auto-approve",
+        run_id=run["id"],
+        reviewed_by="auto",
+    )
+
+    with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_store_ctor:
+        mock_store = MagicMock()
+        mock_store.get_run.return_value = run
+        mock_store_ctor.return_value = mock_store
+
+        result = main_audit_review(args)
+
+        assert result == 1, f"Expected exit code 1 but got {result}"
+        # run 검증 실패이므로 findings 조회 안 됨
+        mock_store.get_proposed_findings.assert_not_called()

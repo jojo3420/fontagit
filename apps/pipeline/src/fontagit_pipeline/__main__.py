@@ -480,6 +480,9 @@ def main_audit_run(args: argparse.Namespace) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     try:
         targets = load_bootstrap_targets(args.bootstrap)
+        # metadata 감사는 눈누 파일 cmap 검사 기반이라 Tier A는 파일 후보가 없음
+        if args.stage == "metadata":
+            targets = [t for t in targets if t.source_tier == "B"]
         selected = select_pilot(targets, size=args.limit, require_slugs=args.require_slug)
         registry = load_source_registry()
         if args.stage == "metadata" and not args.dry_run and not sys.platform.startswith("linux"):
@@ -749,31 +752,34 @@ def main_audit_review(args: argparse.Namespace) -> int:
         dev_url, dev_secret = settings.dev_write_credentials()
         store = SupabaseAuditStore.from_dev_credentials(dev_url, dev_secret)
 
-        # 1. run 조회
+        # 1. run 조회 및 stage 검증
         run = store.get_run(run_id)
-        logger.info("감사 run 조회: run_id=%s stage=%s", run_id, run.get("stage"))
+        run_stage = run.get("stage")
+        logger.info("감사 run 조회: run_id=%s stage=%s", run_id, run_stage)
 
-        # 2. needs_review findings 조회
-        needs_review_findings = store.get_needs_review_findings(run_id)
-        if not needs_review_findings:
+        if run_stage != "metadata":
+            logger.error("run stage는 metadata여야 합니다: stage=%s", run_stage)
+            return 1
+
+        # 2. proposed findings 조회 (tags/weights만)
+        proposed_findings = store.get_proposed_findings(run_id)
+        if not proposed_findings:
             logger.warning("승인 대상 findings가 없습니다: run_id=%s", run_id)
             return 0
-        logger.info("승인 대상 findings 조회: count=%d", len(needs_review_findings))
+        logger.info("승인 대상 findings 조회: count=%d", len(proposed_findings))
 
         # 3. 각 finding 승인 (개별 실패는 수집)
         approved_count = 0
         failed_findings: list[dict[str, object]] = []
 
-        for finding in needs_review_findings:
+        for finding in proposed_findings:
             finding_id = finding.get("id")
             field_name = finding.get("field_name")
-            stage = finding.get("stage")
 
             try:
                 if not isinstance(finding_id, str):
                     raise ValueError(f"invalid finding_id: {finding_id}")
-                stage_str = stage if isinstance(stage, str) else "metadata"
-                store.approve_finding(UUID(finding_id), reviewed_by=reviewed_by, stage=stage_str)
+                store.approve_finding(UUID(finding_id), reviewed_by=reviewed_by)
                 approved_count += 1
             except Exception as exc:  # DB 호출 경계: APIError, RuntimeError, ValueError 등
                 logger.warning(
@@ -786,12 +792,12 @@ def main_audit_review(args: argparse.Namespace) -> int:
                 failed_findings.append(finding)
 
         # 4. 요약 로깅
-        summary = _summarize_findings_by_field(needs_review_findings)
+        summary = _summarize_findings_by_field(proposed_findings)
         logger.info(
             "승인 완료: approved=%d failed=%d total=%d field_distribution=%s",
             approved_count,
             len(failed_findings),
-            len(needs_review_findings),
+            len(proposed_findings),
             summary,
         )
 

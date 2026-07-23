@@ -494,24 +494,23 @@ class SupabaseAuditStore:
         ).eq("id", str(run_id)).execute()
 
     def approve_finding(
-        self, finding_id: UUID, *, reviewed_by: str, stage: str
+        self, finding_id: UUID, *, reviewed_by: str
     ) -> None:
-        """명시적 검증 후 metadata finding을 approved로 상태 전이.
+        """명시적 검증 후 metadata tags/weights finding을 approved로 상태 전이.
 
         Args:
             finding_id: 승인할 finding UUID
             reviewed_by: 검수자 식별자
-            stage: 요청 stage (DB와 일치 확인용)
 
         Raises:
-            ValueError: finding 미존재, field 불허, stage 불일치, 이미 approved, 동시성 실패, reviewed_by 비어있음
+            ValueError: finding 미존재, field 불허, status 불일치, 동시성 실패, reviewed_by 비어있음
         """
         # 검증 0: reviewed_by 필수
         if not reviewed_by or not str(reviewed_by).strip():
             raise ValueError("reviewed_by는 필수 입력입니다")
 
         # SELECT: finding 검색
-        query = self._schema.table("font_audit_findings").select("id", "field_name", "status", "stage").eq("id", str(finding_id)).limit(1)
+        query = self._schema.table("font_audit_findings").select("id", "field_name", "status").eq("id", str(finding_id)).limit(1)
         response = query.execute()
         data = response.data
 
@@ -525,25 +524,16 @@ class SupabaseAuditStore:
 
         field_name = row.get("field_name")
         current_status = row.get("status")
-        current_stage = row.get("stage")
 
         # 검증 2: field_name (tags, weights만 승인 가능)
         if field_name not in {"tags", "weights"}:
             raise ValueError(f"field '{field_name}' 는 승인 대상이 아닙니다")
 
-        # 검증 3: stage=="metadata" 강제
-        if current_stage != "metadata":
-            raise ValueError(f"stage는 metadata여야 합니다 (현재={current_stage})")
+        # 검증 3: 현재 상태 (proposed만)
+        if current_status != "proposed":
+            raise ValueError(f"status={current_status}인 경우 승인 불가 (proposed만 가능)")
 
-        # 검증 4: 요청 stage와 DB stage 일치
-        if current_stage != stage:
-            raise ValueError(f"stage 불일치: 요청={stage}, DB={current_stage}")
-
-        # 검증 5: 현재 상태 (needs_review만)
-        if current_status != "needs_review":
-            raise ValueError(f"status={current_status}인 경우 승인 불가 (needs_review만 가능)")
-
-        # UPDATE: 조건부 승인 (id+status+stage+field_name 조합)
+        # UPDATE: 조건부 승인 (id+status+field_name 조합)
         update_response = (
             self._schema.table("font_audit_findings")
             .update(
@@ -554,8 +544,7 @@ class SupabaseAuditStore:
                 }
             )
             .eq("id", str(finding_id))
-            .eq("status", "needs_review")
-            .eq("stage", "metadata")
+            .eq("status", "proposed")
             .eq("field_name", field_name)
             .execute()
         )
@@ -833,14 +822,14 @@ class SupabaseAuditStore:
 
         return all_findings
 
-    def get_needs_review_findings(self, run_id: UUID) -> list[dict[str, object]]:
-        """font_audit_findings 테이블에서 needs_review 상태의 metadata findings 조회 (페이지네이션).
+    def get_proposed_findings(self, run_id: UUID) -> list[dict[str, object]]:
+        """font_audit_findings 테이블에서 proposed 상태의 tags/weights findings 조회 (페이지네이션).
 
         Args:
             run_id: 조회할 감사 run의 UUID
 
         Returns:
-            needs_review 상태이고 stage가 metadata인 finding 레코드 리스트
+            proposed 상태이고 field_name이 tags 또는 weights인 finding 레코드 리스트
 
         Raises:
             RuntimeError: 부분 조회 실패(1,000행 제한 초과 가능성)
@@ -854,15 +843,15 @@ class SupabaseAuditStore:
                 self._schema.table("font_audit_findings")
                 .select("*")
                 .eq("run_id", str(run_id))
-                .eq("status", "needs_review")
-                .eq("stage", "metadata")
+                .eq("status", "proposed")
+                .in_("field_name", ["tags", "weights"])
                 .order("id", desc=False)
                 .range(offset, offset + page_size - 1)
                 .execute()
             )
             data = result.data
             if not isinstance(data, list):
-                raise RuntimeError("needs_review findings 조회 결과가 올바르지 않습니다")
+                raise RuntimeError("proposed findings 조회 결과가 올바르지 않습니다")
 
             all_findings.extend(data)
 
