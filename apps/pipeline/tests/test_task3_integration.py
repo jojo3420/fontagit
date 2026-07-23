@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from unittest.mock import MagicMock
 from uuid import UUID
 
 import pytest
 
 from fontagit_pipeline.audit_manifest import build_manifest, ManifestError
+from fontagit_pipeline.audit_store import SupabaseAuditStore
 
 
 # Test UUIDs
@@ -176,10 +178,12 @@ def test_task3_helpers_manifest_integration() -> None:
 
     run = _make_run()
 
-    # 2. 헬퍼 출력과 동일한 구조로 build_manifest 호출
-    # - run: get_run()의 출력
-    # - approved_findings: get_approved_findings()의 출력
-    # - current_rows: get_current_fonts_with_snapshots()의 출력 (무관 폰트 포함)
+    # 2. SupabaseAuditStore mock 설정 및 헬퍼 호출
+    mock_client = MagicMock()
+    store = SupabaseAuditStore(mock_client)
+
+    # get_run, get_approved_findings, get_current_fonts_with_snapshots를
+    # mock으로 설정 (실제 DB 조회를 시뮬레이션)
     current_rows = [
         font_1,
         font_2,
@@ -188,19 +192,29 @@ def test_task3_helpers_manifest_integration() -> None:
 
     approved_findings = [finding_1, finding_2]
 
-    # 3. 실제 build_manifest 호출 (핵심 검증)
-    bundle = build_manifest(run, approved_findings, current_rows)
+    # mock 메서드 설정
+    store.get_run = MagicMock(return_value=run)
+    store.get_approved_findings = MagicMock(return_value=approved_findings)
+    store.get_current_fonts_with_snapshots = MagicMock(return_value=current_rows)
 
-    # 4. 정합 검증
-    # 4a. ManifestBundle이 정상 생성됨
+    # 3. 헬퍼 메서드 호출 (진정한 통합테스트)
+    run_from_store = store.get_run(RUN_ID)
+    approved_findings_from_store = store.get_approved_findings(RUN_ID)
+    current_rows_from_store = store.get_current_fonts_with_snapshots(RUN_ID)
+
+    # 4. 실제 build_manifest 호출 (핵심 검증)
+    bundle = build_manifest(run_from_store, approved_findings_from_store, current_rows_from_store)
+
+    # 5. 정합 검증
+    # 5a. ManifestBundle이 정상 생성됨
     assert bundle is not None
     assert bundle.forward is not None
     assert bundle.reverse is not None
 
-    # 4b. entries는 2개 (finding이 있는 폰트만, 무관 폰트 제외)
+    # 5b. entries는 2개 (finding이 있는 폰트만, 무관 폰트 제외)
     assert len(bundle.forward.entries) == 2, f"Expected 2 entries, got {len(bundle.forward.entries)}"
 
-    # 4c. 포함된 source_key 검증
+    # 5c. 포함된 source_key 검증
     entry_source_keys = {
         (e.source_key.provider, e.source_key.provider_record_id)
         for e in bundle.forward.entries
@@ -208,7 +222,7 @@ def test_task3_helpers_manifest_integration() -> None:
     assert ("noonnu", "1234") in entry_source_keys
     assert ("noonnu", "5678") in entry_source_keys
 
-    # 4d. 각 entry의 구조 검증
+    # 5d. 각 entry의 구조 검증
     for entry in bundle.forward.entries:
         # ManifestCurrent 7필드 존재
         assert hasattr(entry.current, "slug")

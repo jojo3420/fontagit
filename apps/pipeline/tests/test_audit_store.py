@@ -4,6 +4,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import UUID
 
+import pytest
+
 from fontagit_pipeline.audit_store import SupabaseAuditStore
 
 
@@ -15,6 +17,9 @@ def _query(data: list[dict[str, object]]) -> MagicMock:
     query.upsert.return_value = query
     query.eq.return_value = query
     query.limit.return_value = query
+    query.order.return_value = query
+    query.range.return_value = query
+    query.in_.return_value = query
     query.execute.return_value = SimpleNamespace(data=data)
     return query
 
@@ -112,6 +117,31 @@ def test_approve_finding_updates_status_on_valid_tags_finding() -> None:
     store.approve_finding(UUID(finding_id), reviewed_by="test_user", stage="metadata")
 
 
+def test_approve_finding_raises_on_empty_reviewed_by() -> None:
+    """reviewed_by가 비어있으면 ValueError."""
+    finding_id = "00000000-0000-0000-0000-000000000901"
+
+    select_response = _query(
+        [
+            {
+                "id": finding_id,
+                "field_name": "tags",
+                "status": "needs_review",
+                "stage": "metadata",
+            }
+        ]
+    )
+
+    schema = MagicMock()
+    schema.table.side_effect = [select_response]
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+    with pytest.raises(ValueError, match="reviewed_by는 필수"):
+        store.approve_finding(UUID(finding_id), reviewed_by="", stage="metadata")
+
+
 def test_approve_finding_raises_on_nonexistent_finding() -> None:
     """finding이 존재하지 않으면 ValueError."""
     finding_id = "00000000-0000-0000-0000-000000000902"
@@ -124,11 +154,8 @@ def test_approve_finding_raises_on_nonexistent_finding() -> None:
     client.schema.return_value = schema
 
     store = SupabaseAuditStore(client)
-    try:
+    with pytest.raises(ValueError, match="존재하지 않는 finding"):
         store.approve_finding(UUID(finding_id), reviewed_by="test_user", stage="metadata")
-        assert False, "should raise ValueError"
-    except ValueError:
-        pass
 
 
 def test_approve_finding_raises_on_legal_field() -> None:
@@ -152,11 +179,8 @@ def test_approve_finding_raises_on_legal_field() -> None:
     client.schema.return_value = schema
 
     store = SupabaseAuditStore(client)
-    try:
+    with pytest.raises(ValueError, match="승인 대상이 아닙니다"):
         store.approve_finding(UUID(finding_id), reviewed_by="test_user", stage="metadata")
-        assert False, "should raise ValueError"
-    except ValueError:
-        pass
 
 
 def test_approve_finding_raises_on_stage_mismatch() -> None:
@@ -180,12 +204,9 @@ def test_approve_finding_raises_on_stage_mismatch() -> None:
     client.schema.return_value = schema
 
     store = SupabaseAuditStore(client)
-    try:
+    with pytest.raises(ValueError, match="stage 불일치"):
         # 요청 stage: "audit" (불일치)
         store.approve_finding(UUID(finding_id), reviewed_by="test_user", stage="audit")
-        assert False, "should raise ValueError"
-    except ValueError:
-        pass
 
 
 def test_approve_finding_raises_on_already_approved() -> None:
@@ -209,11 +230,8 @@ def test_approve_finding_raises_on_already_approved() -> None:
     client.schema.return_value = schema
 
     store = SupabaseAuditStore(client)
-    try:
+    with pytest.raises(ValueError, match="승인 불가"):
         store.approve_finding(UUID(finding_id), reviewed_by="test_user", stage="metadata")
-        assert False, "should raise ValueError"
-    except ValueError:
-        pass
 
 
 def test_approve_finding_raises_on_zero_affected_rows() -> None:
@@ -241,11 +259,8 @@ def test_approve_finding_raises_on_zero_affected_rows() -> None:
     client.schema.return_value = schema
 
     store = SupabaseAuditStore(client)
-    try:
+    with pytest.raises(ValueError, match="동시성 충돌"):
         store.approve_finding(UUID(finding_id), reviewed_by="test_user", stage="metadata")
-        assert False, "should raise ValueError"
-    except ValueError:
-        pass
 
 
 def test_get_run_returns_correct_audit_run() -> None:
@@ -390,7 +405,7 @@ def test_get_current_fonts_with_snapshots_returns_fonts_with_evidence() -> None:
     snapshots_response = _query([snapshot_data])
 
     schema = MagicMock()
-    schema.table.side_effect = [fonts_response, snapshots_response]
+    schema.table.side_effect = [snapshots_response, fonts_response]
     client = MagicMock()
     client.schema.return_value = schema
 

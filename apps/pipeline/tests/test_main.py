@@ -259,7 +259,8 @@ def test_main_returns_3_on_supabase_config_mismatch(tmp_path):
 
                         result = main()
 
-                        # write_output은 호출되어야 함 (JSON 저장)
+                        mock_write.assert_called_once()
+                        assert result == 3
 """Task 4: font-audit-manifest build CLI 테스트."""
 
 import argparse
