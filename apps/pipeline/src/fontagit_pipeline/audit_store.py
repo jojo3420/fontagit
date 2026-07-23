@@ -784,7 +784,10 @@ class SupabaseAuditStore:
         return data[0]
 
     def get_approved_findings(self, run_id: UUID) -> list[dict[str, object]]:
-        """font_audit_findings 테이블에서 approved 상태 findings 조회 (페이지네이션).
+        """font_audit_findings 테이블에서 승인 기록 findings 조회 (페이지네이션).
+
+        applied는 approved+반영 마커라 다른 타깃(build --target prod) 재조립을 위해 포함하고,
+        번들 계약(승인 기록)에 맞춰 status를 approved로 정규화해 돌려준다.
 
         Args:
             run_id: 조회할 감사 run의 UUID
@@ -804,7 +807,7 @@ class SupabaseAuditStore:
                 self._schema.table("font_audit_findings")
                 .select("*")
                 .eq("run_id", str(run_id))
-                .eq("status", "approved")
+                .in_("status", ["approved", "applied"])
                 .order("id", desc=False)
                 .range(offset, offset + page_size - 1)
                 .execute()
@@ -813,6 +816,9 @@ class SupabaseAuditStore:
             if not isinstance(data, list):
                 raise RuntimeError("approved findings 조회 결과가 올바르지 않습니다")
 
+            for row in data:
+                if row.get("status") == "applied":
+                    row["status"] = "approved"
             all_findings.extend(data)
 
             if len(data) < page_size:
