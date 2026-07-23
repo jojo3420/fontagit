@@ -1,6 +1,7 @@
 -- 증거(스냅샷)를 콘텐츠 기준으로 통일: dedup 재사용으로 타 run 스냅샷이 증거가 되므로
 -- run_id는 최초 수집 provenance일 뿐 정합성 기준이 아님. RPC 삽입은 매니페스트 run으로 기록.
--- 변경: (a) content-conflict 검사에서 run_id 비교 제거 (b) INSERT에서 run_id를 매니페스트 run으로
+-- 컬렉션 0단계: 눈누 폰트파일에서 추출한 tags/weights는 noonnu metadata font-file-script 증거로 reference 신뢰도 허용.
+-- 변경: (a) content-conflict 검사에서 run_id 비교 제거 (b) INSERT에서 run_id를 매니페스트 run으로 (c) tags/weights 눈누 증거 경로 허용
 
 create or replace function fontagit.apply_font_audit_manifest(
   p_manifest_text text, p_expected_sha256 text, p_schema_version integer
@@ -182,12 +183,19 @@ begin
                or (v_snapshot->>'document_kind'='metadata' and v_snapshot->>'source_kind'='noonnu'
                    and v_snapshot#>>'{extracted,evidence_role}'='font-file-script'
                    and v_finding->>'confidence'='reference')
+             ))
+         or (v_key in ('tags','weights') and not (
+               (v_snapshot->>'document_kind'='metadata' and v_snapshot->>'source_kind' in ('official','public')
+                and v_finding->>'confidence'=v_snapshot->>'source_kind')
+               or (v_snapshot->>'document_kind'='metadata' and v_snapshot->>'source_kind'='noonnu'
+                   and v_snapshot#>>'{extracted,evidence_role}'='font-file-script'
+                   and v_finding->>'confidence'='reference')
              )) then
         raise exception 'evidence document/source kind mismatch';
       end if;
-      if (v_key not in ('subsets','script_status','script_checked_at','script_evidence_id')
+      if (v_key not in ('subsets','script_status','script_checked_at','script_evidence_id','tags','weights')
           and v_finding->>'confidence' <> v_snapshot->>'source_kind')
-         or (v_key in ('foundry','foundry_url','name_en','name_ko','category_ko','tags','weights','variants')
+         or (v_key in ('foundry','foundry_url','name_en','name_ko','category_ko','variants')
              and (v_snapshot->>'document_kind'<>'metadata' or v_snapshot->>'source_kind' not in ('official','public'))) then
         raise exception 'metadata evidence is not official or public';
       end if;

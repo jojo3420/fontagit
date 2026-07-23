@@ -143,7 +143,8 @@ def _evidence_role_is_valid(
         "license_verified",
     }:
         required_document = "license"
-    elif field_name in _SCRIPT_FIELDS:
+    elif field_name in _SCRIPT_FIELDS or field_name in {"tags", "weights"}:
+        # 컬렉션 0단계: 눈누 폰트파일에서 추출한 tags/weights는 font-file-script 증거로 reference 신뢰도
         source_kind = snapshot.get("source_kind")
         extracted = snapshot.get("extracted")
         if (
