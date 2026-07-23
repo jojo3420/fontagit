@@ -786,14 +786,17 @@ class SupabaseAuditStore:
     def get_approved_findings(self, run_id: UUID) -> list[dict[str, object]]:
         """font_audit_findings 테이블에서 승인 기록 findings 조회 (페이지네이션).
 
-        applied는 approved+반영 마커라 다른 타깃(build --target prod) 재조립을 위해 포함하고,
-        번들 계약(승인 기록)에 맞춰 status를 approved로 정규화해 돌려준다.
+        store 계층에서 status 정규화를 수행한다.
+        - 조건: status in (approved, applied) 모두 포함
+        - applied는 "승인됨+이미 prod에 반영됨" 마커 (다른 타깃에서 재조립 시 추적용)
+        - 번들 계약(승인 기록 스냅샷)은 status=approved만 포함하므로,
+          store가 조회 시 applied→approved로 정규화하여 호출자 부담 제거
 
         Args:
             run_id: 조회할 감사 run의 UUID
 
         Returns:
-            approved 상태의 finding 레코드 리스트
+            approved 상태로 정규화된 finding 레코드 리스트
 
         Raises:
             RuntimeError: 부분 조회 실패(1,000행 제한 초과 가능성)
