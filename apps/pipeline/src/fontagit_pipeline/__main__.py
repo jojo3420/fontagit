@@ -452,11 +452,14 @@ def _project_bootstrap_manifest(manifest: dict[str, object]) -> dict[str, object
     Raises:
         ValueError: 필드 검증 실패 (before 결측, 필드 누락 등)
     """
-    if not isinstance(manifest.get("entries"), list):
+    from typing import cast
+
+    entries = manifest.get("entries")
+    if not isinstance(entries, list):
         raise ValueError("entries가 배열이 아닙니다")
 
     projected_entries = []
-    for entry in manifest["entries"]:
+    for entry in entries:
         before = entry.get("before", {})
         if not isinstance(before, dict):
             raise ValueError("before가 dict가 아닙니다")
