@@ -228,8 +228,12 @@ class AuditReport:
             raise AuditGateError("target count must be greater than zero")
         if self.pending_count:
             raise AuditGateError("pending remains")
-        if self.target_count and self.needs_review_count / self.target_count > 0.10:
-            raise AuditGateError("pilot review ratio exceeds 10%")
+        if self.stage == "metadata":
+            if self.target_count and self.broken_count / self.target_count > 0.10:
+                raise AuditGateError("broken ratio exceeds 10%")
+        else:
+            if self.target_count and self.needs_review_count / self.target_count > 0.10:
+                raise AuditGateError("pilot review ratio exceeds 10%")
 
     def as_dict(self) -> dict[str, object]:
         domains: dict[str, int] = {}
@@ -432,6 +436,7 @@ def run_metadata_audit(
     finding_ids: list[UUID] = []
     verified = 0
     needs_review = 0
+    broken = 0
     errors: list[str] = []
     for target in targets:
         if dry_run:
@@ -531,7 +536,7 @@ def run_metadata_audit(
             else:
                 needs_review += 1
         except (FetchError, OSError, UnicodeError, ValueError) as exc:
-            needs_review += 1
+            broken += 1
             errors.append(f"{target.slug}: {type(exc).__name__}")
             finding = FindingDraft(
                 font_id=target.font_id,
@@ -552,6 +557,7 @@ def run_metadata_audit(
         finding_ids=finding_ids,
         verified_count=verified,
         needs_review_count=needs_review,
+        broken_count=broken,
         errors=errors,
     )
     if not dry_run:
