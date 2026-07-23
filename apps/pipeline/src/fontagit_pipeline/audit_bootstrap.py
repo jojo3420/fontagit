@@ -419,6 +419,9 @@ def fetch_dev_service_rows(supabase_url: str, service_key: str) -> list[dict[str
             if not page_data:
                 break
             rows.extend(page_data)
+            # 클라우드 PostgREST는 총량 초과 Range에 416을 던지므로 exact count로 종료
+            if len(page_data) < page_size or len(rows) >= exact_total:
+                break
             offset += page_size
     if len(rows) != exact_total:
         raise BootstrapError(
@@ -468,7 +471,8 @@ def fetch_prod_public_rows(supabase_url: str, anon_key: str) -> list[dict[str, o
             if not isinstance(page, list) or not all(isinstance(row, dict) for row in page):
                 raise BootstrapError("prod 공개 API 응답 형식이 올바르지 않습니다")
             rows.extend(page)
-            if len(page) < page_size:
+            # 총량이 page_size 배수일 때 다음 요청이 416이 되는 것을 exact count로 방지
+            if len(page) < page_size or (exact_total is not None and len(rows) >= exact_total):
                 break
             offset += page_size
     if exact_total != len(rows):
