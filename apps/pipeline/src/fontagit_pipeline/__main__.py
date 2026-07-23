@@ -413,11 +413,19 @@ def main_audit_export_baseline(args: argparse.Namespace) -> int:
             if not settings.supabase_url or not settings.supabase_anon_key:
                 raise BootstrapError("SUPABASE_URL과 SUPABASE_ANON_KEY가 필요합니다")
             rows = fetch_prod_public_rows(settings.supabase_url, settings.supabase_anon_key)
+            # prod 기준선: 고정 개수/tier 기대치 검증
+            baseline_content_sha256 = calculate_baseline_content_sha256(rows)
+            file_sha256 = write_prod_baseline(rows, args.out)
         else:  # dev-service
             dev_url, dev_secret = settings.dev_write_credentials()
             rows = fetch_dev_service_rows(dev_url, dev_secret)
-        baseline_content_sha256 = calculate_baseline_content_sha256(rows)
-        file_sha256 = write_prod_baseline(rows, args.out)
+            # dev 기준선: 구조 검증만 (개수/tier 기대치 없음)
+            baseline_content_sha256 = calculate_baseline_content_sha256(
+                rows, expected_record_count=None, expected_tier_counts=None
+            )
+            file_sha256 = write_prod_baseline(
+                rows, args.out, expected_record_count=None, expected_tier_counts=None
+            )
     except (BootstrapError, OSError, httpx.HTTPError) as exc:
         logger.error("prod 공개 기준선 내보내기 실패: %s", exc)
         return 3
@@ -432,8 +440,64 @@ def main_audit_export_baseline(args: argparse.Namespace) -> int:
     return 0
 
 
+def _project_bootstrap_manifest(manifest: dict[str, object]) -> dict[str, object]:
+    """bootstrap manifest를 RPC 계약 형식으로 투영한다 (신형 22필드 → 구형 7필드).
+
+    Args:
+        manifest: 신형 22필드 manifest dict (entries 필수)
+
+    Returns:
+        구형 7필드 RPC 계약 형식 dict
+
+    Raises:
+        ValueError: 필드 검증 실패 (before 결측, 필드 누락 등)
+    """
+    from typing import cast
+
+    entries = manifest.get("entries")
+    if not isinstance(entries, list):
+        raise ValueError("entries가 배열이 아닙니다")
+
+    projected_entries = []
+    for entry in entries:
+        before = entry.get("before", {})
+        if not isinstance(before, dict):
+            raise ValueError("before가 dict가 아닙니다")
+
+        # before 필드 검증 및 선별
+        before_keys = ("foundry", "name_en", "name_ko", "official_url", "slug", "source_tier", "updated_at")
+        projected_before = {}
+        for key in before_keys:
+            if key not in before:
+                raise ValueError(f"before에 필수 키 '{key}'가 없습니다 (계약 위반)")
+            projected_before[key] = before[key]
+
+        projected_entry = {
+            "font_id": entry.get("font_id"),
+            "provider": entry.get("provider"),
+            "provider_record_id": entry.get("provider_record_id"),
+            "slug": entry.get("slug"),
+            "source_url": entry.get("source_url"),
+            "public_updates": entry.get("public_updates", {}),
+            "before": projected_before,
+        }
+        projected_entries.append(projected_entry)
+
+    # 투영 payload 구성
+    projected_payload = {
+        "schema_version": manifest.get("schema_version", 1),
+        "matched": manifest.get("matched"),
+        "unmatched": manifest.get("unmatched"),
+        "conflicts": manifest.get("conflicts"),
+        "review_rows": manifest.get("review_rows"),
+        "entries": projected_entries,
+    }
+
+    return projected_payload
+
+
 def main_audit_bootstrap_apply(args: argparse.Namespace) -> int:
-    """bootstrap manifest를 RPC로 dev 또는 prod에 적용한다 (신형 22필드 산출물 → 구형 7필드 RPC로 투영)."""
+    """bootstrap manifest를 RPC로 dev 또는 prod에 적용한다."""
     import hashlib
     import json
     import os
@@ -452,47 +516,11 @@ def main_audit_bootstrap_apply(args: argparse.Namespace) -> int:
 
         # 2. 원본 payload 로드
         manifest_dict = json.loads(manifest_bytes.decode("utf-8"))
-        if not isinstance(manifest_dict.get("entries"), list):
-            raise ValueError("entries가 배열이 아닙니다")
 
-        # 3. RPC 계약으로 투영: 신형 22필드 → 구형 7필드
-        # (current 키 제거, before에서 7필드만 선별)
-        projected_entries = []
-        for entry in manifest_dict["entries"]:
-            before = entry.get("before", {})
-            if not isinstance(before, dict):
-                raise ValueError("before가 dict가 아닙니다")
+        # 3. RPC 계약으로 투영
+        projected_payload = _project_bootstrap_manifest(manifest_dict)
 
-            # before 필드 검증 및 선별
-            before_keys = ("foundry", "name_en", "name_ko", "official_url", "slug", "source_tier", "updated_at")
-            projected_before = {}
-            for key in before_keys:
-                if key not in before:
-                    raise ValueError(f"before에 필수 키 '{key}'가 없습니다 (계약 위반)")
-                projected_before[key] = before[key]
-
-            projected_entry = {
-                "font_id": entry.get("font_id"),
-                "provider": entry.get("provider"),
-                "provider_record_id": entry.get("provider_record_id"),
-                "slug": entry.get("slug"),
-                "source_url": entry.get("source_url"),
-                "public_updates": entry.get("public_updates", {}),
-                "before": projected_before,
-            }
-            projected_entries.append(projected_entry)
-
-        # 4. 투영 payload 구성
-        projected_payload = {
-            "schema_version": manifest_dict.get("schema_version", 1),
-            "matched": manifest_dict.get("matched"),
-            "unmatched": manifest_dict.get("unmatched"),
-            "conflicts": manifest_dict.get("conflicts"),
-            "review_rows": manifest_dict.get("review_rows"),
-            "entries": projected_entries,
-        }
-
-        # 5. 투영 payload SHA256 계산
+        # 4. 투영 payload SHA256 계산
         projected_text = json.dumps(projected_payload, sort_keys=True, ensure_ascii=False)
         projected_sha256 = hashlib.sha256(projected_text.encode("utf-8")).hexdigest()
 
