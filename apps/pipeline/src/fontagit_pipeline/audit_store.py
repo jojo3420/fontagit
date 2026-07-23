@@ -808,21 +808,24 @@ class SupabaseAuditStore:
     def get_current_fonts_with_snapshots(
         self, run_id: UUID
     ) -> list[dict[str, object]]:
-        """fonts와 font_source_snapshots를 조회하여 evidence_snapshots 추가.
-        
+        """fonts와 font_source_snapshots를 조회하여 snapshots 추가.
+
+        Critical #1 FIX: run의 snapshots에 등장하는 font_id만 필터
+        Critical #2 FIX: source_key는 snapshot에서 (provider, provider_record_id)로 파생
+
         Args:
             run_id: 조회할 감사 run의 UUID
-            
+
         Returns:
-            evidence_snapshots가 포함된 font 레코드 리스트
+            font_source_snapshots가 포함된 font 레코드 리스트 (run 관련만)
         """
-        # fonts 조회
+        # 1. fonts 전체 조회
         fonts_result = self._schema.table("fonts").select("*").execute()
         fonts_data = fonts_result.data
         if not isinstance(fonts_data, list):
             raise RuntimeError("fonts 조회 결과가 올바르지 않습니다")
 
-        # snapshots 조회
+        # 2. snapshots을 run_id로 필터링하여 조회
         snapshots_result = (
             self._schema.table("font_source_snapshots")
             .select("*")
@@ -835,18 +838,38 @@ class SupabaseAuditStore:
                 "font_source_snapshots 조회 결과가 올바르지 않습니다"
             )
 
-        # fonts에 evidence_snapshots 추가
+        # 3. snapshots에서 font_id 추출 (run에 등장하는 font만 필터)
+        font_ids_in_run = set()
+        for snapshot in snapshots_data:
+            font_id = snapshot.get("font_id")
+            if font_id:
+                font_ids_in_run.add(font_id)
+
+        # 4. fonts에 evidence_snapshots 추가하되, run과 관련된 폰트만 포함 (Critical #1 해결)
         fonts_by_id: dict[str, dict[str, object]] = {}
         for font in fonts_data:
             font_id = font.get("id")
-            if font_id is not None:
+            if font_id is not None and font_id in font_ids_in_run:
                 font["evidence_snapshots"] = []
                 fonts_by_id[font_id] = font
 
-        # snapshots를 fonts에 매핑
+        # 5. snapshots를 fonts에 매핑하고 source_key 파생 (Critical #2 해결)
         for snapshot in snapshots_data:
             font_id = snapshot.get("font_id")
             if font_id in fonts_by_id:
+                # source_key를 snapshot에서 파생하여 snapshot과 font 행 모두에 추가
+                if "source_key" not in snapshot:
+                    provider = snapshot.get("provider")
+                    provider_record_id = snapshot.get("provider_record_id")
+                    snapshot["source_key"] = {
+                        "provider": provider,
+                        "provider_record_id": provider_record_id,
+                    }
+
+                # font 행에도 source_key 추가 (build_manifest에서 필요)
+                if "source_key" not in fonts_by_id[font_id]:
+                    fonts_by_id[font_id]["source_key"] = snapshot["source_key"]
+
                 fonts_by_id[font_id]["evidence_snapshots"].append(snapshot)
 
         return list(fonts_by_id.values())
