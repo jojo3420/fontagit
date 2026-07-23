@@ -393,23 +393,28 @@ def main_audit_policy_check(args: argparse.Namespace) -> int:
 
 
 def main_audit_export_baseline(args: argparse.Namespace) -> int:
-    """공개 anon API만 사용해 prod 기준선을 내보낸다."""
+    """prod 공개 또는 dev 서비스 기준선을 내보낸다."""
     from fontagit_pipeline.audit_bootstrap import (
         BootstrapError,
         calculate_baseline_content_sha256,
+        fetch_dev_service_rows,
         fetch_prod_public_rows,
         write_prod_baseline,
     )
     from fontagit_pipeline.config import load_audit_settings
 
-    if args.source != "prod-public":
+    if args.source not in ("prod-public", "dev-service"):
         logger.error("허용되지 않은 기준선 출처입니다: %s", args.source)
         return 2
     try:
         settings = load_audit_settings()
-        if not settings.supabase_url or not settings.supabase_anon_key:
-            raise BootstrapError("SUPABASE_URL과 SUPABASE_ANON_KEY가 필요합니다")
-        rows = fetch_prod_public_rows(settings.supabase_url, settings.supabase_anon_key)
+        if args.source == "prod-public":
+            if not settings.supabase_url or not settings.supabase_anon_key:
+                raise BootstrapError("SUPABASE_URL과 SUPABASE_ANON_KEY가 필요합니다")
+            rows = fetch_prod_public_rows(settings.supabase_url, settings.supabase_anon_key)
+        else:  # dev-service
+            dev_url, dev_secret = settings.dev_write_credentials()
+            rows = fetch_dev_service_rows(dev_url, dev_secret)
         baseline_content_sha256 = calculate_baseline_content_sha256(rows)
         file_sha256 = write_prod_baseline(rows, args.out)
     except (BootstrapError, OSError, httpx.HTTPError) as exc:
@@ -424,6 +429,52 @@ def main_audit_export_baseline(args: argparse.Namespace) -> int:
         file_sha256,
     )
     return 0
+
+
+def main_audit_bootstrap_apply(args: argparse.Namespace) -> int:
+    """bootstrap manifest를 RPC로 dev에 적용한다."""
+    import hashlib
+
+    from fontagit_pipeline.audit_store import SupabaseAuditStore
+    from fontagit_pipeline.config import load_audit_settings
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    try:
+        # SHA256 검증
+        manifest_bytes = args.manifest.read_bytes()
+        file_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
+        if file_sha256 != args.confirm_hash:
+            logger.error("bootstrap manifest SHA-256 불일치")
+            return 3
+
+        # dev RPC 호출
+        settings = load_audit_settings()
+        dev_url, dev_secret = settings.dev_write_credentials()
+        store = SupabaseAuditStore.from_dev_credentials(dev_url, dev_secret)
+
+        # RPC 호출
+        result = store._schema.rpc(
+            "apply_font_source_bootstrap",
+            {
+                "p_manifest_text": manifest_bytes.decode("utf-8"),
+                "p_expected_sha256": args.confirm_hash,
+                "p_schema_version": 1,
+            },
+        ).execute()
+
+        if isinstance(result.data, int) and result.data > 0:
+            logger.info("bootstrap manifest 적용 완료: %d건", result.data)
+            return 0
+        else:
+            logger.error("bootstrap manifest RPC 실패: %s", result.data)
+            return 3
+
+    except (ValueError, OSError) as exc:
+        logger.error("bootstrap manifest 적용 실패 (입력): %s", exc)
+        return 3
+    except Exception as exc:
+        logger.error("bootstrap manifest 적용 실패 (DB): %s", exc)
+        return 3
 
 
 def main_audit_bootstrap(args: argparse.Namespace) -> int:
@@ -995,9 +1046,9 @@ if __name__ == "__main__":
     )
     baseline_parser.add_argument(
         "--source",
-        choices=["prod-public"],
+        choices=["prod-public", "dev-service"],
         required=True,
-        help="읽기 전용 공개 prod 출처",
+        help="기준선 출처: prod-public=prod 공개 API, dev-service=dev 전체",
     )
     baseline_parser.add_argument(
         "--out", type=Path, required=True, help="기준선 JSON 출력 경로"
@@ -1015,6 +1066,21 @@ if __name__ == "__main__":
         "--out", type=Path, required=True, help="bootstrap JSON 출력 경로"
     )
     bootstrap_parser.set_defaults(func=main_audit_bootstrap)
+
+    bootstrap_apply_parser = subparsers.add_parser(
+        "font-audit-bootstrap-apply",
+        help="bootstrap manifest를 dev에 적용",
+    )
+    bootstrap_apply_parser.add_argument(
+        "--manifest", type=Path, required=True, help="bootstrap-manifest.json 경로"
+    )
+    bootstrap_apply_parser.add_argument(
+        "--target", choices=["dev"], required=True, help="대상 환경"
+    )
+    bootstrap_apply_parser.add_argument(
+        "--confirm-hash", required=True, help="manifest SHA-256 확인"
+    )
+    bootstrap_apply_parser.set_defaults(func=main_audit_bootstrap_apply)
 
     audit_run_parser = subparsers.add_parser(
         "font-audit-run",

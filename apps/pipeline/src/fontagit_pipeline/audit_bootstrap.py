@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 import os
 import re
 import tempfile
@@ -13,6 +14,8 @@ from typing import Mapping, Sequence
 import httpx
 
 from fontagit_pipeline.noonnu_seed import derive_noonnu_slug
+
+logger = logging.getLogger(__name__)
 
 _NOONNU_PAGE_ID = re.compile(r"^https://noonnu\.cc/font_page/([1-9][0-9]*)$")
 _CONTENT_RANGE = re.compile(r"^(?:[0-9]+-[0-9]+|\*)/([0-9]+)$")
@@ -140,7 +143,7 @@ def _before(row: Mapping[str, object]) -> dict[str, object]:
 
 
 def _validate_public_row_contract(row: Mapping[str, object]) -> None:
-    """공개 export가 누락·추가·기본값 보정 없는 정확한 DB 행인지 확인한다."""
+    """공개 export가 누락-추가-기본값 보정 없는 정확한 DB 행인지 확인한다."""
     if set(row) != set(_PUBLIC_FONT_FIELDS):
         raise BootstrapError("prod row columns가 공개 감사 계약과 다릅니다")
     required_text = {
@@ -376,6 +379,55 @@ def load_snapshot_records(path: Path, field: str) -> list[dict[str, object]]:
     return records
 
 
+def fetch_dev_service_rows(supabase_url: str, service_key: str) -> list[dict[str, object]]:
+    """service_role 키로 dev 전체 fonts를 페이지 단위로 읽는다 (RLS 우회, 정확한 기준선)."""
+    if not supabase_url.strip() or not service_key.strip():
+        raise BootstrapError("dev SUPABASE_URL과 SERVICE_KEY가 필요합니다")
+    endpoint = f"{supabase_url.rstrip('/')}/rest/v1/fonts"
+    headers = {
+        "apikey": service_key,
+        "Authorization": f"Bearer {service_key}",
+        "Prefer": "count=exact",
+        "Accept-Profile": "fontagit",
+    }
+    rows: list[dict[str, object]] = []
+    offset = 0
+    page_size = 1000
+    exact_total: int | None = None
+    with httpx.Client(timeout=20.0) as client:
+        while True:
+            response = client.get(
+                endpoint,
+                headers={**headers, "Range": f"{offset}-{offset + page_size - 1}"},
+                params={
+                    "select": _PUBLIC_FONT_COLUMNS,
+                    "order": "slug.asc",
+                },
+            )
+            response.raise_for_status()
+            content_range = response.headers.get("Content-Range", "")
+            count_match = _CONTENT_RANGE.fullmatch(content_range)
+            if count_match is None:
+                raise BootstrapError("dev API가 exact count를 반환하지 않았습니다")
+            page_total = int(count_match.group(1))
+            if exact_total is None:
+                exact_total = page_total
+                logger.info("dev 기준선 조회 대상: %d건", exact_total)
+            page_data = response.json()
+            if not isinstance(page_data, list):
+                raise BootstrapError("dev API 응답 형식이 잘못되었습니다")
+            if not page_data:
+                break
+            rows.extend(page_data)
+            offset += page_size
+    if len(rows) != exact_total:
+        raise BootstrapError(
+            f"dev 기준선 조회 완전하지 않음: 예상 {exact_total}, 조회 {len(rows)}"
+        )
+    logger.info("dev 기준선 조회 완료: %d건", len(rows))
+    return rows
+
+
 def fetch_prod_public_rows(supabase_url: str, anon_key: str) -> list[dict[str, object]]:
     """anon key로 published fonts만 페이지 단위로 읽는다. 쓰기 요청은 하지 않는다."""
     if not supabase_url.strip() or not anon_key.strip():
@@ -490,7 +542,7 @@ def calculate_baseline_content_sha256(
     expected_record_count: int = _EXPECTED_PROD_PUBLISHED_COUNT,
     expected_tier_counts: Mapping[str, int] | None = _EXPECTED_PROD_TIER_COUNTS,
 ) -> str:
-    """정렬·검증된 기준선 본문 해시를 계산한다."""
+    """정렬-검증된 기준선 본문 해시를 계산한다."""
     sorted_rows = _validated_sorted_prod_rows(
         rows,
         expected_record_count=expected_record_count,
@@ -534,7 +586,7 @@ def load_prod_baseline(
     expected_record_count: int = _EXPECTED_PROD_PUBLISHED_COUNT,
     expected_tier_counts: Mapping[str, int] | None = _EXPECTED_PROD_TIER_COUNTS,
 ) -> list[dict[str, object]]:
-    """완전성·본문 해시·파일 해시가 검증된 prod 기준선만 읽는다."""
+    """완전성-본문 해시-파일 해시가 검증된 prod 기준선만 읽는다."""
     try:
         content = path.read_bytes()
         payload = json.loads(content.decode("utf-8"))
