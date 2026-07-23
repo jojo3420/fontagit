@@ -305,3 +305,12 @@ def test_evidence_role_is_valid_tags_noonnu_missing_evidence_role() -> None:
         "extracted": {},  # evidence_role 없음
     }
     assert _evidence_role_is_valid("tags", snapshot, "reference") is False
+
+
+def test_build_manifest_snapshot_run_id_invalid_uuid() -> None:
+    """비정상: snapshot run_id가 유효한 UUID가 아니면 ManifestError."""
+    row = deepcopy(_row())
+    row["evidence_snapshots"][0]["run_id"] = "not-a-uuid"  # 유효하지 않은 UUID
+
+    with pytest.raises(ManifestError, match="snapshot.run_id"):
+        build_manifest(_run(), [_finding("download_url", None, "https://clova.ai/font.zip")], [row])

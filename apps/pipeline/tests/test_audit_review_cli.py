@@ -184,3 +184,108 @@ def test_audit_review_run_stage_not_metadata() -> None:
         assert result == 1, f"Expected exit code 1 but got {result}"
         # run 검증 실패이므로 findings 조회 안 됨
         mock_store.get_proposed_findings.assert_not_called()
+
+
+def test_audit_review_run_not_completed() -> None:
+    """비정상: run status가 'completed'이 아니면 exit 1."""
+    run = _mock_run()
+    run["status"] = "running"  # status를 'running'으로 변경
+
+    args = argparse.Namespace(
+        action="auto-approve",
+        run_id=run["id"],
+        reviewed_by="auto",
+    )
+
+    with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_store_ctor:
+        mock_store = MagicMock()
+        mock_store.get_run.return_value = run
+        mock_store_ctor.return_value = mock_store
+
+        result = main_audit_review(args)
+
+        assert result == 1, f"Expected exit code 1 but got {result}"
+        # status 검증 실패이므로 findings 조회 안 됨
+        mock_store.get_proposed_findings.assert_not_called()
+
+
+def test_audit_review_run_broken_ratio_exceeded() -> None:
+    """비정상: broken ratio가 10%를 초과하면 exit 1."""
+    run = _mock_run()
+    run["broken_count"] = 25
+    run["target_count"] = 50  # 50%로 설정, 임계값 10% 초과
+
+    args = argparse.Namespace(
+        action="auto-approve",
+        run_id=run["id"],
+        reviewed_by="auto",
+    )
+
+    with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_store_ctor:
+        mock_store = MagicMock()
+        mock_store.get_run.return_value = run
+        mock_store_ctor.return_value = mock_store
+
+        result = main_audit_review(args)
+
+        assert result == 1, f"Expected exit code 1 but got {result}"
+        # broken ratio 검증 실패이므로 findings 조회 안 됨
+        mock_store.get_proposed_findings.assert_not_called()
+
+
+def test_audit_review_evidence_mismatch() -> None:
+    """비정상: proposed_value가 evidence extracted와 다르면 해당 finding만 실패."""
+    from uuid import uuid4
+
+    run = _mock_run()
+    evidence_id = str(uuid4())
+
+    # tags/weights finding 섞임
+    findings = [
+        {
+            **_mock_finding(run["id"], "tags"),
+            "evidence_id": evidence_id,
+            "proposed_value": ["tag1", "tag2"],
+        },
+        {
+            **_mock_finding(run["id"], "weights"),
+            "evidence_id": str(uuid4()),  # 다른 evidence_id
+            "proposed_value": [400],
+        },
+    ]
+
+    args = argparse.Namespace(
+        action="auto-approve",
+        run_id=run["id"],
+        reviewed_by="auto",
+    )
+
+    with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_store_ctor:
+        mock_store = MagicMock()
+        mock_store.get_run.return_value = run
+        mock_store.get_proposed_findings.return_value = findings
+
+        # snapshot 조회 결과: 첫 번째 evidence의 extracted 값이 다름
+        # (proposed_value=["tag1", "tag2"]인데 extracted["tags"]는 ["different"])
+        mock_store._schema.table.return_value.select.return_value.in_.return_value.execute.return_value.data = [
+            {
+                "id": evidence_id,
+                "extracted": {"tags": ["different"]},  # proposed와 다른 값
+            },
+            {
+                "id": findings[1]["evidence_id"],
+                "extracted": {"weight": 400},  # proposed [400]과 일치
+            },
+        ]
+
+        # 첫 번째는 값-증거 검증 실패로 실패, 두 번째는 성공
+        mock_store.approve_finding.side_effect = [
+            None,  # 두 번째 finding 승인 성공
+        ]
+        mock_store_ctor.return_value = mock_store
+
+        result = main_audit_review(args)
+
+        assert result == 3, f"Expected exit code 3 but got {result}"
+        # 첫 번째는 실패로 건너뛰고, 두 번째만 승인 호출
+        assert mock_store.approve_finding.call_count == 1

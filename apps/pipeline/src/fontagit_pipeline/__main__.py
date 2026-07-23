@@ -25,6 +25,7 @@ from fontagit_pipeline.writer import write_output
 logger = logging.getLogger(__name__)
 _OUTPUT_PATH = Path("output") / "tier-a.json"
 _SOURCE = "google-fonts-webfonts-api"
+_BROKEN_RATIO_THRESHOLD = 0.10
 
 
 def build_document(
@@ -915,7 +916,7 @@ def main_audit_review(args: argparse.Namespace) -> int:
 
         broken_count = cast(int, run.get("broken_count")) or 0
         target_count = cast(int, run.get("target_count")) or 0
-        if target_count and broken_count / target_count > 0.10:
+        if target_count and broken_count / target_count > _BROKEN_RATIO_THRESHOLD:
             logger.error(
                 "broken ratio 10%% 초과: broken=%d target=%d ratio=%.1f%%",
                 broken_count,

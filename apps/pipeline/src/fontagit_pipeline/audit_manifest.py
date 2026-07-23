@@ -267,6 +267,7 @@ class FontAuditManifest(BaseModel):
             if set(snapshot) != _SNAPSHOT_KEYS:
                 raise ValueError("snapshot has unknown or missing keys")
             snapshot_id = _uuid(snapshot.get("id"), "snapshot.id")
+            _uuid(snapshot.get("run_id"), "snapshot.run_id")
             if snapshot_id in globally_used_ids:
                 raise ValueError("run, snapshot, and finding UUIDs must be globally unique")
             globally_used_ids.add(snapshot_id)
