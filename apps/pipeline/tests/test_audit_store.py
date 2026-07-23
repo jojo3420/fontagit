@@ -643,3 +643,130 @@ def test_get_current_fonts_with_snapshots_font_sources_no_match() -> None:
     # 호출: RuntimeError 발생
     with pytest.raises(RuntimeError, match="font_sources 매칭 실패"):
         dev_store.get_current_fonts_with_snapshots(run_id, target_store=target_store)
+
+
+def test_get_current_fonts_with_snapshots_chunked_query() -> None:
+    """N+1 제거: 2개 provider 그룹이 1회 청크 쿼리로 처리됨."""
+    run_id = UUID("00000000-0000-0000-0000-000000000909")
+    font_id_1 = UUID("00000000-0000-0000-0000-000000000810")
+    font_id_2 = UUID("00000000-0000-0000-0000-000000000811")
+    snapshot_id_1 = UUID("00000000-0000-0000-0000-000000000813")
+    snapshot_id_2 = UUID("00000000-0000-0000-0000-000000000814")
+
+    # dev: 2개 approved findings, 2개 snapshots (다른 provider)
+    finding_1 = {
+        "id": str(uuid4()),
+        "run_id": str(run_id),
+        "font_id": str(font_id_1),
+        "field_name": "tags",
+        "status": "approved",
+        "evidence_id": str(snapshot_id_1),
+    }
+    finding_2 = {
+        "id": str(uuid4()),
+        "run_id": str(run_id),
+        "font_id": str(font_id_2),
+        "field_name": "tags",
+        "status": "approved",
+        "evidence_id": str(snapshot_id_2),
+    }
+
+    snapshot_1 = {
+        "id": str(snapshot_id_1),
+        "run_id": str(run_id),
+        "font_id": str(font_id_1),
+        "provider": "noonnu",
+        "provider_record_id": "100",
+        "source_kind": "official",
+        "document_kind": "download",
+        "request_url": "https://clova.ai/font1.zip",
+        "final_url": "https://clova.ai/font1.zip",
+        "http_status": 200,
+        "raw_text": "text1",
+        "raw_sha256": "a" * 64,
+        "normalized_sha256": "b" * 64,
+        "extracted": {"download_url": "https://clova.ai/font1.zip"},
+        "evidence_locations": {"download_url": "a.download"},
+        "extraction_rule_id": "official-download-v1",
+        "parser_version": "audit-v1",
+        "collected_at": "2026-07-22T08:00:00+00:00",
+    }
+
+    snapshot_2 = {
+        "id": str(snapshot_id_2),
+        "run_id": str(run_id),
+        "font_id": str(font_id_2),
+        "provider": "google-fonts",
+        "provider_record_id": "200",
+        "source_kind": "official",
+        "document_kind": "download",
+        "request_url": "https://fonts.google.com/font2",
+        "final_url": "https://fonts.google.com/font2",
+        "http_status": 200,
+        "raw_text": "text2",
+        "raw_sha256": "c" * 64,
+        "normalized_sha256": "d" * 64,
+        "extracted": {"download_url": "https://fonts.google.com/font2"},
+        "evidence_locations": {"download_url": "b.download"},
+        "extraction_rule_id": "official-download-v1",
+        "parser_version": "audit-v1",
+        "collected_at": "2026-07-22T08:00:00+00:00",
+    }
+
+    dev_findings_response = _query([finding_1, finding_2])
+    dev_snapshots_response = _query([snapshot_1, snapshot_2])
+
+    dev_schema = MagicMock()
+    dev_schema.table.side_effect = [dev_findings_response, dev_snapshots_response]
+    dev_client = MagicMock()
+    dev_client.schema.return_value = dev_schema
+
+    dev_store = SupabaseAuditStore(dev_client)
+
+    # prod schema: font_sources와 fonts 응답
+    font_source_1 = {"id": str(uuid4()), "provider": "noonnu", "provider_record_id": "100", "font_id": str(font_id_1)}
+    font_source_2 = {"id": str(uuid4()), "provider": "google-fonts", "provider_record_id": "200", "font_id": str(font_id_2)}
+    font_1 = {"id": str(font_id_1), "family_name": "Font1"}
+    font_2 = {"id": str(font_id_2), "family_name": "Font2"}
+
+    # font_sources 응답: 두 provider 모두 포함 (각 .eq().in_() 호출마다 모든 결과 반환)
+    all_font_sources_response = _query([font_source_1, font_source_2])
+    fonts_response = _query([font_1, font_2])
+
+    prod_schema = MagicMock()
+
+    # table 호출 시마다 다른 mock 반환
+    def table_side_effect(table_name):
+        if table_name == "font_sources":
+            mock_obj = MagicMock()
+            # 각 .eq().in_() 체인이 호출될 때마다 모든 결과 반환
+            mock_obj.select.return_value.eq.return_value.in_.return_value = all_font_sources_response
+            return mock_obj
+        elif table_name == "fonts":
+            mock_obj = MagicMock()
+            mock_obj.select.return_value.in_.return_value = fonts_response
+            return mock_obj
+        else:
+            raise ValueError(f"Unexpected table: {table_name}")
+
+    prod_schema.table.side_effect = table_side_effect
+
+    prod_client = MagicMock()
+    prod_client.schema.return_value = prod_schema
+
+    target_store = SupabaseAuditStore(prod_client)
+
+    # 호출
+    result = dev_store.get_current_fonts_with_snapshots(run_id, target_store=target_store)
+
+    # 검증: N+1 제거 확인
+    # - 2개 provider가 있으므로 font_sources table 호출은 2회 (provider별 1회씩)
+    # - 각 provider별로 in_() 청크 쿼리로 모든 record_id를 한 번에 처리 (개별 쿼리 아님)
+    font_sources_calls = [
+        call for call in prod_schema.table.call_args_list if call[0][0] == "font_sources"
+    ]
+    assert len(font_sources_calls) == 2, f"Expected 2 font_sources calls (per provider), got {len(font_sources_calls)}"
+
+    # 결과 검증
+    assert len(result) == 2
+    assert all(isinstance(font, dict) for font in result)
