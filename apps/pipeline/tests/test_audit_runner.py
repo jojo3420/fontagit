@@ -1359,3 +1359,27 @@ def test_metadata_audit_gate_rejects_high_broken_ratio() -> None:
     # Verify gate rejects
     with pytest.raises(AuditGateError, match="broken ratio exceeds 10%"):
         report.assert_safe()
+
+
+def test_default_font_fetcher_accepts_max_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """회귀: 기본 font_fetcher는 호출부의 max_bytes 키워드 계약을 fetch_public_url로 전달한다.
+
+    2026-07-23 파일럿에서 기본 lambda가 max_bytes를 안 받아 TypeError로 크래시.
+    이 경로는 리눅스 라이브에서만 실행돼 mock 주입 테스트가 못 잡았다.
+    """
+    from fontagit_pipeline import audit_runner
+
+    captured: dict[str, object] = {}
+
+    def _fake_fetch(url: str, **kwargs: object) -> FetchResult:
+        captured["url"] = url
+        captured.update(kwargs)
+        return _fetched(url)
+
+    monkeypatch.setattr(audit_runner, "fetch_public_url", _fake_fetch)
+    result = audit_runner._default_font_fetcher("https://example.com/a.woff2", max_bytes=1234)
+
+    assert result.status == 200
+    assert captured["url"] == "https://example.com/a.woff2"
+    assert captured["max_body_bytes"] == 1234
+    assert captured["delay_seconds"] == audit_runner._CRAWL_DELAY_SECONDS
