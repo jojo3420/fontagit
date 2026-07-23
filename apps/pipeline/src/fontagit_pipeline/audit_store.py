@@ -961,7 +961,6 @@ class SupabaseAuditStore:
             for font in fonts_data:
                 font_id = font.get("id")
                 if font_id is not None:
-                    font["evidence_snapshots"] = []
                     fonts_by_id[font_id] = font
 
         # fonts 결측 검증
@@ -971,6 +970,7 @@ class SupabaseAuditStore:
             )
 
         # 5. snapshots를 fonts에 매핑하고 source_key 파생
+        snapshots_by_font: dict[object, list[dict[str, object]]] = {}
         for snapshot in all_snapshots:
             font_id = snapshot.get("font_id")
             if font_id in fonts_by_id:
@@ -984,7 +984,10 @@ class SupabaseAuditStore:
                 if "source_key" not in fonts_by_id[font_id]:
                     fonts_by_id[font_id]["source_key"] = snapshot["source_key"]
 
-                fonts_by_id[font_id]["evidence_snapshots"].append(snapshot)
+                snapshots_by_font.setdefault(font_id, []).append(snapshot)
+
+        for font_id, font_row in fonts_by_id.items():
+            font_row["evidence_snapshots"] = snapshots_by_font.get(font_id, [])
 
         return list(fonts_by_id.values())
 
