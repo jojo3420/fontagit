@@ -1056,6 +1056,8 @@ class SupabaseAuditStore:
                     if key in source_key_to_target_font_id:
                         target_font_id = source_key_to_target_font_id[key]
                         if target_font_id in fonts_by_id:
+                            # 대상 DB 문맥으로 재바인딩(export 시 pop되며 source_key가 신원)
+                            snapshot["font_id"] = target_font_id
                             snapshot["source_key"] = {
                                 "provider": provider,
                                 "provider_record_id": provider_record_id,
