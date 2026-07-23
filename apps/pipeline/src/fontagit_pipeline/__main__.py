@@ -709,6 +709,99 @@ def main_audit_manifest_build(args: argparse.Namespace) -> int:
         return 3
 
 
+def _summarize_findings_by_field(findings: list[dict[str, object]]) -> dict[str, int]:
+    """findings를 field_name으로 그룹화하여 개수 반환."""
+    summary: dict[str, int] = {}
+    for finding in findings:
+        field_name = finding.get("field_name")
+        if isinstance(field_name, str):
+            summary[field_name] = summary.get(field_name, 0) + 1
+    return summary
+
+
+def main_audit_review(args: argparse.Namespace) -> int:
+    """metadata findings을 무인 승인한다.
+
+    - run_id로 기준 run을 조회
+    - 해당 run의 needs_review metadata findings을 조회
+    - 각 finding을 전건 auto-approve
+    - 결과를 요약하여 로깅
+
+    실패한 findings는 continue하고, 최종 결과를 기반으로 exit code 결정.
+    """
+    from uuid import UUID
+
+    from fontagit_pipeline.audit_store import SupabaseAuditStore
+    from fontagit_pipeline.config import load_audit_settings
+
+    try:
+        if args.action != "auto-approve":
+            raise ValueError(f"지원하지 않는 action: {args.action}")
+
+        run_id = UUID(args.run_id)
+        reviewed_by = args.reviewed_by or "auto"
+        settings = load_audit_settings()
+        dev_url, dev_secret = settings.dev_write_credentials()
+        store = SupabaseAuditStore.from_dev_credentials(dev_url, dev_secret)
+
+        # 1. run 조회
+        run = store.get_run(run_id)
+        logger.info("감사 run 조회: run_id=%s stage=%s", run_id, run.get("stage"))
+
+        # 2. needs_review findings 조회
+        needs_review_findings = store.get_needs_review_findings(run_id)
+        if not needs_review_findings:
+            logger.warning("승인 대상 findings가 없습니다: run_id=%s", run_id)
+            return 0
+        logger.info("승인 대상 findings 조회: count=%d", len(needs_review_findings))
+
+        # 3. 각 finding 승인 (개별 실패는 수집)
+        approved_count = 0
+        failed_findings: list[dict[str, object]] = []
+
+        for finding in needs_review_findings:
+            finding_id = finding.get("id")
+            field_name = finding.get("field_name")
+            stage = finding.get("stage")
+
+            try:
+                if not isinstance(finding_id, str):
+                    raise ValueError(f"invalid finding_id: {finding_id}")
+                stage_str = stage if isinstance(stage, str) else "metadata"
+                store.approve_finding(UUID(finding_id), reviewed_by=reviewed_by, stage=stage_str)
+                approved_count += 1
+            except ValueError as exc:
+                logger.warning("finding 승인 실패: id=%s field=%s reason=%s", finding_id, field_name, exc)
+                failed_findings.append(finding)
+
+        # 4. 요약 로깅
+        summary = _summarize_findings_by_field(needs_review_findings)
+        logger.info(
+            "승인 완료: approved=%d failed=%d total=%d field_distribution=%s",
+            approved_count,
+            len(failed_findings),
+            len(needs_review_findings),
+            summary,
+        )
+
+        # 5. exit code 결정
+        if failed_findings:
+            logger.error("일부 findings 승인 실패: 수동 검수 필요")
+            return 3
+
+        return 0
+
+    except ValueError as exc:
+        logger.error("입력값 오류: %s", exc)
+        return 1
+    except Exception as exc:  # 외부 DB 경계, settings 오류
+        if isinstance(exc, Exception) and "SUPABASE" in str(exc.__class__.__name__).upper():
+            logger.error("설정 오류: %s", exc)
+            return 2
+        logger.error("metadata 승인 실패: %s", exc.__class__.__name__)
+        return 3
+
+
 def main_audit_crawl_all(args: argparse.Namespace) -> int:
     """전수 배치 크롤링을 실행하고 체크포인트로 재개를 지원한다."""
     from fontagit_pipeline.audit_license import _load_rules
@@ -965,6 +1058,23 @@ if __name__ == "__main__":
     manifest_build_parser.add_argument("--run-id", required=True, help="조회할 감사 run의 UUID")
     manifest_build_parser.add_argument("--out", type=Path, required=True, help="manifest 번들 저장 디렉터리")
     manifest_build_parser.set_defaults(func=main_audit_manifest_build)
+
+    review_parser = subparsers.add_parser(
+        "font-audit-review",
+        help="metadata findings 무인 승인",
+    )
+    review_parser.add_argument(
+        "action",
+        choices=["auto-approve"],
+        help="실행 액션",
+    )
+    review_parser.add_argument(
+        "--run-id", required=True, help="조회할 감사 run의 UUID"
+    )
+    review_parser.add_argument(
+        "--reviewed-by", default="auto", help="검수자 식별자 (기본값: auto)"
+    )
+    review_parser.set_defaults(func=main_audit_review)
 
     crawl_all_parser = subparsers.add_parser(
         "font-audit-crawl-all",

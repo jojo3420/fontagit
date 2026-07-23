@@ -833,6 +833,46 @@ class SupabaseAuditStore:
 
         return all_findings
 
+    def get_needs_review_findings(self, run_id: UUID) -> list[dict[str, object]]:
+        """font_audit_findings 테이블에서 needs_review 상태의 metadata findings 조회 (페이지네이션).
+
+        Args:
+            run_id: 조회할 감사 run의 UUID
+
+        Returns:
+            needs_review 상태이고 stage가 metadata인 finding 레코드 리스트
+
+        Raises:
+            RuntimeError: 부분 조회 실패(1,000행 제한 초과 가능성)
+        """
+        all_findings: list[dict[str, object]] = []
+        page_size = 1000
+        offset = 0
+
+        while True:
+            result = (
+                self._schema.table("font_audit_findings")
+                .select("*")
+                .eq("run_id", str(run_id))
+                .eq("status", "needs_review")
+                .eq("stage", "metadata")
+                .order("id", desc=False)
+                .range(offset, offset + page_size - 1)
+                .execute()
+            )
+            data = result.data
+            if not isinstance(data, list):
+                raise RuntimeError("needs_review findings 조회 결과가 올바르지 않습니다")
+
+            all_findings.extend(data)
+
+            if len(data) < page_size:
+                break
+
+            offset += page_size
+
+        return all_findings
+
     def get_current_fonts_with_snapshots(
         self, run_id: UUID
     ) -> list[dict[str, object]]:
