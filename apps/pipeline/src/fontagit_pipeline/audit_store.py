@@ -865,57 +865,73 @@ class SupabaseAuditStore:
     def get_current_fonts_with_snapshots(
         self, run_id: UUID
     ) -> list[dict[str, object]]:
-        """fonts와 font_source_snapshots를 조회하여 snapshots 추가 (페이지네이션).
+        """현재 run의 approved findings 증거 스냅샷과 폰트를 조회 (evidence_id 기준).
 
-        Critical #1 FIX: run의 snapshots에 등장하는 font_id만 필터
-        Critical #2 FIX: source_key는 snapshot에서 (provider, provider_record_id)로 파생
-        Critical #3 NEW: (provider, provider_record_id) 유일성 검증
+        스냅샷은 (font_id, provider, provider_record_id, document_kind, normalized_sha256) on-conflict
+        중복 제거되어 과거 run의 기존 행이 재사용됨. finding.evidence_id가 가리키는 행들을 직접 조회하여
+        current rows를 구성한다. 이를 통해 타 run 귀속 스냅샷도 포함되며, 스냅샷 결측 오류를 사전 감지.
 
         Args:
             run_id: 조회할 감사 run의 UUID
 
         Returns:
-            font_source_snapshots가 포함된 font 레코드 리스트 (run 관련만)
+            font_source_snapshots가 포함된 font 레코드 리스트
 
         Raises:
-            RuntimeError: snapshots 중복, fonts 부분 조회 실패
+            RuntimeError: evidence_id 결측, evidence 스냅샷 결측, fonts 결측, source_key 중복
         """
-        # 1. snapshots 전체 조회 (페이지네이션)
-        all_snapshots: list[dict[str, object]] = []
-        page_size = 1000
-        offset = 0
+        # 1. approved findings 조회 (evidence_id 기준)
+        approved_findings = self.get_approved_findings(run_id)
+        if not approved_findings:
+            return []
 
-        while True:
+        # evidence_ids와 font_ids 추출
+        evidence_ids: set[str] = set()
+        font_ids: set[str] = set()
+
+        for finding in approved_findings:
+            evidence_id = finding.get("evidence_id")
+            if evidence_id is None:
+                raise RuntimeError(f"finding {finding.get('id')} has no evidence_id (계약 위반)")
+            if isinstance(evidence_id, str):
+                evidence_ids.add(evidence_id)
+
+            font_id = finding.get("font_id")
+            if isinstance(font_id, str):
+                font_ids.add(font_id)
+
+        if not evidence_ids or not font_ids:
+            return []
+
+        # 2. snapshots를 id in-list 청크 조회 (100단위, 502 대응)
+        all_snapshots: list[dict[str, object]] = []
+        chunk_size = 100
+        evidence_ids_list = list(evidence_ids)
+
+        for i in range(0, len(evidence_ids_list), chunk_size):
+            chunk = evidence_ids_list[i : i + chunk_size]
             snapshots_result = (
                 self._schema.table("font_source_snapshots")
                 .select("*")
-                .eq("run_id", str(run_id))
-                .order("id", desc=False)
-                .range(offset, offset + page_size - 1)
+                .in_("id", chunk)
                 .execute()
             )
             snapshots_data = snapshots_result.data
             if not isinstance(snapshots_data, list):
-                raise RuntimeError(
-                    "font_source_snapshots 조회 결과가 올바르지 않습니다"
-                )
+                raise RuntimeError("font_source_snapshots 조회 결과가 올바르지 않습니다")
 
             all_snapshots.extend(snapshots_data)
 
-            if len(snapshots_data) < page_size:
-                break
+        # 결측 검증
+        if len(all_snapshots) != len(evidence_ids):
+            raise RuntimeError(
+                f"evidence 스냅샷 결측: 예상 {len(evidence_ids)}, 조회 {len(all_snapshots)}"
+            )
 
-            offset += page_size
-
-        # 2. snapshots에서 font_id 및 source_key 유일성 검증
-        font_ids_in_run: set[str] = set()
+        # 3. (provider, provider_record_id) 유일성 검증
         source_keys_seen: dict[tuple[str, str], bool] = {}
 
         for snapshot in all_snapshots:
-            font_id = snapshot.get("font_id")
-            if font_id:
-                font_ids_in_run.add(font_id)
-
             provider = snapshot.get("provider")
             provider_record_id = snapshot.get("provider_record_id")
             if provider and provider_record_id:
@@ -926,14 +942,10 @@ class SupabaseAuditStore:
                     )
                 source_keys_seen[key] = True
 
-        # 3. fonts를 청크로 조회 (run 대상만)
-        if not font_ids_in_run:
-            return []
-
+        # 4. fonts를 id in-list 청크 조회
         fonts_by_id: dict[str, dict[str, object]] = {}
-        chunk_size = 100
+        font_ids_list = list(font_ids)
 
-        font_ids_list = list(font_ids_in_run)
         for i in range(0, len(font_ids_list), chunk_size):
             chunk = font_ids_list[i : i + chunk_size]
             fonts_result = (
@@ -952,7 +964,13 @@ class SupabaseAuditStore:
                     font["evidence_snapshots"] = []
                     fonts_by_id[font_id] = font
 
-        # 4. snapshots를 fonts에 매핑하고 source_key 파생
+        # fonts 결측 검증
+        if len(fonts_by_id) != len(font_ids):
+            raise RuntimeError(
+                f"fonts 결측: 예상 {len(font_ids)}, 조회 {len(fonts_by_id)}"
+            )
+
+        # 5. snapshots를 fonts에 매핑하고 source_key 파생
         for snapshot in all_snapshots:
             font_id = snapshot.get("font_id")
             if font_id in fonts_by_id:

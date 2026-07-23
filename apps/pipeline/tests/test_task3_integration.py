@@ -183,38 +183,23 @@ def test_task3_helpers_manifest_integration() -> None:
     store = SupabaseAuditStore(mock_client)
 
     # Mock the supabase query chains for real get_current_fonts_with_snapshots execution
+    # (새 구현: evidence_id 기준 in-list 조회)
     snapshot_data = [snapshot_1, snapshot_2]
-    empty_data = []
-    fonts_data = [font_1, font_2, font_unrelated]  # filtering happens in helper
+    fonts_data = [font_1, font_2]  # evidence_id에 해당하는 것들만
 
-    # font_source_snapshots table query chain
-    # execute() result has .data attribute (not dict)
-    result_page0 = MagicMock()
-    result_page0.data = snapshot_data
-
-    result_page1 = MagicMock()
-    result_page1.data = empty_data
-
-    range_mock_page0 = MagicMock()
-    range_mock_page0.execute.return_value = result_page0
-
-    range_mock_page1 = MagicMock()
-    range_mock_page1.execute.return_value = result_page1
+    # font_source_snapshots table query chain (.in_("id", chunk))
+    snapshots_result = MagicMock()
+    snapshots_result.data = snapshot_data
 
     mock_snapshots_table = MagicMock()
-    mock_snapshots_range_chain = MagicMock()
-    mock_snapshots_range_chain.side_effect = [range_mock_page0, range_mock_page1]
-    mock_snapshots_table.select.return_value.eq.return_value.order.return_value.range = mock_snapshots_range_chain
+    mock_snapshots_table.select.return_value.in_.return_value.execute.return_value = snapshots_result
 
-    # fonts table query chain
+    # fonts table query chain (.in_("id", chunk))
     fonts_result = MagicMock()
     fonts_result.data = fonts_data
 
-    fonts_execute_mock = MagicMock()
-    fonts_execute_mock.execute.return_value = fonts_result
-
     mock_fonts_table = MagicMock()
-    mock_fonts_table.select.return_value.in_.return_value = fonts_execute_mock
+    mock_fonts_table.select.return_value.in_.return_value.execute.return_value = fonts_result
 
     # Route table() calls to correct mock
     def table_side_effect(table_name):

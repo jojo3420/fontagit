@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 from unittest.mock import MagicMock
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -332,6 +332,16 @@ def test_get_current_fonts_with_snapshots_returns_fonts_with_evidence() -> None:
     font_id = UUID("00000000-0000-0000-0000-000000000810")
     snapshot_id = UUID("00000000-0000-0000-0000-000000000813")
 
+    # approved finding
+    finding_data = {
+        "id": str(uuid4()),
+        "run_id": str(run_id),
+        "font_id": str(font_id),
+        "field_name": "tags",
+        "status": "approved",
+        "evidence_id": str(snapshot_id),
+    }
+
     font_data = {
         "id": str(font_id),
         "source_key": {"provider": "noonnu", "provider_record_id": "613"},
@@ -370,11 +380,13 @@ def test_get_current_fonts_with_snapshots_returns_fonts_with_evidence() -> None:
         "collected_at": "2026-07-22T08:00:00+00:00",
     }
 
-    fonts_response = _query([font_data])
+    # Mock 응답 순서: get_approved_findings → snapshots .in_("id",...) → fonts .in_("id",...)
+    findings_response = _query([finding_data])
     snapshots_response = _query([snapshot_data])
+    fonts_response = _query([font_data])
 
     schema = MagicMock()
-    schema.table.side_effect = [snapshots_response, fonts_response]
+    schema.table.side_effect = [findings_response, snapshots_response, fonts_response]
     client = MagicMock()
     client.schema.return_value = schema
 
@@ -390,3 +402,85 @@ def test_get_current_fonts_with_snapshots_returns_fonts_with_evidence() -> None:
     assert len(font["evidence_snapshots"]) == 1
     assert font["evidence_snapshots"][0]["id"] == str(snapshot_id)
     assert font["evidence_snapshots"][0]["document_kind"] == "download"
+
+
+def test_get_current_fonts_with_snapshots_includes_other_run_snapshots() -> None:
+    """스냅샷이 타 run 귀속이어도 current rows에 정상 포함 (dedup 재사용 대응)."""
+    run_id = UUID("00000000-0000-0000-0000-000000000909")
+    other_run_id = UUID("00000000-0000-0000-0000-000000000908")
+    font_id = UUID("00000000-0000-0000-0000-000000000810")
+    snapshot_id = UUID("00000000-0000-0000-0000-000000000813")
+
+    # 현재 run의 approved finding이 다른 run 귀속 스냅샷을 가리킴 (dedup 때문)
+    finding_data = {
+        "id": str(uuid4()),
+        "run_id": str(run_id),
+        "font_id": str(font_id),
+        "field_name": "tags",
+        "status": "approved",
+        "evidence_id": str(snapshot_id),
+    }
+
+    font_data = {
+        "id": str(font_id),
+        "source_key": {"provider": "noonnu", "provider_record_id": "613"},
+        "slug": "흰꼬리수리",
+    }
+
+    # 스냅샷이 다른 run_id를 가짐
+    snapshot_data = {
+        "id": str(snapshot_id),
+        "run_id": str(other_run_id),  # 다른 run
+        "font_id": str(font_id),
+        "provider": "noonnu",
+        "provider_record_id": "613",
+        "document_kind": "download",
+    }
+
+    findings_response = _query([finding_data])
+    snapshots_response = _query([snapshot_data])
+    fonts_response = _query([font_data])
+
+    schema = MagicMock()
+    schema.table.side_effect = [findings_response, snapshots_response, fonts_response]
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+    results = store.get_current_fonts_with_snapshots(run_id)
+
+    # 다른 run 귀속이어도 포함되어야 함
+    assert len(results) == 1
+    font = results[0]
+    assert font["id"] == str(font_id)
+    assert len(font["evidence_snapshots"]) == 1
+    assert font["evidence_snapshots"][0]["id"] == str(snapshot_id)
+    # run_id가 다르지만 정상 동작
+    assert font["evidence_snapshots"][0]["run_id"] == str(other_run_id)
+
+
+def test_get_current_fonts_with_snapshots_raises_on_missing_evidence_id() -> None:
+    """evidence_id가 None인 approved finding 존재 시 RuntimeError."""
+    run_id = UUID("00000000-0000-0000-0000-000000000909")
+    font_id = UUID("00000000-0000-0000-0000-000000000810")
+
+    # evidence_id가 None
+    finding_data = {
+        "id": str(uuid4()),
+        "run_id": str(run_id),
+        "font_id": str(font_id),
+        "field_name": "tags",
+        "status": "approved",
+        "evidence_id": None,  # 결측
+    }
+
+    findings_response = _query([finding_data])
+
+    schema = MagicMock()
+    schema.table.side_effect = [findings_response]
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+    with pytest.raises(RuntimeError, match="has no evidence_id"):
+        store.get_current_fonts_with_snapshots(run_id)
