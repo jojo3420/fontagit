@@ -957,7 +957,6 @@ class SupabaseAuditStore:
 
         # 4. fonts를 id in-list 청크 조회 (target_store가 있으면 그곳에서, 없으면 self에서)
         fonts_by_id: dict[str, dict[str, object]] = {}
-        query_store = target_store if target_store is not None else self
         font_ids_list = list(font_ids)
 
         if target_store is not None:

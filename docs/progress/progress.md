@@ -19,12 +19,12 @@ FontAgit는 한글 폰트를 찾고 라이선스-미리보기 정보를 확인�
 
 ## 진행 기록
 
-## 2026-07-23 - metadata 무인 승인 + 감사 파이프라인 라이브 파일럿 완주 (dev/prod 47종 적용, PR #102 머지)
-- 상태: 완료 (v0.4.0 배포 완료 — fontagit.com 스모크 200. 단 tags는 아직 웹 UI 미소비라 화면 변화는 /collections 확대 단계부터)
-- 요약: metadata(tags/weights) 승인을 전면 자동화(사용자 거버넌스 결정)하는 auto-approve CLI를 만들고, 눈누 라이브 크롤 파일럿으로 전 구간 실증 — mock으로 못 잡던 결함 13건을 수정, 마이그레이션 0019(evidence run-agnostic, dev/prod 적용)로 근본 해결. dev/prod 각 47종 tags 47/weights 42 적용-재검증 일치. codex 리뷰(Must-fix 2 포함) 크로스 검증 후 동의 항목 반영해 PR #102 squash 머지, develop→main 승격(d8d8374)까지 완료. 리뷰 후속 Should-fix 6건 중 5건 조치(N+1 제거, dev 기준선 분리, SRP, 계약 문서화, 브랜치 feature/audit-review-followups).
-- 커밋/PR: PR #102 MERGED (https://github.com/jojo3420/fontagit/pull/102, squash 2ec6475), main 승격 `d8d8374`, 후속 `643d2ed`..`21395ef`
-- 남은 일: (1)v0.4.0 태그+배포 — 임시 워크트리에 env 복사 후 `bash scripts/deploy.sh --new-tag v0.4.0` (2)후속 T6 RPC 통합테스트(supabase 전용 의존으로 블로커 가능) + 후속 브랜치 PR (3)전체 1,110종 확장 run + 무인 체인 wrapper (4)Dockerfile tests/ COPY
-- 관련 문서: docs/review/pr-review-102-20260723-182220.md, .superpowers/sdd/progress.md, supabase/migrations/0019_audit_manifest_run_agnostic_evidence.sql
+## 2026-07-23 - metadata 무인 승인 + 감사 파이프라인 라이브 파일럿 완주 (dev/prod 47종 적용, PR #102)
+- 상태: 완료 (PR #102 오픈, codex 리뷰 진행 중)
+- 요약: metadata(tags/weights) 승인을 전면 자동화(사용자 거버넌스 결정)하는 auto-approve CLI를 만들고, 눈누 라이브 크롤 파일럿으로 전 구간을 실증 — mock으로 못 잡던 결함 13건(실스키마 불일치, 스냅샷 dedup 모순 등)을 수정하고 마이그레이션 0019(evidence run-agnostic, dev/prod 적용)로 근본 해결. dev/prod 각 47종에 tags 47/weights 42 적용-재검증 일치.
+- 커밋/PR: `d934f16`..`342e9e4` 19커밋, PR #102 (https://github.com/jojo3420/fontagit/pull/102)
+- 남은 일: (1)PR #102 codex 리뷰 후 머지 (2)apply/auto-approve 성공 로그 미출력 수정(조용한 성공이 혼선 유발) (3)전체 1,110종 확장 run + 무인 체인 wrapper (4)Dockerfile tests/ COPY
+- 관련 문서: .superpowers/sdd/progress.md, supabase/migrations/0019_audit_manifest_run_agnostic_evidence.sql
 - 상세: progress-010.md
 
 ## 2026-07-23 - 컬렉션 0단계 폰트 감사 조립 파이프라인 (백엔드, PR #99+#101)

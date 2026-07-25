@@ -452,8 +452,6 @@ def _project_bootstrap_manifest(manifest: dict[str, object]) -> dict[str, object
     Raises:
         ValueError: 필드 검증 실패 (before 결측, 필드 누락 등)
     """
-    from typing import cast
-
     entries = manifest.get("entries")
     if not isinstance(entries, list):
         raise ValueError("entries가 배열이 아닙니다")
