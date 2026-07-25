@@ -487,14 +487,14 @@ def fetch_prod_public_rows(supabase_url: str, anon_key: str) -> list[dict[str, o
 def _validate_prod_rows(
     rows: Sequence[Mapping[str, object]],
     *,
-    expected_record_count: int = _EXPECTED_PROD_PUBLISHED_COUNT,
+    expected_record_count: int | None = _EXPECTED_PROD_PUBLISHED_COUNT,
     expected_tier_counts: Mapping[str, int] | None = _EXPECTED_PROD_TIER_COUNTS,
     require_sorted: bool = False,
 ) -> None:
     for row in rows:
         _validate_public_row_contract(row)
     slugs = [_required_text(row, "slug") for row in rows]
-    if len(rows) != expected_record_count:
+    if expected_record_count is not None and len(rows) != expected_record_count:
         raise BootstrapError(
             f"prod published 기준선 수가 다릅니다: expected={expected_record_count}, actual={len(rows)}"
         )
@@ -518,7 +518,7 @@ def _validate_prod_rows(
 def _validated_sorted_prod_rows(
     rows: Sequence[Mapping[str, object]],
     *,
-    expected_record_count: int = _EXPECTED_PROD_PUBLISHED_COUNT,
+    expected_record_count: int | None = _EXPECTED_PROD_PUBLISHED_COUNT,
     expected_tier_counts: Mapping[str, int] | None = _EXPECTED_PROD_TIER_COUNTS,
 ) -> list[dict[str, object]]:
     """개수와 중복을 검증한 뒤 환경 독립적인 slug 순서로 고정한다."""
@@ -545,7 +545,7 @@ def _sha256(content: bytes) -> str:
 def calculate_baseline_content_sha256(
     rows: Sequence[Mapping[str, object]],
     *,
-    expected_record_count: int = _EXPECTED_PROD_PUBLISHED_COUNT,
+    expected_record_count: int | None = _EXPECTED_PROD_PUBLISHED_COUNT,
     expected_tier_counts: Mapping[str, int] | None = _EXPECTED_PROD_TIER_COUNTS,
 ) -> str:
     """정렬-검증된 기준선 본문 해시를 계산한다."""
@@ -561,7 +561,7 @@ def write_prod_baseline(
     rows: Sequence[Mapping[str, object]],
     out: Path,
     *,
-    expected_record_count: int = _EXPECTED_PROD_PUBLISHED_COUNT,
+    expected_record_count: int | None = _EXPECTED_PROD_PUBLISHED_COUNT,
     expected_tier_counts: Mapping[str, int] | None = _EXPECTED_PROD_TIER_COUNTS,
 ) -> str:
     """검증된 공개 prod 기준선을 저장하고 파일 전체 SHA-256을 반환한다.
