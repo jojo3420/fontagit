@@ -4,7 +4,14 @@
 .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .row { display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
 .icon { width: 20px; height: 20px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+.labelHelp { position: relative; display: inline-flex; align-items: center; gap: 5px; }
 .rowLabel { color: var(--ink); }
+.helpTrigger { width: 24px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--sub); display: inline-flex; align-items: center; justify-content: center; flex: none; font: inherit; font-size: 11px; font-weight: 700; line-height: 1; cursor: help; }
+.helpTrigger:hover { border-color: var(--point); background: var(--point-weak); color: var(--point); }
+.helpTrigger:focus-visible { outline: 2px solid var(--point); outline-offset: 2px; }
+.tooltip { position: absolute; z-index: 10; top: calc(100% + 8px); left: -30px; width: min(240px, calc(100vw - 64px)); padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: 0 8px 24px rgba(0, 0, 0, .12); color: var(--ink); font-size: 12px; font-weight: 400; line-height: 1.55; opacity: 0; visibility: hidden; pointer-events: none; }
+.labelHelp:hover .tooltip,
+.helpTrigger:focus + .tooltip { opacity: 1; visibility: visible; }
 .rowValue { margin-left: auto; font-weight: 600; }
 .ok { color: var(--point); }
 .cond { color: var(--warn); }
