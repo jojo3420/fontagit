@@ -14,7 +14,7 @@
 - Tier A 130종은 license status가 verified
 - Tier B 1,110종은 license status가 pending
 - tags 보유 47종, weights 보유 446종
-- 선정한 고유 폰트 40종은 모두 운영 DB에 존재하며 `published`·`verified`·`OFL`
+- 선정한 고유 폰트 40종은 dev·운영 DB에 모두 존재하며 `published`·`verified`·`OFL`
 
 따라서 이번 단계는 정보가 충분한 Tier A와 현재 확인된 필드를 중심으로 사람이 고른 에디토리얼 컬렉션을 만든다.
 
@@ -55,7 +55,7 @@ tags는 47종에만 있고 Tier B 1,110종의 라이선스는 아직 pending이�
 | `ui-korean-sans` | 화면에 또렷한 한글 고딕 | `noto-sans-kr`, `ibm-plex-sans-kr`, `gothic-a1`, `nanum-gothic`, `asta-sans`, `gowun-dodum` |
 | `wide-weight-korean` | 굵기를 자유롭게 고르는 한글 폰트 | `gothic-a1`, `hahmlet`, `noto-sans-kr`, `noto-serif-kr`, `ibm-plex-sans-kr`, `asta-sans` |
 | `korean-display` | 한눈에 꽂히는 한글 디스플레이 | `bagel-fat-one`, `gugi`, `moirai-one`, `dokdo`, `cute-font`, `gasoek-one` |
-| `latin-sans-essentials` | 영문 산세리프 기본 컬렉션 | `inter`, `geist`, `dm-sans`, `montserrat`, `figtree` |
+| `latin-sans-essentials` | 영문 산세리프 기본 컬렉션 | `inter`, `source-sans-3`, `dm-sans`, `montserrat`, `figtree` |
 | `latin-serif-editorial` | 영문 에디토리얼 세리프 | `lora`, `merriweather`, `eb-garamond`, `libre-baskerville`, `playfair-display`, `bitter` |
 | `developer-monospace` | 코드와 숫자를 위한 모노스페이스 | `inconsolata`, `jetbrains-mono`, `roboto-mono`, `source-code-pro`, `nanum-gothic-coding` |
 | `verified-ofl-picks` | OFL 라이선스 확인 추천 | `noto-sans-kr`, `noto-serif-kr`, `ibm-plex-sans-kr`, `inter`, `lora`, `jetbrains-mono`, `bagel-fat-one` |
@@ -111,7 +111,7 @@ tags는 47종에만 있고 Tier B 1,110종의 라이선스는 아직 pending이�
 
 1. dev DB에 마이그레이션 적용
 2. dev 데이터 검증
-3. production 환경을 대상으로 정적 빌드·SEO 검증
+3. dev DB 데이터를 사용한 production-mode 정적 빌드·SEO 검증
 4. PR 병합
 5. production DB 적용
 6. production 재빌드·배포
@@ -135,3 +135,5 @@ tags는 47종에만 있고 Tier B 1,110종의 라이선스는 아직 pending이�
 최신 `origin/develop`(`444a8d7`) 기반 새 작업공간에서 `pnpm install --frozen-lockfile`을 실행했으나, 기존 `pnpm-lock.yaml`과 `apps/web/package.json` 불일치로 실패했다. 이번 컬렉션 변경 전부터 존재한 기준선 문제다.
 
 웹 검증 전에 잠금 파일 문제를 별도 최소 변경으로 해결하거나, 이미 검증된 최신 기준선으로 브랜치를 보정해야 한다. 컬렉션 시드 변경과 한 커밋에 섞지 않는다.
+
+초기 후보였던 `geist`는 운영에서는 발행 상태지만 현재 dev에서는 `draft`라서 제외했다. dev·운영에서 모두 발행 상태인 `source-sans-3`로 교체해 환경에 따른 마이그레이션 실패를 막는다.
