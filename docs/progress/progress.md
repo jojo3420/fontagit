@@ -21,6 +21,13 @@ FontAgit는 한글 폰트를 찾고 라이선스-미리보기 정보를 확인�
 
 - 2026-07-25: 모바일 헤더의 하단 탭 중복 메뉴를 정리하고 `v0.4.1` 배포 완료(#100, `b45c171`; 테스트 236개·모바일 320/375/390px·fontagit.com 확인).
 
+## 2026-07-26 - 컬렉션 에디토리얼 10종 dev 확장 (#56)
+- 상태: dev 완료, 운영 적용·배포·브라우저 시각 확인 대기
+- 요약: 마이그레이션 `0020`으로 기존 3종의 문구를 보존하면서 수동 큐레이션 10종·연결 56개로 확장. 로컬 실패 경로와 dev 2회 실행에서 최소 5개·중복 0·발행/OFL 위반 0·멱등 해시 일치를 확인.
+- 검증: Next.js production-mode Webpack 정적 빌드 2,508페이지 통과, SEO 1,256 URL(`fonts=1,240`, `collections=10`), 상세 10개와 폰트 링크 56개 HTTP 200. 브라우저 플러그인 미연결로 모바일·데스크톱 시각 확인은 미완료.
+- 커밋/브랜치: `e6c943e`, `feature/collections-editorial-expansion`. 운영 DB는 기존 3종 그대로이며, `pnpm --filter web lint`와 기본 Turbopack 빌드는 기준 브랜치의 기존 오류로 실패.
+- 관련 문서: `docs/superpowers/specs/2026-07-26-collections-editorial-expansion-design.md`, `docs/superpowers/plans/2026-07-26-collections-editorial-expansion.md`
+
 ## 2026-07-23 - metadata 무인 승인 + 감사 파이프라인 라이브 파일럿 완주 (dev/prod 47종 적용, PR #102)
 - 상태: 완료 (PR #102 오픈, codex 리뷰 진행 중)
 - 요약: metadata(tags/weights) 승인을 전면 자동화(사용자 거버넌스 결정)하는 auto-approve CLI를 만들고, 눈누 라이브 크롤 파일럿으로 전 구간을 실증 — mock으로 못 잡던 결함 13건(실스키마 불일치, 스냅샷 dedup 모순 등)을 수정하고 마이그레이션 0019(evidence run-agnostic, dev/prod 적용)로 근본 해결. dev/prod 각 47종에 tags 47/weights 42 적용-재검증 일치.

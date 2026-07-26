@@ -85,6 +85,16 @@ describe("LicenseSummaryCard", () => {
 
     const attributionRow = screen.getByText("출처 표기").closest("li");
     expect(within(attributionRow!).getByText("필수")).toBeInTheDocument();
+
+    const commercialHelp = screen.getByRole("button", { name: "상업적 사용 설명" });
+    const commercialDescriptionId = commercialHelp.getAttribute("aria-describedby");
+    expect(commercialDescriptionId).toBeTruthy();
+    expect(document.getElementById(commercialDescriptionId!)).toHaveTextContent(
+      "광고·상품·웹사이트·영상 등 상업 활동의 결과물에 폰트를 사용할 수 있는지 뜻해요.",
+    );
+
+    const fontSaleHelp = screen.getByRole("button", { name: "폰트 판매 설명" });
+    expect(fontSaleHelp).toHaveAttribute("aria-describedby");
   });
   it("감사 검토 필요 폰트 (needs_review): 재확인 필요 안내 표시", () => {
     const needsReviewFont: Font = {

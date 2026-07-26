@@ -643,3 +643,104 @@ def test_get_current_fonts_with_snapshots_font_sources_no_match() -> None:
     # 호출: RuntimeError 발생
     with pytest.raises(RuntimeError, match="font_sources 매칭 실패"):
         dev_store.get_current_fonts_with_snapshots(run_id, target_store=target_store)
+
+
+def test_get_current_fonts_with_snapshots_chunked_query() -> None:
+    """N+1 제거: 같은 provider의 여러 record를 단일 in-list 쿼리로 조회."""
+    run_id = UUID("00000000-0000-0000-0000-000000000909")
+    font_id_1 = UUID("00000000-0000-0000-0000-000000000810")
+    font_id_2 = UUID("00000000-0000-0000-0000-000000000811")
+    snapshot_id_1 = UUID("00000000-0000-0000-0000-000000000813")
+    snapshot_id_2 = UUID("00000000-0000-0000-0000-000000000814")
+
+    finding_1 = {
+        "id": str(uuid4()),
+        "run_id": str(run_id),
+        "font_id": str(font_id_1),
+        "field_name": "tags",
+        "status": "approved",
+        "evidence_id": str(snapshot_id_1),
+    }
+    finding_2 = {
+        "id": str(uuid4()),
+        "run_id": str(run_id),
+        "font_id": str(font_id_2),
+        "field_name": "tags",
+        "status": "approved",
+        "evidence_id": str(snapshot_id_2),
+    }
+
+    snapshot_1 = {
+        "id": str(snapshot_id_1),
+        "run_id": str(run_id),
+        "font_id": str(font_id_1),
+        "provider": "noonnu",
+        "provider_record_id": "100",
+    }
+
+    snapshot_2 = {
+        "id": str(snapshot_id_2),
+        "run_id": str(run_id),
+        "font_id": str(font_id_2),
+        "provider": "noonnu",
+        "provider_record_id": "200",
+    }
+
+    dev_findings_response = _query([finding_1, finding_2])
+    dev_snapshots_response = _query([snapshot_1, snapshot_2])
+
+    dev_schema = MagicMock()
+    dev_schema.table.side_effect = [dev_findings_response, dev_snapshots_response]
+    dev_client = MagicMock()
+    dev_client.schema.return_value = dev_schema
+
+    dev_store = SupabaseAuditStore(dev_client)
+
+    font_source_1 = {
+        "id": str(uuid4()),
+        "provider": "noonnu",
+        "provider_record_id": "100",
+        "font_id": str(font_id_1),
+    }
+    font_source_2 = {
+        "id": str(uuid4()),
+        "provider": "noonnu",
+        "provider_record_id": "200",
+        "font_id": str(font_id_2),
+    }
+    font_1 = {"id": str(font_id_1), "family_name": "Font1"}
+    font_2 = {"id": str(font_id_2), "family_name": "Font2"}
+
+    font_sources_response = _query([font_source_1, font_source_2])
+    fonts_response = _query([font_1, font_2])
+
+    prod_schema = MagicMock()
+
+    def table_side_effect(table_name: str) -> MagicMock:
+        if table_name == "font_sources":
+            return font_sources_response
+        if table_name == "fonts":
+            return fonts_response
+        raise ValueError(f"Unexpected table: {table_name}")
+
+    prod_schema.table.side_effect = table_side_effect
+
+    prod_client = MagicMock()
+    prod_client.schema.return_value = prod_schema
+
+    target_store = SupabaseAuditStore(prod_client)
+
+    result = dev_store.get_current_fonts_with_snapshots(run_id, target_store=target_store)
+
+    font_sources_calls = [
+        call for call in prod_schema.table.call_args_list if call[0][0] == "font_sources"
+    ]
+    assert len(font_sources_calls) == 1
+    font_sources_response.eq.assert_called_once_with("provider", "noonnu")
+    font_sources_response.in_.assert_called_once()
+    in_field, in_values = font_sources_response.in_.call_args.args
+    assert in_field == "provider_record_id"
+    assert set(in_values) == {"100", "200"}
+
+    assert len(result) == 2
+    assert all(isinstance(font, dict) for font in result)
