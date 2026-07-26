@@ -774,7 +774,12 @@ def main_audit_manifest_apply(args: argparse.Namespace) -> int:
             "apply_font_audit_manifest",
             rpc_payload,
         ).execute()
-        logger.info("감사 manifest 적용 완료: target=%s result=%s", args.target, response.data)
+        # apply_font_audit_manifest RPC는 갱신 행 수(integer)를 반환한다
+        logger.info(
+            "감사 manifest 적용 완료: target=%s updated_rows=%s",
+            args.target,
+            response.data,
+        )
         return 0
     except (ManifestError, OSError, ValueError) as exc:
         logger.error("감사 manifest 적용 중단: %s", exc)
@@ -954,7 +959,9 @@ def main_audit_review(args: argparse.Namespace) -> int:
         # 2. proposed findings 조회 (tags/weights만)
         proposed_findings = store.get_proposed_findings(run_id)
         if not proposed_findings:
-            logger.warning("승인 대상 findings가 없습니다: run_id=%s", run_id)
+            logger.info(
+                "승인 완료: approved=0 failed=0 total=0 (승인 대상 없음) run_id=%s", run_id
+            )
             return 0
         logger.info("승인 대상 findings 조회: count=%d", len(proposed_findings))
 
