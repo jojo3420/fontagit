@@ -129,7 +129,7 @@ values
   ('wide-weight-korean', 'noto-sans-kr', '아홉 굵기로 화면의 정보 단계를 한 가족 안에서 표현해요.', 2),
   ('wide-weight-korean', 'noto-serif-kr', '여러 굵기의 명조 조합으로 긴 글의 위계를 만들기 좋아요.', 3),
   ('wide-weight-korean', 'ibm-plex-sans-kr', '일곱 굵기를 지원해 본문과 강조 문구를 함께 구성하기 좋아요.', 4),
-  ('wide-weight-korean', 'asta-sans', '아홉 굵기를 지원해 다양한 크기의 한글 조판에 대응해요.', 5),
+  ('wide-weight-korean', 'asta-sans', '여섯 굵기를 지원해 다양한 크기의 한글 조판에 대응해요.', 5),
 
   ('korean-display', 'bagel-fat-one', '둥글고 두꺼운 형태가 짧은 제목에 밝은 힘을 더해요.', 0),
   ('korean-display', 'gugi', '굵은 손그림 느낌으로 한두 줄 제목에 개성을 더해요.', 1),
@@ -236,7 +236,7 @@ begin
     from _collection_seed s
     where s.font_slug = f.slug
   )
-  for key share;
+  for share;
 
   perform c.id
   from fontagit.collections c
