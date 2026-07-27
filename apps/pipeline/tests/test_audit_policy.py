@@ -8,6 +8,7 @@ import pytest
 from fontagit_pipeline.audit_policy import (
     assert_collection_allowed,
     load_source_registry,
+    may_update_source_kind,
 )
 
 
@@ -183,3 +184,17 @@ def test_collection_policy_rejects_whitespace_approver(tmp_path: Path) -> None:
             expected_source="noonnu",
             retain_raw_text=True,
         )
+
+
+def test_classify_archive_domain() -> None:
+    """fonts.google.com은 archive 등급으로 분류된다."""
+    registry = load_source_registry()
+    assert registry.classify("https://fonts.google.com/specimen/Nanum+Myeongjo") == "archive"
+
+
+def test_may_update_source_kind_rank() -> None:
+    """등급 우선순위: official > public > archive > null. 강등 불가."""
+    assert may_update_source_kind(None, "archive") is True
+    assert may_update_source_kind("archive", "official") is True
+    assert may_update_source_kind("official", "archive") is False
+    assert may_update_source_kind("public", "public") is True

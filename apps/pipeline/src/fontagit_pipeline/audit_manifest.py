@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import re
 import tempfile
@@ -16,6 +17,10 @@ from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+
+from fontagit_pipeline.audit_policy import may_update_source_kind
+
+_logger = logging.getLogger(__name__)
 
 
 _HASH = re.compile(r"^[0-9a-f]{64}$")
@@ -132,6 +137,7 @@ def _evidence_role_is_valid(
 ) -> bool:
     if field_name.startswith("download_"):
         required_document = "download"
+        allowed_source_kinds = {"official", "public", "archive"}
     elif field_name.startswith("license_") or field_name in {
         "allow_commercial",
         "allow_font_sale",
@@ -143,6 +149,7 @@ def _evidence_role_is_valid(
         "license_verified",
     }:
         required_document = "license"
+        allowed_source_kinds = {"official", "public"}  # archive 미허용: 라이선스는 자동 승인 불가
     elif field_name in _SCRIPT_FIELDS or field_name in {"tags", "weights"}:
         # 컬렉션 0단계: 눈누 폰트파일에서 추출한 tags/weights는 font-file-script 증거로 reference 신뢰도
         source_kind = snapshot.get("source_kind")
@@ -155,13 +162,15 @@ def _evidence_role_is_valid(
         ):
             return confidence == "reference"
         required_document = "metadata"
+        allowed_source_kinds = {"official", "public"}  # archive 미허용
     elif field_name in _METADATA_FIELDS:
         required_document = "metadata"
+        allowed_source_kinds = {"official", "public"}  # archive 미허용
     else:
         return False
     source_kind = snapshot.get("source_kind")
     return (
-        source_kind in {"official", "public", "archive"}
+        source_kind in allowed_source_kinds
         and snapshot.get("document_kind") == required_document
         and confidence == source_kind
     )
@@ -430,7 +439,9 @@ def _validated_value(field_name: str, value: object) -> object:
         if value is not None and not isinstance(value, str):
             raise ManifestError(f"field {field_name} requires text or null")
     elif field_name in _SOURCE_KIND_FIELDS:
-        if value is not None and value not in {"official", "public", "archive"}:
+        # download_source_kind만 archive 허용 (license는 자동 승인 불가)
+        allowed = {"official", "public", "archive"} if field_name == "download_source_kind" else {"official", "public"}
+        if value is not None and value not in allowed:
             raise ManifestError(f"field {field_name} has invalid source kind")
     elif field_name in _EVIDENCE_FIELDS:
         if value is not None:
@@ -603,6 +614,25 @@ def build_manifest(
     for font_id, findings in grouped.items():
         row = rows_by_id[font_id]
         key = _source_key(row)
+
+        # download_source_kind 강등 차단: 등급이 내려가려는 경우 엔트리 전체 제외
+        skip_entry = False
+        for finding in findings:
+            if finding.get("field_name") == "download_source_kind":
+                current_kind = row.get("download_source_kind")
+                proposed_kind = finding.get("proposed_value")
+                if not may_update_source_kind(current_kind, proposed_kind):
+                    _logger.warning(
+                        "entry excluded due to source kind downgrade: %s, current=%s proposed=%s",
+                        key,
+                        current_kind,
+                        proposed_kind,
+                    )
+                    skip_entry = True
+                    break
+        if skip_entry:
+            continue
+
         before: dict[str, object] = {}
         after: dict[str, object] = {}
         evidence_ids: set[UUID] = set()
