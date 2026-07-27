@@ -827,7 +827,6 @@ def test_scheduled_license_hash_change_creates_review_without_public_apply() -> 
 
 def test_batch_crawl_tier_b_filter() -> None:
     """Tier B 필터가 Tier A 대상을 제외한다."""
-    from fontagit_pipeline.audit_runner import run_batch_crawl
 
     targets = [
         FontTarget(
@@ -884,7 +883,6 @@ def test_batch_crawl_checkpoint_resume() -> None:
     import tempfile
     from pathlib import Path
 
-    from fontagit_pipeline.audit_runner import run_batch_crawl
 
     targets = [FontTarget(
         font_id=uuid4(),
@@ -921,7 +919,6 @@ def test_batch_crawl_checkpoint_resume() -> None:
 
 def test_batch_crawl_no_assert_safe() -> None:
     """배치 크롤링은 pending/needs_review가 있어도 assert_safe()를 호출하지 않는다."""
-    from fontagit_pipeline.audit_runner import run_batch_crawl
     from fontagit_pipeline.audit_http import FetchResult
 
     store = InMemoryAuditStore()
@@ -966,7 +963,6 @@ def test_batch_crawl_no_assert_safe() -> None:
 
 def test_batch_crawl_dry_run() -> None:
     """dry-run 모드에서는 InMemoryAuditStore를 사용하고 실제 저장 안 함."""
-    from fontagit_pipeline.audit_runner import run_batch_crawl
     from fontagit_pipeline.audit_http import FetchResult
 
     store = InMemoryAuditStore()
@@ -1478,8 +1474,6 @@ def test_metadata_audit_skips_foundry_if_unchanged(
 
 def test_compare_metadata_emits_foundry_and_download(monkeypatch: pytest.MonkeyPatch) -> None:
     """foundry/download_url/download_source_kind 3필드 draft를 모두 생성한다."""
-    from fontagit_pipeline.audit_runner import _parse_candidate
-    from fontagit_pipeline.audit_policy import SourceRegistry
 
     fixture = Path(__file__).parent / "fixtures" / "audit" / "noonnu-white-tailed-eagle.html"
     reference_html = fixture.read_bytes()
@@ -1540,7 +1534,6 @@ def test_compare_metadata_emits_foundry_and_download(monkeypatch: pytest.MonkeyP
 
 def test_download_official_domain_is_auto(monkeypatch: pytest.MonkeyPatch) -> None:
     """official 도메인 다운로드는 auto_applicable=True, 미등록 도메인은 False."""
-    from datetime import datetime
     from fontagit_pipeline.audit_policy import SourceRegistry
 
     fixture = Path(__file__).parent / "fixtures" / "audit" / "noonnu-white-tailed-eagle.html"
