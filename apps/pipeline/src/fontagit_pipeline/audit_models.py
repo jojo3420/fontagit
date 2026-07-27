@@ -8,7 +8,7 @@ from pydantic import BaseModel, HttpUrl
 
 AuditStage = Literal["bootstrap", "legal", "metadata", "scheduled"]
 SourceKind = Literal["official", "public", "noonnu"]
-RegistryKind = Literal["official", "public", "discovery"]
+RegistryKind = Literal["official", "public", "archive", "discovery"]
 DocumentKind = Literal["download", "license", "metadata"]
 DownloadStatus = Literal["pending", "verified", "needs_review", "broken"]
 LicenseStatus = Literal["pending", "verified", "needs_review"]

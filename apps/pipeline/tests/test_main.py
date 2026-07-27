@@ -3,9 +3,17 @@
 import argparse
 import hashlib
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import patch, MagicMock
+from uuid import uuid4
 
-from fontagit_pipeline.__main__ import build_document, main, main_audit_manifest_apply
+from fontagit_pipeline.__main__ import (
+    build_document,
+    main,
+    main_audit_manifest_apply,
+    main_audit_manifest_build,
+)
+from fontagit_pipeline.audit_manifest import ManifestBundle, ManifestPaths
 from fontagit_pipeline.models import GoogleFontRaw, OutputDocument
 from fontagit_pipeline.licenses import LicenseFetchError
 
@@ -261,15 +269,9 @@ def test_main_returns_3_on_supabase_config_mismatch(tmp_path):
 
                         mock_write.assert_called_once()
                         assert result == 3
+
+
 """Task 4: font-audit-manifest build CLI 테스트."""
-
-import argparse
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-from uuid import uuid4
-
-from fontagit_pipeline.__main__ import main_audit_manifest_build
-from fontagit_pipeline.audit_manifest import ManifestBundle, ManifestPaths
 
 
 def _mock_run() -> dict:

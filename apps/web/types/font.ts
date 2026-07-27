@@ -54,6 +54,7 @@ export interface Font {
   /** 이전 데이터 호환용 주소. 신규 화면은 아래 감사 필드를 우선한다. */
   officialUrl: string;
   downloadUrl?: string | null;
+  downloadSourceKind?: "official" | "public" | "archive" | null;
   foundryUrl?: string | null;
   legacyOfficialUrl?: string | null;
   downloadStatus?: AuditStatus;

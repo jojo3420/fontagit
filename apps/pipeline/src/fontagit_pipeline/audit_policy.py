@@ -16,6 +16,12 @@ _DEFAULT_REGISTRY_PATH = _DATA_DIR / "source_registry.json"
 PolicyDecision = Literal["allowed", "denied", "unknown"]
 CollectionMode = Literal["structured-only", "raw-retention"]
 
+# 출처 등급 우선순위 (높을수록 신뢰도 높음). 강등 금지 규칙에 사용.
+_SOURCE_KIND_RANK: dict[str | None, int] = {"official": 3, "public": 2, "archive": 1, None: 0}
+
+# 사람 검수 없이 자동 승인 가능한 출처 등급. archive/discovery는 반드시 사람 검수를 거친다.
+AUTO_APPLICABLE_SOURCE_KINDS: frozenset[str] = frozenset({"official", "public"})
+
 
 class RegistryEntry(BaseModel):
     """제작사 또는 공공 출처 한 곳의 승인 정보."""
@@ -66,7 +72,7 @@ class RegistryEntry(BaseModel):
 
     @model_validator(mode="after")
     def require_approval_evidence(self) -> "RegistryEntry":
-        """공식·공공 출처에는 빈칸 없는 승인 근거가 필요하다."""
+        """공식-공공 출처에는 빈칸 없는 승인 근거가 필요하다."""
         if self.source_kind not in {"official", "public"}:
             return self
 
@@ -96,10 +102,21 @@ class SourceRegistry(BaseModel):
             domain = (entry.domain or "").lower().rstrip(".")
             if not domain or not (hostname == domain or hostname.endswith(f".{domain}")):
                 continue
-            if entry.source_kind in {"official", "public"}:
+            # archive는 참고 등급이지만 official과 구별하기 위해 명시적으로 반환 (official 오인 판정 방지)
+            if entry.source_kind in {"official", "public", "archive"}:
                 return entry.source_kind
             return "discovery"
         return "discovery"
+
+
+def may_update_source_kind(current: str | None, proposed: str | None) -> bool:
+    """출처 등급 강등을 차단한다. 같거나 높은 등급만 갱신을 허용한다.
+
+    proposed가 등급 체계에 없는 값(예: discovery)이면 fail-closed로 거부한다.
+    """
+    if proposed not in _SOURCE_KIND_RANK:
+        return False
+    return _SOURCE_KIND_RANK.get(proposed, 0) >= _SOURCE_KIND_RANK.get(current, 0)
 
 
 class CollectionPolicy(BaseModel):
@@ -141,7 +158,7 @@ class CollectionPolicy(BaseModel):
 
     @property
     def has_complete_evidence(self) -> bool:
-        """robots·이용 조건 원문과 SHA-256이 모두 기록됐는지 반환한다."""
+        """robots-이용 조건 원문과 SHA-256이 모두 기록됐는지 반환한다."""
         return bool(
             self.checked_at
             and self.robots_url
@@ -184,7 +201,7 @@ def assert_collection_allowed(
     expected_source: str,
     retain_raw_text: bool = False,
 ) -> CollectionMode:
-    """수집·원문 보관 정책을 확인하고 허용된 저장 모드를 반환한다."""
+    """수집-원문 보관 정책을 확인하고 허용된 저장 모드를 반환한다."""
     normalized_source = expected_source.strip()
     if not normalized_source:
         raise ValueError("expected collection source is required")

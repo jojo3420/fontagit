@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import re
 import tempfile
@@ -16,6 +17,10 @@ from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+
+from fontagit_pipeline.audit_policy import may_update_source_kind
+
+_logger = logging.getLogger(__name__)
 
 
 _HASH = re.compile(r"^[0-9a-f]{64}$")
@@ -132,6 +137,10 @@ def _evidence_role_is_valid(
 ) -> bool:
     if field_name.startswith("download_"):
         required_document = "download"
+        # font_source_snapshots.source_kind CHECK는 official/public/noonnu만 허용해
+        # archive는 스냅샷 근거로 절대 도달하지 않는다(archive 등급은 근거 없는
+        # reference finding으로만 생성됨). 여기 포함하면 죽은 코드가 된다.
+        allowed_source_kinds = {"official", "public"}
     elif field_name.startswith("license_") or field_name in {
         "allow_commercial",
         "allow_font_sale",
@@ -143,6 +152,7 @@ def _evidence_role_is_valid(
         "license_verified",
     }:
         required_document = "license"
+        allowed_source_kinds = {"official", "public"}  # archive 미허용: 라이선스는 자동 승인 불가
     elif field_name in _SCRIPT_FIELDS or field_name in {"tags", "weights"}:
         # 컬렉션 0단계: 눈누 폰트파일에서 추출한 tags/weights는 font-file-script 증거로 reference 신뢰도
         source_kind = snapshot.get("source_kind")
@@ -155,13 +165,15 @@ def _evidence_role_is_valid(
         ):
             return confidence == "reference"
         required_document = "metadata"
+        allowed_source_kinds = {"official", "public"}  # archive 미허용
     elif field_name in _METADATA_FIELDS:
         required_document = "metadata"
+        allowed_source_kinds = {"official", "public"}  # archive 미허용
     else:
         return False
     source_kind = snapshot.get("source_kind")
     return (
-        source_kind in {"official", "public"}
+        source_kind in allowed_source_kinds
         and snapshot.get("document_kind") == required_document
         and confidence == source_kind
     )
@@ -430,7 +442,9 @@ def _validated_value(field_name: str, value: object) -> object:
         if value is not None and not isinstance(value, str):
             raise ManifestError(f"field {field_name} requires text or null")
     elif field_name in _SOURCE_KIND_FIELDS:
-        if value is not None and value not in {"official", "public"}:
+        # download_source_kind만 archive 허용 (license는 자동 승인 불가)
+        allowed = {"official", "public", "archive"} if field_name == "download_source_kind" else {"official", "public"}
+        if value is not None and value not in allowed:
             raise ManifestError(f"field {field_name} has invalid source kind")
     elif field_name in _EVIDENCE_FIELDS:
         if value is not None:
@@ -600,9 +614,32 @@ def build_manifest(
     entries: list[ManifestEntry] = []
     exported_snapshots: dict[UUID, dict[str, object]] = {}
     exported_findings: dict[UUID, dict[str, object]] = {}
+    downgrade_skipped_count = 0
     for font_id, findings in grouped.items():
         row = rows_by_id[font_id]
         key = _source_key(row)
+
+        # download_source_kind 강등 차단: 등급이 내려가려는 경우 엔트리 전체 제외
+        skip_entry = False
+        for finding in findings:
+            if finding.get("field_name") == "download_source_kind":
+                current_kind_raw = row.get("download_source_kind")
+                proposed_kind_raw = finding.get("proposed_value")
+                current_kind = current_kind_raw if isinstance(current_kind_raw, str) else None
+                proposed_kind = proposed_kind_raw if isinstance(proposed_kind_raw, str) else None
+                if not may_update_source_kind(current_kind, proposed_kind):
+                    _logger.warning(
+                        "entry excluded due to source kind downgrade: %s, current=%s proposed=%s",
+                        key,
+                        current_kind_raw,
+                        proposed_kind_raw,
+                    )
+                    skip_entry = True
+                    break
+        if skip_entry:
+            downgrade_skipped_count += 1
+            continue
+
         before: dict[str, object] = {}
         after: dict[str, object] = {}
         evidence_ids: set[UUID] = set()
@@ -654,31 +691,43 @@ def build_manifest(
             )
         )
 
+    if downgrade_skipped_count:
+        _logger.warning(
+            "manifest build skipped %d/%d entries due to source kind downgrade",
+            downgrade_skipped_count,
+            len(grouped),
+        )
+    if not entries:
+        raise ManifestError("manifest requires at least one entry after downgrade exclusion")
+
     entries.sort(key=lambda item: (item.source_key.provider, item.source_key.provider_record_id))
     evidence = EvidenceBundle(
         run={**run_data, "id": str(run_id)},
         snapshots=[exported_snapshots[key] for key in sorted(exported_snapshots, key=str)],
         findings=[exported_findings[key] for key in sorted(exported_findings, key=str)],
     )
-    forward = FontAuditManifest(
-        run_id=run_id,
-        baseline_sha256=baseline_sha256,
-        generated_at=generated_at,
-        rollback_mode=False,
-        evidence_bundle=evidence,
-        entries=entries,
-    )
-    reverse = FontAuditManifest(
-        run_id=run_id,
-        baseline_sha256=baseline_sha256,
-        generated_at=generated_at,
-        rollback_mode=True,
-        evidence_bundle=evidence,
-        entries=[
-            entry.model_copy(update={"before": entry.after, "after": entry.before})
-            for entry in entries
-        ],
-    )
+    try:
+        forward = FontAuditManifest(
+            run_id=run_id,
+            baseline_sha256=baseline_sha256,
+            generated_at=generated_at,
+            rollback_mode=False,
+            evidence_bundle=evidence,
+            entries=entries,
+        )
+        reverse = FontAuditManifest(
+            run_id=run_id,
+            baseline_sha256=baseline_sha256,
+            generated_at=generated_at,
+            rollback_mode=True,
+            evidence_bundle=evidence,
+            entries=[
+                entry.model_copy(update={"before": entry.after, "after": entry.before})
+                for entry in entries
+            ],
+        )
+    except ValidationError as exc:
+        raise ManifestError(f"manifest failed pydantic validation: {exc}") from exc
     return ManifestBundle(
         forward=forward,
         reverse=reverse,
@@ -750,6 +799,23 @@ def verify_manifest_file(path: Path, sha256_path: Path) -> FontAuditManifest:
     return verify_manifest_bytes(content, expected)
 
 
+def _validate_chunk_references(chunk_index: int, chunk: ManifestBundle) -> None:
+    """청크 entries가 참조하는 evidence/finding id가 청크에 실재하는지 단정한다.
+
+    잔여 참조가 있으면 부분 적용 사고로 이어지므로 ManifestError로 차단한다.
+    """
+    included_evidence = {str(s["id"]) for s in chunk.forward.evidence_bundle.snapshots}
+    included_findings = {str(f["id"]) for f in chunk.forward.evidence_bundle.findings}
+    for entry in chunk.forward.entries:
+        missing_ev = {str(i) for i in entry.evidence_ids} - included_evidence
+        missing_fd = {str(i) for i in entry.finding_ids} - included_findings
+        if missing_ev or missing_fd:
+            raise ManifestError(
+                f"청크 {chunk_index}: 참조 무결성 위반 evidence={sorted(map(str, missing_ev))} "
+                f"finding={sorted(map(str, missing_fd))}"
+            )
+
+
 def split_manifest_into_chunks(bundle: ManifestBundle, chunk_size: int) -> list[ManifestBundle]:
     """manifest를 청크로 분할한다.
 
@@ -767,7 +833,7 @@ def split_manifest_into_chunks(bundle: ManifestBundle, chunk_size: int) -> list[
     chunks: list[ManifestBundle] = []
 
     # 청크 나누기
-    for i in range(0, len(forward.entries), chunk_size):
+    for chunk_index, i in enumerate(range(0, len(forward.entries), chunk_size)):
         chunk_entries = forward.entries[i : i + chunk_size]
 
         # 참조하는 evidence_id, finding_id 수집 (문자열로 비교)
@@ -800,36 +866,42 @@ def split_manifest_into_chunks(bundle: ManifestBundle, chunk_size: int) -> list[
         )
 
         # forward 청크
-        chunk_forward = FontAuditManifest(
-            run_id=forward.run_id,
-            baseline_sha256=forward.baseline_sha256,
-            generated_at=forward.generated_at,
-            rollback_mode=False,
-            evidence_bundle=filtered_evidence,
-            entries=chunk_entries,
-        )
+        try:
+            chunk_forward = FontAuditManifest(
+                run_id=forward.run_id,
+                baseline_sha256=forward.baseline_sha256,
+                generated_at=forward.generated_at,
+                rollback_mode=False,
+                evidence_bundle=filtered_evidence,
+                entries=chunk_entries,
+            )
+        except ValidationError as exc:
+            raise ManifestError(f"청크 {chunk_index} forward manifest validation 실패: {exc}") from exc
 
         # reverse 청크
-        chunk_reverse = FontAuditManifest(
-            run_id=forward.run_id,
-            baseline_sha256=forward.baseline_sha256,
-            generated_at=forward.generated_at,
-            rollback_mode=True,
-            evidence_bundle=filtered_evidence,
-            entries=[
-                entry.model_copy(update={"before": entry.after, "after": entry.before})
-                for entry in chunk_entries
-            ],
-        )
-
-        chunks.append(
-            ManifestBundle(
-                forward=chunk_forward,
-                reverse=chunk_reverse,
-                forward_sha256=_digest(chunk_forward),
-                reverse_sha256=_digest(chunk_reverse),
+        try:
+            chunk_reverse = FontAuditManifest(
+                run_id=forward.run_id,
+                baseline_sha256=forward.baseline_sha256,
+                generated_at=forward.generated_at,
+                rollback_mode=True,
+                evidence_bundle=filtered_evidence,
+                entries=[
+                    entry.model_copy(update={"before": entry.after, "after": entry.before})
+                    for entry in chunk_entries
+                ],
             )
+        except ValidationError as exc:
+            raise ManifestError(f"청크 {chunk_index} reverse manifest validation 실패: {exc}") from exc
+
+        chunk_bundle = ManifestBundle(
+            forward=chunk_forward,
+            reverse=chunk_reverse,
+            forward_sha256=_digest(chunk_forward),
+            reverse_sha256=_digest(chunk_reverse),
         )
+        _validate_chunk_references(chunk_index, chunk_bundle)
+        chunks.append(chunk_bundle)
 
     return chunks
 

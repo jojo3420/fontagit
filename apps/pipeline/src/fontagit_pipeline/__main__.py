@@ -1027,20 +1027,34 @@ def main_audit_review(args: argparse.Namespace) -> int:
             field_name = finding.get("field_name")
             evidence_id = finding.get("evidence_id")
             proposed_value = finding.get("proposed_value")
+            auto_applicable = finding.get("auto_applicable", False)  # 기존 DB 레코드에 값이 없으면 fail-closed로 사람 검수 유지
 
             try:
                 if not isinstance(finding_id, str):
                     raise ValueError(f"invalid finding_id: {finding_id}")
 
-                # values-evidence 대조 (tags/weights 전용)
-                if field_name in {"tags", "weights"} and evidence_id and isinstance(evidence_id, str):
-                    extracted = evidence_by_id.get(evidence_id)
-                    if extracted:
-                        expected = derive_proposed_value(field_name, extracted)
-                        if expected != proposed_value:
-                            raise ValueError(
-                                f"evidence mismatch: field={field_name} expected={expected} proposed={proposed_value}"
-                            )
+                # 자동 승인 필드 필터 (auto_applicable=True만 처리)
+                if field_name not in {"tags", "weights", "foundry", "download_url", "download_source_kind"}:
+                    continue
+                if not auto_applicable:
+                    # auto_applicable=False는 needs_review 유지 (자동 승인 불가)
+                    continue
+
+                # values-evidence 대조 (자동 승인 대상 필드). evidence_id가 없거나
+                # 매칭되는 스냅샷을 찾지 못하면 fail-closed로 승인을 건너뛴다
+                # (검증 불가를 검증 통과로 취급하지 않는다).
+                if not isinstance(evidence_id, str) or not evidence_id:
+                    raise ValueError(f"missing evidence_id for auto-approvable field: field={field_name}")
+                extracted = evidence_by_id.get(evidence_id)
+                if not extracted:
+                    raise ValueError(
+                        f"evidence snapshot not found: field={field_name} evidence_id={evidence_id}"
+                    )
+                expected = derive_proposed_value(field_name, extracted)
+                if expected != proposed_value:
+                    raise ValueError(
+                        f"evidence mismatch: field={field_name} expected={expected} proposed={proposed_value}"
+                    )
 
                 store.approve_finding(UUID(finding_id), reviewed_by=reviewed_by)
                 approved_count += 1
@@ -1154,6 +1168,329 @@ def main_audit_crawl_all(args: argparse.Namespace) -> int:
         return 0
     except (AuditGateError, OSError, ValueError) as exc:
         logger.error("전수 크롤링 중단: %s", exc)
+        return 3
+
+
+def main_audit_tier_a_meta(args: argparse.Namespace) -> int:
+    """Tier A 공식 메타데이터(권리사/specimen URL)를 수집한다."""
+    import json
+    from hashlib import sha256
+    from uuid import uuid4
+
+    from fontagit_pipeline.config import load_audit_settings
+    from fontagit_pipeline.audit_policy import load_source_registry
+    from fontagit_pipeline.tier_a_meta import (
+        BrandNormalization,
+        TierATarget,
+        collect_tier_a_meta,
+    )
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    report = {
+        "dry_run": args.dry_run,
+        "limit": args.limit,
+        "results": None,
+        "errors": [],
+    }
+
+    try:
+        # 정규화 테이블 로드
+        norm_path = Path(__file__).with_name("data") / "brand_normalization.json"
+        norm_data = json.loads(norm_path.read_text(encoding="utf-8"))
+        normalization = BrandNormalization.model_validate(norm_data)
+
+        # 출처 레지스트리 로드
+        registry = load_source_registry()
+
+        # dev DB에서 Tier A 대상 조회
+        settings = load_audit_settings()
+        dev_url, dev_secret_key = settings.dev_write_credentials()
+        from supabase import create_client
+
+        dev_client = create_client(dev_url, dev_secret_key)
+        dev_schema = dev_client.schema("fontagit")
+
+        # published + source_tier='A' 폰트 조회
+        query = (
+            dev_schema.table("fonts")
+            .select("id,slug,name_en,download_source_kind,license_source_kind")
+            .eq("status", "published")
+            .eq("source_tier", "A")
+            .order("id")
+        )
+        if args.limit > 0:
+            query = query.limit(args.limit)
+        response = query.execute()
+
+        if not isinstance(response.data, list):
+            raise ValueError("dev fonts query returned invalid data")
+
+        targets: list[TierATarget] = []
+        for row in response.data:
+            font_id = row.get("id")
+            name_en = row.get("name_en")
+            if not all([font_id, name_en]):
+                logger.warning("skipping invalid font row: %s", row)
+                continue
+            slug = row.get("slug")
+            download_source_kind = row.get("download_source_kind")
+            license_source_kind = row.get("license_source_kind")
+            # Tier A는 google-fonts 출처이고, 대부분 OFL 라이선스 사용
+            # (apache, ufl도 있지만 메타데이터에서 판별 가능)
+            targets.append(
+                TierATarget(
+                    font_id=font_id,
+                    name_en=name_en,
+                    license_type="OFL",  # google-fonts 기본값
+                    slug=slug if isinstance(slug, str) else None,
+                    noonnu_foundry=None,  # dev에서는 눈누 매핑 미제공
+                    download_source_kind=(
+                        download_source_kind if isinstance(download_source_kind, str) else None
+                    ),
+                    license_source_kind=(
+                        license_source_kind if isinstance(license_source_kind, str) else None
+                    ),
+                )
+            )
+
+        logger.info("Tier A 대상 조회 완료: %d건", len(targets))
+
+        if args.dry_run:
+            # dry-run: 메모리 저장소 + 가상 run_id
+            from fontagit_pipeline.audit_store import InMemoryAuditStore
+
+            store = InMemoryAuditStore()
+            run_id = uuid4()
+            # run 생성 (dry-run이므로 저장 없음)
+            result = collect_tier_a_meta(
+                run_id,
+                targets,
+                store,
+                registry,
+                normalization,
+                dry_run=True,
+            )
+            report["results"] = result
+            report["target_count"] = len(targets)
+            report["findings"] = result.get("findings", [])
+            report["errors"] = result.get("errors", [])
+            logger.info("Tier A 메타 dry-run 완료: %s", result)
+        else:
+            # 실제 저장: SupabaseAuditStore + run 생성
+            from fontagit_pipeline.audit_store import SupabaseAuditStore
+
+            store = SupabaseAuditStore.from_dev_credentials(dev_url, dev_secret_key)
+
+            # baseline_sha256 계산 (타겟 목록의 해시)
+            targets_json = json.dumps(
+                [t.model_dump(mode="json") for t in targets],
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            baseline_sha256 = sha256(targets_json.encode()).hexdigest()
+
+            # run 생성
+            run_id = store.start_run(
+                stage="scheduled",
+                target_count=len(targets),
+                baseline_sha256=baseline_sha256,
+                dry_run=False,
+            )
+
+            result = collect_tier_a_meta(
+                run_id,
+                targets,
+                store,
+                registry,
+                normalization,
+                dry_run=False,
+            )
+
+            # run 완료
+            store.complete_run(run_id, result)
+
+            report["results"] = result
+            report["target_count"] = len(targets)
+            report["run_id"] = str(run_id)
+            report["findings"] = result.get("findings", [])
+            report["errors"] = result.get("errors", [])
+            logger.info("Tier A 메타 저장 완료: run_id=%s, %s", run_id, result)
+
+        # 보고서 저장
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(
+            json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        logger.info("Tier A 메타 보고서 저장: %s", args.out)
+        return 0
+
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        logger.error("Tier A 메타 수집 중단: %s", exc)
+        report["errors"].append(str(exc))
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(
+            json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return 1
+
+
+def main_audit_kogl_preview(args: argparse.Namespace) -> int:
+    """KOGL 후보 폰트 조회 및 유형 판별 미리보기 (preview 전용, DB 쓰기 없음)."""
+    import json
+
+    from fontagit_pipeline.audit_kogl import detect_kogl_type
+    from fontagit_pipeline.config import load_audit_settings
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+
+    try:
+        # 1. 설정 로드
+        settings = load_audit_settings()
+        dev_url, dev_secret_key = settings.dev_write_credentials()
+
+        # 2. Supabase 클라이언트 생성
+        from supabase import create_client
+
+        dev_client = create_client(dev_url, dev_secret_key)
+        dev_schema = dev_client.schema("fontagit")
+
+        # 3. 라이선스 스냅샷 조회 (metadata 문서 종류, 1,000행 제한 회피용 페이지네이션)
+        from typing import cast
+
+        logger.info("라이선스 스냅샷 조회 (metadata)...")
+        snapshots_data: list[dict[str, object]] = []
+        page_size = 1000
+        offset = 0
+        while True:
+            page_response = (
+                dev_schema.table("font_source_snapshots")
+                .select("font_id,extracted")
+                .eq("document_kind", "metadata")
+                .order("collected_at", desc=True)
+                .range(offset, offset + page_size - 1)
+                .execute()
+            )
+            if not isinstance(page_response.data, list):
+                raise ValueError("snapshots query returned invalid data")
+            snapshots_data.extend(cast(list[dict[str, object]], page_response.data))
+            if len(page_response.data) < page_size:
+                break
+            offset += page_size
+
+        # 4. font_id별 스냅샷 선택 (collected_at이 전부 NULL이라 정렬이 무의미하므로
+        #    license_text 본문을 보유한 스냅샷을 우선 채택)
+        def _has_license_text(snap: dict[str, object]) -> bool:
+            extracted = snap.get("extracted")
+            return isinstance(extracted, dict) and isinstance(extracted.get("license_text"), str)
+
+        latest_snapshots: dict[str, dict] = {}
+        for snap in snapshots_data:
+            font_id = snap.get("font_id")
+            if not font_id:
+                continue
+            if font_id not in latest_snapshots:
+                latest_snapshots[font_id] = snap
+            elif _has_license_text(snap) and not _has_license_text(latest_snapshots[font_id]):
+                latest_snapshots[font_id] = snap
+
+        logger.info("라이선스 스냅샷: %d건 (폰트별 1건, 본문 보유 우선)", len(latest_snapshots))
+
+        # 5. 각 스냅샷의 license_text로 detect_kogl_type 실행
+        results: dict[str, object] = {
+            "source": "font_source_snapshots (metadata, latest per font_id)",
+            "query_count": len(latest_snapshots),
+            "by_type": {1: [], 2: [], 3: [], 4: []},
+            "undetected": [],
+            "extraction_errors": [],
+            "summary": {},
+        }
+
+        for font_id, snapshot in latest_snapshots.items():
+            extracted = snapshot.get("extracted")
+
+            # 타입 검증: extracted 필드가 dict인지 확인
+            if not isinstance(extracted, dict):
+                results["extraction_errors"].append(
+                    {
+                        "font_id": font_id,
+                        "slug": "unknown",
+                        "reason": f"extracted is {type(extracted).__name__}, not dict",
+                    }
+                )
+                continue
+
+            license_text = extracted.get("license_text")
+
+            # license_text가 없거나 None이면 skip (정상 데이터, 오류 아님)
+            if license_text is None:
+                continue
+
+            # 타입 검증: license_text 필드가 str인지 확인 (기대 범위 외)
+            if not isinstance(license_text, str):
+                slug = extracted.get("target_slug", "unknown")
+                results["extraction_errors"].append(
+                    {
+                        "font_id": font_id,
+                        "slug": slug,
+                        "reason": f"license_text is {type(license_text).__name__}, not str",
+                    }
+                )
+                continue
+
+            # '공공누리' 포함 여부 확인
+            if "공공누리" not in license_text:
+                continue
+
+            detection = detect_kogl_type(license_text)
+            slug = extracted.get("target_slug", "unknown")
+            font_entry = {
+                "font_id": font_id,
+                "slug": slug,
+                "detection_reason": detection.reason,
+            }
+
+            if detection.kogl_type is not None:
+                results["by_type"][detection.kogl_type].append(font_entry)
+            else:
+                results["undetected"].append(
+                    {**font_entry, "undetected_reason": detection.reason}
+                )
+
+        # 7. 요약 집계
+        summary = {}
+        for kogl_type in (1, 2, 3, 4):
+            summary[f"type_{kogl_type}"] = len(results["by_type"][kogl_type])
+        summary["undetected"] = len(results["undetected"])
+        summary["total_detected"] = sum(len(v) for v in results["by_type"].values())
+        summary["extraction_errors"] = len(results["extraction_errors"])
+        summary["total_with_kogl_text"] = summary["total_detected"] + summary["undetected"]
+        # target_slug 추출 실패 카운트 ("unknown" fallback)
+        slug_extraction_failures = sum(1 for items in results["by_type"].values() for e in items if e.get("slug") == "unknown") + sum(1 for e in results["undetected"] if e.get("slug") == "unknown")
+        summary["slug_extraction_failures"] = slug_extraction_failures
+        results["summary"] = summary
+
+        # 8. JSON 저장
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(
+            json.dumps(results, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        logger.info(
+            "KOGL preview 완료: type_1=%d type_2=%d type_3=%d type_4=%d undetected=%d extraction_errors=%d (출력=%s)",
+            summary["type_1"],
+            summary["type_2"],
+            summary["type_3"],
+            summary["type_4"],
+            summary["undetected"],
+            summary["extraction_errors"],
+            args.out,
+        )
+        return 0
+
+    except Exception as exc:
+        logger.error("KOGL preview 실패: %s (%s)", exc.__class__.__name__, exc)
         return 3
 
 
@@ -1388,6 +1725,24 @@ if __name__ == "__main__":
     )
     crawl_all_parser.add_argument("--dry-run", action="store_true", help="dry-run 모드")
     crawl_all_parser.set_defaults(func=main_audit_crawl_all)
+
+    tier_a_meta_parser = subparsers.add_parser(
+        "font-audit-tier-a-meta",
+        help="Tier A 공식 메타데이터 수집 (권리사 판정+specimen URL fallback)",
+    )
+    tier_a_meta_parser.add_argument("--limit", type=int, default=50, help="수집 대상 한도 (기본값 50)")
+    tier_a_meta_parser.add_argument("--dry-run", action="store_true", help="DB 쓰기 없이 메모리만 사용")
+    tier_a_meta_parser.add_argument("--out", type=Path, required=True, help="결과 보고서 JSON 경로")
+    tier_a_meta_parser.set_defaults(func=main_audit_tier_a_meta)
+
+    kogl_preview_parser = subparsers.add_parser(
+        "font-audit-kogl-preview",
+        help="KOGL 후보 폰트 조회 및 유형 판별 미리보기 (preview 전용, DB 쓰기 없음)",
+    )
+    kogl_preview_parser.add_argument(
+        "--out", type=Path, required=True, help="KOGL 판별 결과 JSON 경로"
+    )
+    kogl_preview_parser.set_defaults(func=main_audit_kogl_preview)
 
     args = parser.parse_args()
 

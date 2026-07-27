@@ -147,8 +147,7 @@ def test_task3_helpers_manifest_integration() -> None:
     font_1 = _make_font(FONT_ID_1, "test-font-1", provider_record_id="1234")
     font_2 = _make_font(FONT_ID_2, "test-font-2", provider_record_id="5678")
 
-    # 무관 폰트 (run에 snapshot/findings이 없음)
-    font_unrelated = _make_font(FONT_ID_UNRELATED, "unrelated-font", provider_record_id="9999")
+    # 무관 폰트 (run에 snapshot/findings이 없음) — entries에 미포함되므로 변수로 생성하지 않음
 
     # Snapshots (run_id 일치, font_id 포함, 18컬럼 모두)
     snapshot_1 = _make_snapshot(SNAPSHOT_ID_1, FONT_ID_1, "noonnu", "1234")

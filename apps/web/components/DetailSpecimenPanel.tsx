@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import type { Font } from "@/types/font";
-import { getDefaultSpecimenText } from "@/lib/specimen";
+import { getDefaultSpecimenText, resolveSpecimenLanguage } from "@/lib/specimen";
+import { pickPhrase, nextPhrase } from "@/lib/specimenPhrases";
 import { resolveDetailFontPreview } from "@/lib/fontPreview";
 import { SpecimenBox } from "./SpecimenBox";
 import {
@@ -9,6 +10,7 @@ import {
   comboKey,
   type ComboLoadStatus,
 } from "./WeightSpecimenSection";
+import styles from "./DetailSpecimenPanel.module.css";
 
 const LOAD_TIMEOUT_MS = 5000;
 /** 판정 일관성을 위한 고정 검사 문자열(사용자 입력과 무관). */
@@ -80,9 +82,24 @@ export function DetailSpecimenPanel({
   editable: boolean;
   caption?: string;
 }) {
-  const [text, setText] = useState(getDefaultSpecimenText(font));
+  const usePhrasePool =
+    resolveSpecimenLanguage({
+      subsets: font.subsets || [],
+      scriptStatus: font.scriptStatus,
+    }) === "korean";
+
+  const initialPhrase = usePhrasePool ? pickPhrase(font) : null;
+  const [phraseId, setPhraseId] = useState<string | null>(initialPhrase?.id ?? null);
+  const [text, setText] = useState(initialPhrase?.text ?? getDefaultSpecimenText(font));
   const detail = useMemo(() => resolveDetailFontPreview(font), [font]);
   const [statuses, setStatuses] = useState<Record<string, ComboLoadStatus>>({});
+
+  const handleShuffle = () => {
+    if (!phraseId) return;
+    const phrase = nextPhrase(font, phraseId);
+    setPhraseId(phrase.id);
+    setText(phrase.text);
+  };
 
   useEffect(() => {
     if (detail.combos.length === 0) return;
@@ -139,14 +156,25 @@ export function DetailSpecimenPanel({
 
   return (
     <>
-      <SpecimenBox
-        font={font}
-        editable={editable}
-        caption={caption}
-        text={text}
-        onTextChange={setText}
-        stylesheetManaged={detail.stylesheetUrl !== null}
-      />
+      <div className={styles.specimenContainer}>
+        <SpecimenBox
+          font={font}
+          editable={editable}
+          caption={caption}
+          text={text}
+          onTextChange={setText}
+          stylesheetManaged={detail.stylesheetUrl !== null}
+        />
+        {usePhrasePool && (
+          <button
+            type="button"
+            className={styles.shuffle}
+            onClick={handleShuffle}
+          >
+            다른 문구
+          </button>
+        )}
+      </div>
       <WeightSpecimenSection
         font={font}
         text={text}

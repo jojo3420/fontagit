@@ -76,7 +76,7 @@ def test_chunk_missing_evidence_raises_manifest_error() -> None:
         split_manifest_into_chunks(bundle, chunk_size=2)
 ```
 
-주의: `_entries_of`/`_evidence_ids_of`/`_reverse_entries_of` 자리에는 `ManifestBundle` 실제 필드명(파일 내 클래스 정의 확인, build_manifest:515가 반환)을 그대로 쓴다. 별도 헬퍼 함수로 만들지 말고 실제 속성 접근으로 풀어쓴다.
+실측 구조(적대적 리뷰 확인, audit_manifest.py:239,368-373): `ManifestBundle`은 `forward`/`reverse`(각 `FontAuditManifest`)와 `forward_sha256`/`reverse_sha256`을 가진다. `FontAuditManifest`는 `entries: list[ManifestEntry]`와 `evidence_bundle`(snapshots/findings — dict 행 목록)을 가진다. 테스트에서 헬퍼 자리에는 다음을 그대로 풀어쓴다: `_entries_of(c)` → `c.forward.entries`, `_reverse_entries_of(c)` → `c.reverse.entries`, `_evidence_ids_of(c)` → `{str(s["id"]) for s in c.forward.evidence_bundle.snapshots}`, `_finding_ids_of(c)` → `{str(f["id"]) for f in c.forward.evidence_bundle.findings}`.
 
 - [ ] **Step 2: 실패 확인**
 
@@ -93,11 +93,11 @@ def _validate_chunk_references(chunk_index: int, chunk: "ManifestBundle") -> Non
 
     잔여 참조가 있으면 부분 적용 사고로 이어지므로 ManifestError로 차단한다.
     """
-    included_evidence = {e.id for e in chunk.evidence}          # 실제 필드명 사용
-    included_findings = {f.id for f in chunk.findings}          # 실제 필드명 사용
-    for entry in chunk.forward.entries:                          # 실제 필드명 사용
-        missing_ev = set(entry.evidence_ids) - included_evidence
-        missing_fd = set(entry.finding_ids) - included_findings
+    included_evidence = {str(s["id"]) for s in chunk.forward.evidence_bundle.snapshots}
+    included_findings = {str(f["id"]) for f in chunk.forward.evidence_bundle.findings}
+    for entry in chunk.forward.entries:
+        missing_ev = {str(i) for i in entry.evidence_ids} - included_evidence
+        missing_fd = {str(i) for i in entry.finding_ids} - included_findings
         if missing_ev or missing_fd:
             raise ManifestError(
                 f"청크 {chunk_index}: 참조 무결성 위반 evidence={sorted(map(str, missing_ev))} "
@@ -205,6 +205,8 @@ source_registry.json에 엔트리 추가(기존 엔트리 스키마 준수):
 ```
 
 audit_manifest.py `_evidence_role_is_valid`(:130-167): `download_*` 필드의 허용 source_kind 집합에 "archive"를 추가한다. `license_*` 필드 허용 집합은 변경하지 않는다(archive로 license 자동 승인 금지).
+
+audit_manifest.py 값 검증자(:432-434, `_SOURCE_KIND_FIELDS` 분기)의 허용 집합도 `{"official", "public", "archive"}`로 확장한다 — 적대적 리뷰 실측: 이 지점을 빠뜨리면 archive 값이 전부 ManifestError로 차단된다.
 
 build_manifest(:515) 엔트리 생성부: 필드가 `download_url`/`download_source_kind`일 때 `may_update_source_kind(current_row의 download_source_kind, 제안 kind)`가 False면 해당 엔트리를 제외하고 `rejected` 사유("등급 강등 차단")로 집계에 남긴다.
 
@@ -389,7 +391,7 @@ def build_metadata_url(license_type: str, name_en: str) -> str:
     return _METADATA_URL.format(license_dir=license_dir, family_dir=family_dir)
 ```
 
-`_LICENSE_DIRS_ITEMS`는 `from .licenses import _LICENSE_DIRS` 후 `.items()`를 상수로 감싼다. 수집 실행 함수 `collect_tier_a_meta(targets, store, registry, normalization, *, dry_run, fetcher=fetch_public_url)`는 대상별로 (1) METADATA.pb fetch-파싱 (2) resolve_foundry (3) FindingDraft 생성(field_name: `foundry`, `foundry_url`, `download_url`, `download_source_kind`, `license_source_url`) — FindingDraft 생성 인자 구성은 `audit_metadata.py:302-368`의 기존 패턴을 그대로 복사해 맞춘다. fetch 실패-파싱 실패는 해당 폰트 skip + logging.warning + 리포트 집계(절대 허용 승격 없음).
+`_LICENSE_DIRS_ITEMS`는 `from .licenses import _LICENSE_DIRS` 후 `.items()`를 상수로 감싼다. 수집 실행 함수 `collect_tier_a_meta(targets, store, registry, normalization, *, dry_run, fetcher=fetch_public_url)`는 대상별로 (1) METADATA.pb fetch-파싱 (2) resolve_foundry (3) FindingDraft 생성(field_name: `foundry`, `foundry_url`, `download_url`, `download_source_kind`, `license_source_url`) — FindingDraft 필드는 실측 기준(audit_store.py:39-49) `font_id`, `field_name`, `before_value`, `proposed_value`, `evidence_id`, `confidence`, `review_reason`, `auto_applicable`이며, 생성 패턴은 `audit_metadata.py:302-368`을 따른다. fetch 실패-파싱 실패는 해당 폰트 skip + logging.warning + 리포트 집계(절대 허용 승격 없음).
 
 `brand_normalization.json` 초기 내용:
 
@@ -469,7 +471,8 @@ Expected: FAIL
 `compare_metadata`(:274)의 필드 비교 루프에 추가:
 
 - `foundry`: 스냅샷 값 존재 + 현재값과 다름 → FindingDraft. Tier B는 공식 대조 소스가 없으므로 confidence는 "reference"(자동 게이트 미통과 → needs_review 풀. 스펙 5장). Tier A 대상은 Task 3 수집기가 담당하므로 여기서는 눈누 단독 근거로만 생성.
-- `download_url`: `download_candidates[0]` 존재 시 `registry.classify(url)` 결과가 "official"/"public"이면 그 kind로 auto 후보, "archive"/"discovery"면 needs_review. `may_update_source_kind(current_kind, proposed_kind)` False면 draft 생성 생략(강등 금지).
+- `download_url`: 후보 중 **파일 직링크는 제외**(경로가 `.ttf/.otf/.woff/.woff2/.zip`로 끝나면 스킵 — 스펙 "download_url = 페이지 URL" 규칙, 파일 후보는 `font_file_candidates` 소관). 남은 첫 후보에 대해 `registry.classify(url)` 결과가 "official"/"public"이면 그 kind로 auto 후보, "archive"/"discovery"면 needs_review. `may_update_source_kind(current_kind, proposed_kind)` False면 draft 생성 생략(강등 금지).
+- 추가 실측 항목: `font-audit-review auto-approve`가 승인 필드를 화이트리스트로 제한하는지 `__main__.py`-`audit_store.py`에서 grep으로 확인하고, 제한이 있으면 `foundry`/`download_url`/`download_source_kind`를 비legal 자동 승인 목록에 추가한다(legal 필드 추가 금지).
 - `download_source_kind`: download_url draft와 반드시 쌍으로 생성(동일 evidence 참조).
 
 - [ ] **Step 4: 통과 확인 + 전체 회귀**

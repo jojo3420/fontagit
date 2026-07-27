@@ -108,6 +108,15 @@ class _MetadataTarget(Protocol):
     @property
     def tags(self) -> tuple[str, ...]: ...
 
+    @property
+    def foundry(self) -> str | None: ...
+
+    @property
+    def download_url(self) -> str | None: ...
+
+    @property
+    def download_source_kind(self) -> str | None: ...
+
 
 class _MetadataSnapshot(Protocol):
     @property
@@ -365,6 +374,78 @@ def compare_metadata(
                     auto_applicable=False,
                 )
             )
+
+    # Tier B(눈누)에서 제작사(foundry) 필드 추가
+    foundry_value = official_snapshot.extracted.get("foundry")
+    if foundry_value is not None and foundry_value != target.foundry:
+        findings.append(
+            FindingDraft(
+                font_id=target.font_id,
+                field_name="foundry",
+                before_value=target.foundry,
+                proposed_value=foundry_value,
+                evidence_id=None,
+                confidence="reference",  # Tier B는 공식 대조 소스가 없으므로 reference
+                review_reason="foundry from noonnu snapshot",
+                auto_applicable=False,
+            )
+        )
+
+    # Tier B(눈누)에서 다운로드 URL/출처 필드 추가
+    download_url = official_snapshot.extracted.get("download_url")
+    download_source_kind = official_snapshot.extracted.get("download_source_kind")
+    if download_url is not None:
+        from fontagit_pipeline.audit_policy import (
+            AUTO_APPLICABLE_SOURCE_KINDS,
+            may_update_source_kind,
+        )
+
+        proposed_download_kind = download_source_kind if isinstance(download_source_kind, str) else None
+        # 등급 체계 밖 값(discovery 등)은 kind 필드에 실으면 manifest 적용이 깨진다.
+        # 이때도 URL 자체는 사람 검수 대상으로 남긴다(스펙: 화이트리스트 밖은 해당 필드만 needs_review).
+        kind_is_applicable = proposed_download_kind in AUTO_APPLICABLE_SOURCE_KINDS or proposed_download_kind == "archive"
+        auto_applicable = proposed_download_kind in AUTO_APPLICABLE_SOURCE_KINDS
+        # 등급 체계 안의 값인데 강등이면 URL까지 함께 막는다(낮은 등급 출처로 덮어쓰기 방지).
+        is_downgrade = kind_is_applicable and not may_update_source_kind(
+            target.download_source_kind, proposed_download_kind
+        )
+        # 등급 체계 밖 출처(discovery)의 URL은 현재 등급이 없을 때만 제안한다.
+        # 이미 official/public URL이 있는 폰트에 미검증 URL이 들어가면 등급 표시와 실제 링크가 어긋난다.
+        url_allowed = not is_downgrade and (kind_is_applicable or target.download_source_kind is None)
+
+        if url_allowed and download_url != target.download_url:
+            findings.append(
+                FindingDraft(
+                    font_id=target.font_id,
+                    field_name="download_url",
+                    before_value=target.download_url,
+                    proposed_value=download_url,
+                    evidence_id=None,
+                    confidence="reference",
+                    review_reason="download URL from noonnu snapshot",
+                    auto_applicable=auto_applicable,
+                )
+            )
+
+        # kind는 등급 체계 안의 값이고 강등이 아닐 때만 제안한다.
+        if (
+            kind_is_applicable
+            and download_source_kind != target.download_source_kind
+            and may_update_source_kind(target.download_source_kind, proposed_download_kind)
+        ):
+            findings.append(
+                FindingDraft(
+                    font_id=target.font_id,
+                    field_name="download_source_kind",
+                    before_value=target.download_source_kind,
+                    proposed_value=download_source_kind,
+                    evidence_id=None,
+                    confidence="reference",
+                    review_reason="download source kind from noonnu snapshot",
+                    auto_applicable=auto_applicable,
+                )
+            )
+
     return findings
 
 
@@ -568,11 +649,17 @@ def derive_proposed_value(
     field_name: str,
     extracted: Mapping[str, object],
 ) -> object:
-    """증거에서 기대되는 proposed_value를 파생한다 (tags/weights 전용)."""
+    """증거에서 기대되는 proposed_value를 파생한다 (자동 승인 대상 필드)."""
     if field_name == "tags":
         return extracted.get("tags")
     if field_name == "weights":
         weight = extracted.get("weight")
         if weight is not None:
             return [weight]
+    if field_name == "foundry":
+        return extracted.get("foundry")
+    if field_name == "download_url":
+        return extracted.get("download_url")
+    if field_name == "download_source_kind":
+        return extracted.get("download_source_kind")
     return None

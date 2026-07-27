@@ -832,13 +832,16 @@ class SupabaseAuditStore:
         return all_findings
 
     def get_proposed_findings(self, run_id: UUID) -> list[dict[str, object]]:
-        """font_audit_findings 테이블에서 proposed 상태의 tags/weights findings 조회 (페이지네이션).
+        """font_audit_findings 테이블에서 proposed 상태의 자동 승인 가능 findings 조회 (페이지네이션).
+
+        자동 승인 대상: tags, weights, foundry, download_url, download_source_kind
+        비자동 대상: legal 필드들, category_ko, script_status 등
 
         Args:
             run_id: 조회할 감사 run의 UUID
 
         Returns:
-            proposed 상태이고 field_name이 tags 또는 weights인 finding 레코드 리스트
+            proposed 상태이고 자동 승인 가능한 field_name인 finding 레코드 리스트
 
         Raises:
             RuntimeError: 부분 조회 실패(1,000행 제한 초과 가능성)
@@ -853,7 +856,7 @@ class SupabaseAuditStore:
                 .select("*")
                 .eq("run_id", str(run_id))
                 .eq("status", "proposed")
-                .in_("field_name", ["tags", "weights"])
+                .in_("field_name", ["tags", "weights", "foundry", "download_url", "download_source_kind"])
                 .order("id", desc=False)
                 .range(offset, offset + page_size - 1)
                 .execute()
