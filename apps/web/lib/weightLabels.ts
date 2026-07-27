@@ -43,6 +43,9 @@ export function normalizeVariants(variants: string[]): VariantCombination[] {
       weightStr = "";
     }
 
+    // Strict validation: weightStr must be all digits (e.g., "700abc" is rejected)
+    if (weightStr && !/^\d+$/.test(weightStr)) continue;
+
     const weight = weightStr ? parseInt(weightStr, 10) : 400;
 
     if (!Number.isInteger(weight) || weight < 1 || weight > 1000) continue;

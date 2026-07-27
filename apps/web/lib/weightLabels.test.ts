@@ -9,7 +9,7 @@ import {
 describe("normalizeVariants", () => {
   it("Google Fonts 4형태를 정규화하고 불가값은 무시한다", () => {
     expect(
-      normalizeVariants(["regular", "italic", "700", "700italic", "wat", ""])
+      normalizeVariants(["regular", "italic", "700", "700italic", "wat", "700abc", ""])
     ).toEqual([
       { weight: 400, style: "normal" },
       { weight: 400, style: "italic" },

@@ -90,15 +90,21 @@ export function WeightSpecimenSection({
         </>
       ) : (
         <p className={styles.rowFallback}>
-          이 폰트는 웹 견본을 제공하지 않습니다
-          {font.officialUrl ? (
+          {font.sourceTier === "A" ? (
+            "굵기별 견본 정보를 확인하지 못했습니다"
+          ) : (
             <>
-              {" - "}
-              <a href={font.officialUrl} target="_blank" rel="noopener noreferrer">
-                공식 배포 페이지에서 확인
-              </a>
+              이 폰트는 웹 견본을 제공하지 않습니다
+              {font.officialUrl ? (
+                <>
+                  {" - "}
+                  <a href={font.officialUrl} target="_blank" rel="noopener noreferrer">
+                    공식 배포 페이지에서 확인
+                  </a>
+                </>
+              ) : null}
             </>
-          ) : null}
+          )}
         </p>
       )}
     </section>

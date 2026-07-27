@@ -122,7 +122,7 @@ function PublishedFontDetail({ font, alternatives }: { font: Font; alternatives:
             <TierChip tier={font.tier} />
           </div>
           <p className={styles.meta}>
-            {font.foundry} {String.fromCharCode(183)} {font.confirmedWeights ? `${font.confirmedWeights.length}가지 굵기` : "굵기 정보 미확인"} {String.fromCharCode(183)} 이동 {font.moves.toLocaleString()}회
+            {font.foundry} {String.fromCharCode(183)} {font.confirmedWeights?.length ? `${font.confirmedWeights.length}가지 굵기` : "굵기 정보 미확인"} {String.fromCharCode(183)} 이동 {font.moves.toLocaleString()}회
           </p>
           <DetailSpecimenPanel font={font} editable={!isPaid} caption={caption} />
           {isGlyphCheckSupported(font.fontKey, font.tier) && (
