@@ -5,7 +5,7 @@
   background-color: var(--surface-2);
   border-radius: 0.375rem;
   position: sticky;
-  top: 0;
+  top: var(--header-h);
   z-index: 10;
 }
 
