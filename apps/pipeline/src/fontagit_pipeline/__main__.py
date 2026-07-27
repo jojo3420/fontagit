@@ -1158,11 +1158,13 @@ def main_audit_crawl_all(args: argparse.Namespace) -> int:
 
 
 def main_audit_tier_a_meta(args: argparse.Namespace) -> int:
-    """Tier A 공식 메타데이터(권리사/specimen URL)를 수집한다.
-
-    dry-run 모드에서만 실행 가능 또는 dev DB 로드 실패 시 건너뛴다.
-    """
+    """Tier A 공식 메타데이터(권리사/specimen URL)를 수집한다."""
     import json
+    from hashlib import sha256
+    from uuid import uuid4
+
+    from fontagit_pipeline.config import load_audit_settings
+    from fontagit_pipeline.audit_policy import load_source_registry
     from fontagit_pipeline.tier_a_meta import (
         BrandNormalization,
         TierATarget,
@@ -1183,27 +1185,108 @@ def main_audit_tier_a_meta(args: argparse.Namespace) -> int:
         norm_data = json.loads(norm_path.read_text(encoding="utf-8"))
         normalization = BrandNormalization.model_validate(norm_data)
 
+        # 출처 레지스트리 로드
+        registry = load_source_registry()
+
+        # dev DB에서 Tier A 대상 조회
+        settings = load_audit_settings()
+        dev_url, dev_secret_key = settings.dev_write_credentials()
+        from supabase import create_client
+
+        dev_client = create_client(dev_url, dev_secret_key)
+        dev_schema = dev_client.schema("fontagit")
+
+        # published + source_tier='A' 폰트 조회
+        query = (
+            dev_schema.table("fonts")
+            .select("id,name_en")
+            .eq("status", "published")
+            .eq("source_tier", "A")
+            .order("id")
+        )
+        if args.limit > 0:
+            query = query.limit(args.limit)
+        response = query.execute()
+
+        if not isinstance(response.data, list):
+            raise ValueError("dev fonts query returned invalid data")
+
+        targets: list[TierATarget] = []
+        for row in response.data:
+            font_id = row.get("id")
+            name_en = row.get("name_en")
+            if not all([font_id, name_en]):
+                logger.warning("skipping invalid font row: %s", row)
+                continue
+            # Tier A는 google-fonts 출처이고, 대부분 OFL 라이선스 사용
+            # (apache, ufl도 있지만 메타데이터에서 판별 가능)
+            targets.append(
+                TierATarget(
+                    font_id=font_id,
+                    name_en=name_en,
+                    license_type="OFL",  # google-fonts 기본값
+                    noonnu_foundry=None,  # dev에서는 눈누 매핑 미제공
+                )
+            )
+
+        logger.info("Tier A 대상 조회 완료: %d건", len(targets))
+
         if args.dry_run:
-            # dry-run: 메모리 저장소만 사용
+            # dry-run: 메모리 저장소 + 가상 run_id
             from fontagit_pipeline.audit_store import InMemoryAuditStore
 
             store = InMemoryAuditStore()
-
-            # 더미 대상 생성 (실제로는 dev DB에서 조회하지만, dry-run이므로 생략)
-            # 실제 구현에서는 여기서 dev DB 조회
-            targets: list[TierATarget] = []
+            run_id = uuid4()
+            # run 생성 (dry-run이므로 저장 없음)
             result = collect_tier_a_meta(
+                run_id,
                 targets,
                 store,
+                registry,
                 normalization,
                 dry_run=True,
             )
             report["results"] = result
+            report["target_count"] = len(targets)
             logger.info("Tier A 메타 dry-run 완료: %s", result)
         else:
-            # 실제 구현에서는 dev DB 로드 및 저장소 생성
-            report["errors"].append("일반 모드는 현재 미지원 (dev DB 환경 필요)")
-            logger.warning("Tier A 메타 수집: 일반 모드 미지원")
+            # 실제 저장: SupabaseAuditStore + run 생성
+            from fontagit_pipeline.audit_store import SupabaseAuditStore
+
+            store = SupabaseAuditStore.from_dev_credentials(dev_url, dev_secret_key)
+
+            # baseline_sha256 계산 (타겟 목록의 해시)
+            targets_json = json.dumps(
+                [t.model_dump(mode="json") for t in targets],
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            baseline_sha256 = sha256(targets_json.encode()).hexdigest()
+
+            # run 생성
+            run_id = store.start_run(
+                stage="scheduled",
+                target_count=len(targets),
+                baseline_sha256=baseline_sha256,
+                dry_run=False,
+            )
+
+            result = collect_tier_a_meta(
+                run_id,
+                targets,
+                store,
+                registry,
+                normalization,
+                dry_run=False,
+            )
+
+            # run 완료
+            store.complete_run(run_id, result)
+
+            report["results"] = result
+            report["target_count"] = len(targets)
+            report["run_id"] = str(run_id)
+            logger.info("Tier A 메타 저장 완료: run_id=%s, %s", run_id, result)
 
         # 보고서 저장
         args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -1222,7 +1305,7 @@ def main_audit_tier_a_meta(args: argparse.Namespace) -> int:
             json.dumps(report, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
-        return 3
+        return 1
 
 
 if __name__ == "__main__":
