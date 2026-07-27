@@ -1474,3 +1474,214 @@ def test_metadata_audit_skips_foundry_if_unchanged(
     # foundry finding이 생성되지 않아야 한다 (값이 변경되지 않았으므로)
     foundry_drafts = [d for d in drafts if d.field_name == "foundry"]
     assert len(foundry_drafts) == 0
+
+
+def test_compare_metadata_emits_foundry_and_download(monkeypatch: pytest.MonkeyPatch) -> None:
+    """foundry/download_url/download_source_kind 3필드 draft를 모두 생성한다."""
+    from fontagit_pipeline.audit_runner import _parse_candidate
+    from fontagit_pipeline.audit_policy import SourceRegistry
+
+    fixture = Path(__file__).parent / "fixtures" / "audit" / "noonnu-white-tailed-eagle.html"
+    reference_html = fixture.read_bytes()
+
+    def noonnu_fetch(url: str) -> FetchResult:
+        content = reference_html if url.endswith("/613") else b"<html><body>cta</body></html>"
+        return FetchResult(200, url, content, "1" * 64, 0)
+
+    def font_fetch(url: str, max_bytes: int = 32 * 1024 * 1024) -> FetchResult:
+        return _fetched(url)
+
+    monkeypatch.setattr("fontagit_pipeline.audit_runner.sys.platform", "linux")
+
+    target = replace(
+        _targets()[0],
+        foundry=None,
+        download_url=None,
+        download_source_kind=None,
+        name_ko="흰꼬리수리",
+        candidates=(),
+    )
+    store = InMemoryAuditStore()
+    report = run_metadata_audit(
+        [target], store, registry={"version": 1, "entries": []}, fetcher=noonnu_fetch, font_fetcher=font_fetch
+    )
+
+    if report.broken_count > 0:
+        raise AssertionError(f"Broken count: {report.broken_count}, errors: {report.errors}")
+
+    drafts = [store.finding_draft(item) for item in report.finding_ids]
+    field_names = [d.field_name for d in drafts]
+
+    # foundry finding 확인
+    foundry_drafts = [d for d in drafts if d.field_name == "foundry"]
+    assert len(foundry_drafts) == 1, f"Expected 1 foundry draft, got {len(foundry_drafts)}. Fields: {field_names}"
+    assert foundry_drafts[0].proposed_value == "네이버"
+
+    # download_url finding 확인
+    download_url_drafts = [d for d in drafts if d.field_name == "download_url"]
+    assert len(download_url_drafts) == 1, f"Expected 1 download_url draft, got {len(download_url_drafts)}. Fields: {field_names}"
+
+    # download_source_kind finding 확인
+    download_kind_drafts = [d for d in drafts if d.field_name == "download_source_kind"]
+    assert len(download_kind_drafts) == 1, f"Expected 1 download_source_kind draft, got {len(download_kind_drafts)}. Fields: {field_names}"
+
+
+def test_download_official_domain_is_auto(monkeypatch: pytest.MonkeyPatch) -> None:
+    """official 도메인 다운로드는 auto_applicable=True, 미등록 도메인은 False."""
+    from datetime import datetime
+    from fontagit_pipeline.audit_policy import SourceRegistry
+
+    fixture = Path(__file__).parent / "fixtures" / "audit" / "noonnu-white-tailed-eagle.html"
+    reference_html = fixture.read_bytes()
+
+    # fixture HTML을 수정하여 특정 다운로드 URL을 포함하도록 mock
+    def mock_parse_noonnu(url: str) -> FetchResult:
+        # clova.ai를 다운로드 후보로 포함하도록 설정
+        html_with_download = reference_html.replace(
+            b"https://clova.ai/handwriting/list.html",
+            b"https://fonts.google.com/download/example",
+        )
+        return FetchResult(200, url, html_with_download, "1" * 64, 0)
+
+    def font_fetch(url: str, max_bytes: int = 32 * 1024 * 1024) -> FetchResult:
+        return _fetched(url)
+
+    monkeypatch.setattr("fontagit_pipeline.audit_runner.sys.platform", "linux")
+
+    # google.com을 registry에 official로 등록
+    registry_dict = {
+        "version": 1,
+        "entries": [
+            {
+                "domain": "fonts.google.com",
+                "maker": "Google",  # maker는 required
+                "roles": ["download"],
+                "source_kind": "official",
+                "approved_by": "test",
+                "approved_at": "2026-01-01T00:00:00",
+                "evidence_snapshot_id": "test",
+            }
+        ],
+    }
+    registry = SourceRegistry.model_validate(registry_dict)
+
+    target = replace(
+        _targets()[0],
+        foundry=None,
+        download_url=None,
+        download_source_kind=None,
+        name_ko="흰꼬리수리",
+        candidates=(),
+    )
+    store = InMemoryAuditStore()
+    report = run_metadata_audit(
+        [target], store, registry=registry, fetcher=mock_parse_noonnu, font_fetcher=font_fetch
+    )
+
+    if report.broken_count > 0:
+        raise AssertionError(f"Broken count: {report.broken_count}, errors: {report.errors}")
+
+    drafts = [store.finding_draft(item) for item in report.finding_ids]
+    download_kind_drafts = [d for d in drafts if d.field_name == "download_source_kind"]
+
+    if download_kind_drafts:
+        # official 등록되면 auto_applicable=True
+        assert download_kind_drafts[0].auto_applicable is True
+
+
+def test_download_only_file_links_skips_draft(monkeypatch: pytest.MonkeyPatch) -> None:
+    """직링크만 있으면 download draft를 생성하지 않는다."""
+    fixture = Path(__file__).parent / "fixtures" / "audit" / "noonnu-white-tailed-eagle.html"
+    # 직링크 후보만 있는 HTML
+    reference_html = fixture.read_bytes()
+    file_link_html = reference_html.replace(
+        b"https://clova.ai/handwriting/list.html",
+        b"https://example.com/font.woff2",
+    )
+
+    def noonnu_fetch(url: str) -> FetchResult:
+        content = file_link_html if url.endswith("/613") else b"<html><body>cta</body></html>"
+        return FetchResult(200, url, content, "1" * 64, 0)
+
+    def font_fetch(url: str, max_bytes: int = 32 * 1024 * 1024) -> FetchResult:
+        return _fetched(url)
+
+    monkeypatch.setattr("fontagit_pipeline.audit_runner.sys.platform", "linux")
+
+    target = replace(
+        _targets()[0],
+        foundry=None,
+        download_url=None,
+        download_source_kind=None,
+        name_ko="흰꼬리수리",
+        candidates=(),
+    )
+    store = InMemoryAuditStore()
+    report = run_metadata_audit(
+        [target], store, registry={"version": 1, "entries": []}, fetcher=noonnu_fetch, font_fetcher=font_fetch
+    )
+
+    if report.broken_count > 0:
+        raise AssertionError(f"Broken count: {report.broken_count}, errors: {report.errors}")
+
+    drafts = [store.finding_draft(item) for item in report.finding_ids]
+    # download_url/download_source_kind draft가 없어야 한다
+    download_drafts = [
+        d for d in drafts if d.field_name in ("download_url", "download_source_kind")
+    ]
+    assert len(download_drafts) == 0
+
+
+def test_download_downgrade_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """출처 강등은 거부된다 (official 현재값 + archive 제안 → 쌍 미생성)."""
+    fixture = Path(__file__).parent / "fixtures" / "audit" / "noonnu-white-tailed-eagle.html"
+    reference_html = fixture.read_bytes()
+
+    def noonnu_fetch(url: str) -> FetchResult:
+        content = reference_html if url.endswith("/613") else b"<html><body>cta</body></html>"
+        return FetchResult(200, url, content, "1" * 64, 0)
+
+    def font_fetch(url: str, max_bytes: int = 32 * 1024 * 1024) -> FetchResult:
+        return _fetched(url)
+
+    monkeypatch.setattr("fontagit_pipeline.audit_runner.sys.platform", "linux")
+
+    # 현재값: official 출처
+    target = replace(
+        _targets()[0],
+        download_source_kind="official",  # 현재 official
+        download_url="https://fonts.google.com/download/font",
+        name_ko="흰꼬리수리",
+        candidates=(),
+    )
+
+    # fixture의 다운로드 후보를 archive(참고) 도메인으로 변경
+    registry = {
+        "version": 1,
+        "entries": [
+            {
+                "domain": "clova.ai",
+                "roles": ["download"],
+                "source_kind": "archive",  # archive = 강등
+                "approved_by": "test",
+                "approved_at": "2026-01-01T00:00:00Z",
+                "maker": None,
+                "evidence_snapshot_id": "test",
+            }
+        ],
+    }
+
+    store = InMemoryAuditStore()
+    report = run_metadata_audit(
+        [target], store, registry=registry, fetcher=noonnu_fetch, font_fetcher=font_fetch
+    )
+
+    if report.broken_count > 0:
+        raise AssertionError(f"Broken count: {report.broken_count}, errors: {report.errors}")
+
+    drafts = [store.finding_draft(item) for item in report.finding_ids]
+    # download 강등이 거부되면 draft가 생성되지 않아야 한다
+    download_drafts = [
+        d for d in drafts if d.field_name in ("download_url", "download_source_kind")
+    ]
+    assert len(download_drafts) == 0

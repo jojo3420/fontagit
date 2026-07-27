@@ -684,6 +684,17 @@ def _collect_metadata_evidence(
             extracted["tags"] = list(parsed.tags)
         if parsed.foundry:
             extracted["foundry"] = parsed.foundry
+        # 파일 직링크 필터: .ttf/.otf/.woff/.woff2/.zip로 끝나는 것은 스킵
+        file_extensions = (".ttf", ".otf", ".woff", ".woff2", ".zip")
+        non_file_candidates = [
+            url for url in parsed.download_candidates
+            if not url.lower().endswith(file_extensions)
+        ]
+        if non_file_candidates:
+            # 첫 번째 비-파일 후보를 선택하고 분류
+            first_candidate = non_file_candidates[0]
+            extracted["download_url"] = first_candidate
+            extracted["download_source_kind"] = registry.classify(first_candidate)
     normalized_sha256 = hashlib.sha256(
         json.dumps(extracted, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(
             "utf-8"

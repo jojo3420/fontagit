@@ -385,6 +385,44 @@ def compare_metadata(
             )
         )
 
+    # Tier B(눈누)에서 다운로드 URL/출처 필드 추가
+    download_url = official_snapshot.extracted.get("download_url")
+    download_source_kind = official_snapshot.extracted.get("download_source_kind")
+    if download_url is not None:
+        from fontagit_pipeline.audit_policy import may_update_source_kind
+
+        # 출처 강등 체크: may_update_source_kind(현재 kind, 제안 kind)
+        if may_update_source_kind(target.download_source_kind, download_source_kind):
+            # download_url finding 생성
+            if download_url != target.download_url:
+                findings.append(
+                    FindingDraft(
+                        font_id=target.font_id,
+                        field_name="download_url",
+                        before_value=target.download_url,
+                        proposed_value=download_url,
+                        evidence_id=None,
+                        confidence="reference",
+                        review_reason="download URL from noonnu snapshot",
+                        auto_applicable=(download_source_kind in {"official", "public"}),
+                    )
+                )
+
+            # download_source_kind finding 생성 (동일 evidence로)
+            if download_source_kind != target.download_source_kind:
+                findings.append(
+                    FindingDraft(
+                        font_id=target.font_id,
+                        field_name="download_source_kind",
+                        before_value=target.download_source_kind,
+                        proposed_value=download_source_kind,
+                        evidence_id=None,
+                        confidence="reference",
+                        review_reason="download source kind from noonnu snapshot",
+                        auto_applicable=(download_source_kind in {"official", "public"}),
+                    )
+                )
+
     return findings
 
 

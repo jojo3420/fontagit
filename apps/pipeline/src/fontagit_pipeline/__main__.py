@@ -1027,13 +1027,21 @@ def main_audit_review(args: argparse.Namespace) -> int:
             field_name = finding.get("field_name")
             evidence_id = finding.get("evidence_id")
             proposed_value = finding.get("proposed_value")
+            auto_applicable = finding.get("auto_applicable", True)  # 기존 DB 레코드는 auto_applicable이 없을 수 있으므로 True 기본값
 
             try:
                 if not isinstance(finding_id, str):
                     raise ValueError(f"invalid finding_id: {finding_id}")
 
+                # 자동 승인 필드 필터 (auto_applicable=True만 처리)
+                if field_name not in {"tags", "weights", "foundry", "download_url", "download_source_kind"}:
+                    continue
+                if not auto_applicable:
+                    # auto_applicable=False는 needs_review 유지 (자동 승인 불가)
+                    continue
+
                 # values-evidence 대조 (자동 승인 대상 필드)
-                if field_name in {"tags", "weights", "foundry", "download_url", "download_source_kind"} and evidence_id and isinstance(evidence_id, str):
+                if evidence_id and isinstance(evidence_id, str):
                     extracted = evidence_by_id.get(evidence_id)
                     if extracted:
                         expected = derive_proposed_value(field_name, extracted)
