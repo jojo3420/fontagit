@@ -56,9 +56,7 @@ export function LicenseSummaryCard({ font }: { font: Font }) {
     ? "구매하러 가기"
     : font.downloadSourceKind === "archive"
       ? "다운로드 페이지로 이동(아카이브 제공)"
-      : font.downloadSourceKind === "public"
-        ? "공개 출처에서 내려받기"
-        : "공식 페이지에서 내려받기";
+      : "공식 페이지에서 내려받기";
   const price = isPaid && font.priceFrom ? `₩${font.priceFrom.toLocaleString()}~` : null;
   const legacyHref = font.legacyOfficialUrl ?? font.officialUrl;
   const downloadHref = isLegacy
