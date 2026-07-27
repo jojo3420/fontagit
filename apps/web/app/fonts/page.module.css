@@ -6,5 +6,5 @@
 .sort { padding: 6px 12px; border-radius: var(--radius-pill); border: 1px solid var(--border); background: transparent; color: var(--sub); font-size: 12px; cursor: pointer; }
 .sort.active { border-color: var(--point); color: var(--point); }
 @media (max-width: 720px) {
-  .main { grid-template-columns: 1fr; gap: 24px; }
+  .main { grid-template-columns: minmax(0, 1fr); gap: 24px; }
 }

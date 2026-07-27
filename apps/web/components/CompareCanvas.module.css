@@ -16,7 +16,7 @@
 .heroSpecimen { font-weight: 800; font-size: 96px; line-height: 1; color: var(--ink); letter-spacing: -.03em; word-break: break-all; overflow-wrap: anywhere; }
 .gridHead { font-size: 13px; font-weight: 700; color: var(--ink); margin: 28px 0 16px; }
 .count { font-size: 12px; font-weight: 400; color: var(--sub-2); }
-.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
 .cell { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 18px 20px; }
 .cellHead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; }
 .cellRight { display: flex; gap: 10px; align-items: center; flex: none; }
@@ -24,5 +24,5 @@
 .cellSpecimen { font-size: 36px; line-height: 1.1; color: var(--ink); word-break: break-all; overflow-wrap: anywhere; }
 @media (max-width: 620px) {
   .heroSpecimen { font-size: 60px; }
-  .grid { grid-template-columns: 1fr; }
+  .grid { grid-template-columns: minmax(0, 1fr); }
 }

@@ -151,14 +151,16 @@ test('theme toggle switches data-theme', async ({ page }) => {
   expect(['light', 'dark']).toContain(after);
 });
 
-test('home has no horizontal overflow at narrow viewports (#125)', async ({ page }) => {
+test('no horizontal overflow at narrow viewports (#125)', async ({ page }) => {
   for (const width of [375, 320]) {
     await page.setViewportSize({ width, height: 844 });
-    await page.goto('/', { waitUntil: 'networkidle' });
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow, `viewport ${width}px`).toBe(0);
+    for (const route of routes) {
+      await page.goto(route.path, { waitUntil: 'networkidle' });
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow, `${route.path} @ ${width}px`).toBe(0);
+    }
   }
 });
 
