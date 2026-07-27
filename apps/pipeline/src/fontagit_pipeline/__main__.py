@@ -1342,6 +1342,7 @@ def main_audit_kogl_preview(args: argparse.Namespace) -> int:
             dev_schema.table("font_source_snapshots")
             .select("font_id,extracted")
             .eq("document_kind", "metadata")
+            .order("collected_at", desc=True)
             .execute()
         )
 
