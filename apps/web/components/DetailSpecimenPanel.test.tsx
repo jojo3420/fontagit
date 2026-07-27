@@ -11,16 +11,6 @@ vi.mock("@/lib/specimenPhrases", () => ({
   nextPhrase: vi.fn(),
 }));
 
-vi.mock("@/lib/specimen", () => ({
-  getDefaultSpecimenText: vi.fn((font) => "다람쥐 헌 쳇바퀴에 타고파"),
-  resolveSpecimenLanguage: vi.fn((font) => {
-    if (font.scriptStatus === "verified" && font.subsets?.includes("korean")) {
-      return "korean";
-    }
-    return "mixed";
-  }),
-}));
-
 vi.mock("@/lib/fontPreview", () => ({
   resolveDetailFontPreview: vi.fn(() => ({
     stylesheetUrl: null,
