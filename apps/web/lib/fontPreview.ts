@@ -75,6 +75,7 @@ export function resolveDetailFontPreview(
     return {
       fontFamily: FALLBACK_FAMILY,
       stylesheetUrl: null,
+      combos: [],
     };
   }
 
