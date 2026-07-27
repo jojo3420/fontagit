@@ -126,21 +126,16 @@ test('mobile tab bar shows on small viewport', async ({ page }) => {
   await expect(page.getByRole('navigation', { name: '모바일 탭' })).toBeVisible();
 });
 
-test('mobile viewport shows compare tab in tab bar and hides header tool links', async ({ page }) => {
+test('mobile viewport hides compare tab in tab bar and header tool links', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/', { waitUntil: 'networkidle' });
 
-  // Verify tab bar is visible and has 5 tabs
   const tabBar = page.getByRole('navigation', { name: '모바일 탭' });
   await expect(tabBar).toBeVisible();
-  const tabLinks = tabBar.getByRole('link');
-  await expect(tabLinks).toHaveCount(5);
+  await expect(tabBar.getByRole('link')).toHaveCount(3);
+  await expect(tabBar.getByRole('link', { name: '비교' })).toHaveCount(0);
+  await expect(tabBar.getByRole('link', { name: '캔버스' })).toHaveCount(0);
 
-  // Verify compare tab is visible with correct href
-  await expect(tabBar.getByRole('link', { name: '비교' })).toBeVisible();
-  await expect(tabBar.getByRole('link', { name: '비교' })).toHaveAttribute('href', /^\/#compare$/);
-
-  // Verify header tool links (canvas and compare) are hidden on mobile
   const headerNav = page.getByRole('navigation').first();
   await expect(headerNav.getByRole('link', { name: '캔버스' })).toBeHidden();
   await expect(headerNav.getByRole('link', { name: '비교' })).toBeHidden();
