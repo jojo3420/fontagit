@@ -90,7 +90,7 @@ describe("LicenseSummaryCard", () => {
     const commercialDescriptionId = commercialHelp.getAttribute("aria-describedby");
     expect(commercialDescriptionId).toBeTruthy();
     expect(document.getElementById(commercialDescriptionId!)).toHaveTextContent(
-      "광고-상품-웹사이트-영상 등 상업 활동의 결과물에 폰트를 사용할 수 있는지 뜻해요.",
+      `광고${String.fromCharCode(183)}상품${String.fromCharCode(183)}웹사이트${String.fromCharCode(183)}영상 등 상업 활동의 결과물에 폰트를 사용할 수 있는지 뜻해요.`,
     );
 
     const fontSaleHelp = screen.getByRole("button", { name: "폰트 판매 설명" });
