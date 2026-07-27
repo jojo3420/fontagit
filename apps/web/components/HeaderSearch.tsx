@@ -8,57 +8,54 @@ import styles from './HeaderSearch.module.css';
 
 export function HeaderSearch() {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(-1);
   const [isComposing, setIsComposing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const toggleRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const { items, loading, error } = useDebouncedSuggestions(query);
   const listboxId = 'header-suggest-listbox';
-  const stateStyle: React.CSSProperties = {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    margin: 0,
-    padding: '12px 16px',
-    fontSize: 14,
-    background: 'var(--surface)',
-    border: '1px solid var(--border)',
-    borderTop: 'none',
-    borderRadius: '0 0 var(--radius-card) var(--radius-card)',
-    color: 'var(--text-secondary, #888)',
-  };
 
   useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setOpen(false);
-        toggleRef.current?.focus();
+    const handleSlashKey = (e: KeyboardEvent) => {
+      if (e.key === '/' && e.target instanceof HTMLElement) {
+        const target = e.target;
+        if (!['input', 'textarea', 'select'].includes(target.tagName.toLowerCase()) && !target.isContentEditable) {
+          e.preventDefault();
+          inputRef.current?.focus();
+        }
       }
     };
-    const onDown = (e: MouseEvent) => {
+
+    document.addEventListener('keydown', handleSlashKey);
+    return () => document.removeEventListener('keydown', handleSlashKey);
+  }, []);
+
+  useEffect(() => {
+    if (!dropdownOpen) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setDropdownOpen(false);
+      }
+    };
+
+    const onMouseDown = (e: MouseEvent) => {
       const t = e.target as Node;
-      if (panelRef.current?.contains(t) || toggleRef.current?.contains(t)) return;
-      setOpen(false);
+      if (!formRef.current?.contains(t)) {
+        setDropdownOpen(false);
+      }
     };
-    document.addEventListener('keydown', onKey);
-    document.addEventListener('mousedown', onDown);
+
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('mousedown', onMouseDown);
     return () => {
-      document.removeEventListener('keydown', onKey);
-      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('mousedown', onMouseDown);
     };
-  }, [open]);
+  }, [dropdownOpen]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.nativeEvent.isComposing) return;
@@ -66,19 +63,20 @@ export function HeaderSearch() {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setActiveIndex((i) => Math.min(i + 1, items.length - 1));
-      setOpen(true);
+      setDropdownOpen(true);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setActiveIndex((i) => Math.max(i - 1, -1));
     } else if (e.key === 'Enter') {
-      if (open && activeIndex >= 0 && items[activeIndex]) {
+      if (dropdownOpen && activeIndex >= 0 && items[activeIndex]) {
         e.preventDefault();
         router.push(`/fonts/${items[activeIndex].slug}`);
-        setOpen(false);
+        setDropdownOpen(false);
       }
     } else if (e.key === 'Escape') {
-      setOpen(false);
+      setDropdownOpen(false);
       setActiveIndex(-1);
+      inputRef.current?.blur();
     }
   };
 
@@ -87,91 +85,69 @@ export function HeaderSearch() {
     const q = query.trim();
     if (!q) return;
     router.push(`/search?q=${encodeURIComponent(q)}`);
-    setOpen(false);
+    setDropdownOpen(false);
+  };
+
+  const handleInputChange = (value: string) => {
+    setQuery(value);
+    setDropdownOpen(true);
+    setActiveIndex(-1);
   };
 
   return (
-    <>
-      <button
-        ref={toggleRef}
-        type="button"
-        className={styles.iconBtn}
-        aria-label={open ? '검색 닫기' : '검색'}
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        {open ? (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <path d="M18 6 6 18M6 6l12 12" strokeLinecap="round" />
-          </svg>
-        ) : (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m21 21-4.3-4.3" strokeLinecap="round" />
-          </svg>
-        )}
+    <form className={styles.searchBar} onSubmit={handleSubmit} role="search" ref={formRef}>
+      <div className={styles.inputBox}>
+        <svg className={styles.searchIcon} width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+          <path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+        <input
+          ref={inputRef}
+          type="text"
+          placeholder="폰트 이름을 검색하세요 (예: 프리텐다드)"
+          value={query}
+          onChange={(e) => handleInputChange(e.target.value)}
+          onCompositionStart={() => setIsComposing(true)}
+          onCompositionEnd={(e) => {
+            setIsComposing(false);
+            handleInputChange(e.currentTarget.value);
+          }}
+          onKeyDown={handleKeyDown}
+          onFocus={() => query && setDropdownOpen(true)}
+          className={styles.input}
+          aria-label="폰트 검색"
+          role="combobox"
+          aria-expanded={dropdownOpen && items.length > 0}
+          aria-controls={listboxId}
+          aria-autocomplete="list"
+          aria-activedescendant={activeIndex >= 0 ? `${listboxId}-opt-${activeIndex}` : undefined}
+        />
+        <kbd className={styles.kbd}>/</kbd>
+      </div>
+      <button type="submit" className={styles.searchBtn}>
+        검색
       </button>
-
-      {open && (
-        <div ref={panelRef} className={styles.panel}>
-          <form className={styles.searchBar} onSubmit={handleSubmit} role="search">
-            <div className={styles.inputBox}>
-              <svg className={styles.searchIcon} width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-                <path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-              <input
-                ref={inputRef}
-                type="text"
-                placeholder="폰트 이름을 검색하세요 (예: 프리텐다드)"
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setOpen(true);
-                  setActiveIndex(-1);
-                }}
-                onCompositionStart={() => setIsComposing(true)}
-                onCompositionEnd={(e) => {
-                  setIsComposing(false);
-                  setQuery(e.currentTarget.value);
-                }}
-                onKeyDown={handleKeyDown}
-                className={styles.input}
-                aria-label="폰트 검색"
-                role="combobox"
-                aria-expanded={open && items.length > 0}
-                aria-controls={listboxId}
-                aria-autocomplete="list"
-                aria-activedescendant={activeIndex >= 0 ? `${listboxId}-opt-${activeIndex}` : undefined}
-              />
-            </div>
-            <button type="submit" className={styles.searchBtn}>
-              검색
-            </button>
-            {open && !isComposing && query.trim().length > 0 && (
-              items.length > 0 ? (
-                <SearchSuggestions
-                  items={items}
-                  activeIndex={activeIndex}
-                  query={query}
-                  listboxId={listboxId}
-                  onSelect={(slug) => {
-                    router.push(`/fonts/${slug}`);
-                    setOpen(false);
-                  }}
-                  onHover={setActiveIndex}
-                />
-              ) : error ? (
-                <p style={stateStyle} role="status">검색 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.</p>
-              ) : loading ? (
-                <p style={stateStyle} role="status">검색 중...</p>
-              ) : (
-                <p style={stateStyle} role="status">일치하는 폰트가 없어요.</p>
-              )
-            )}
-          </form>
-        </div>
+      {dropdownOpen && !isComposing && query.trim().length > 0 && (
+        items.length > 0 ? (
+          <SearchSuggestions
+            items={items}
+            activeIndex={activeIndex}
+            query={query}
+            listboxId={listboxId}
+            onSelect={(slug) => {
+              router.push(`/fonts/${slug}`);
+              setDropdownOpen(false);
+            }}
+            onHover={setActiveIndex}
+          />
+        ) : error ? (
+          <p className={styles.state} role="status">검색 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.</p>
+        ) : loading ? (
+          <p className={styles.state} role="status">검색 중...</p>
+        ) : (
+          <p className={styles.state} role="status">일치하는 폰트가 없어요.</p>
+        )
       )}
-    </>
+    </form>
   );
 }

@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>이슈 #117 헤더 검색바 레이아웃 비교</title>
+<style>
+:root {
+  --bg: #FAFAF8; --ink: #1A1A1A; --sub: #6B6B6B; --sub-2: #9A9A96;
+  --border: #E6E6E2; --surface: #FFFFFF; --surface-2: #F4F4F0;
+  --point: #2C5545; --point-weak: rgba(44, 85, 69, .1); --on-point: #FFFFFF;
+  --radius-card: 12px; --radius-btn: 10px; --radius-pill: 20px;
+  --pad-page: 40px;
+}
+html[data-theme="dark"] {
+  --bg: #16171A; --ink: #EDEDEA; --sub: #B9BCBD; --sub-2: #8A8E90;
+  --border: #2A2C30; --surface: #1D1F22; --surface-2: #202226;
+  --point: #7FC2A2; --point-weak: rgba(127, 194, 162, .14); --on-point: #16171A;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 32px 24px 80px;
+  background: var(--bg); color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
+  line-height: 1.6;
+}
+h1 { font-size: 24px; margin: 0 0 6px; letter-spacing: -0.02em; }
+h2 { font-size: 18px; margin: 48px 0 4px; letter-spacing: -0.02em; }
+h3 { font-size: 13px; font-weight: 600; color: var(--sub); margin: 20px 0 8px; }
+p.lead { color: var(--sub); margin: 0 0 8px; font-size: 14px; }
+.note { font-size: 13px; color: var(--sub); margin: 6px 0 0; }
+.tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: var(--radius-pill); vertical-align: middle; margin-left: 8px; }
+.tag.bad { background: rgba(220,80,80,.16); color: #E27070; }
+.tag.rec { background: var(--point-weak); color: var(--point); }
+.themeBtn {
+  position: fixed; right: 20px; top: 20px; z-index: 999;
+  height: 34px; padding: 0 14px; border-radius: var(--radius-btn);
+  border: 1px solid var(--border); background: var(--surface); color: var(--ink);
+  font-size: 13px; cursor: pointer;
+}
+.frame { border: 1px solid var(--border); border-radius: var(--radius-card); overflow: hidden; background: var(--bg); margin-bottom: 4px; }
+.frame.desktop { width: 100%; max-width: 1180px; }
+.frame.mobile { width: 375px; }
+.viewRow { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+.pageBody { padding: 18px var(--pad-page) 26px; }
+.canvasBar { display: flex; gap: 8px; padding: 14px; background: var(--surface-2); border-radius: 6px; }
+.canvasBar input { flex: 1; padding: 8px 12px; background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 6px; font: inherit; font-size: 14px; }
+.canvasBar button { padding: 8px 14px; background: var(--surface-2); color: var(--ink); border: 1px solid var(--border); border-radius: 6px; font-size: 13px; cursor: pointer; }
+.ghostRow { margin-top: 18px; height: 12px; border-radius: 6px; background: var(--surface-2); }
+.ghostRow.short { width: 40%; }
+
+/* ---------- 공통 헤더 ---------- */
+.hd { display: flex; align-items: center; gap: 12px; padding: 14px var(--pad-page); border-bottom: 1px solid var(--border); background: var(--bg); }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex-shrink: 0; }
+.wordmark { font-size: 20px; font-weight: 800; letter-spacing: -0.03em; color: var(--ink); white-space: nowrap; }
+.wordmark i { color: var(--point); font-style: normal; }
+.ko { font-size: 12px; font-weight: 500; color: var(--sub); white-space: nowrap; }
+.nav { display: flex; gap: 18px; flex-shrink: 0; }
+.nav span { font-size: 14px; font-weight: 500; color: var(--sub); white-space: nowrap; }
+.actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.iconBtn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--sub); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+
+/* 검색바 공통 */
+.sbox { display: flex; align-items: center; gap: 10px; height: 42px; padding: 0 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-pill); min-width: 0; }
+.sbox.big { height: 48px; }
+.sbox svg { flex-shrink: 0; color: var(--sub-2); }
+.sbox input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 14px; outline: none; }
+.sbox input::placeholder { color: var(--sub-2); }
+.sbox:focus-within { border-color: var(--point); box-shadow: 0 0 0 3px var(--point-weak); }
+.kbd { flex-shrink: 0; font-size: 11px; color: var(--sub-2); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; background: var(--surface-2); }
+.goBtn { flex-shrink: 0; height: 42px; padding: 0 20px; background: var(--point); color: var(--on-point); border: 0; border-radius: var(--radius-pill); font-size: 14px; font-weight: 700; cursor: pointer; }
+.goBtn.big { height: 48px; }
+
+/* A: 한 줄 가운데 */
+.hd.optA .searchWrap { flex: 1; display: flex; justify-content: center; min-width: 0; }
+.hd.optA .sbox { width: 100%; max-width: 460px; }
+.hd.optA .nav { gap: 15px; }
+.hd.optA .nav span { font-size: 13px; }
+.hd.optA .ko { display: none; }
+
+/* B: 두 줄 */
+.hdB { border-bottom: 1px solid var(--border); background: var(--bg); }
+.hdB .row1 { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px var(--pad-page) 0; }
+.hdB .row2 { padding: 10px var(--pad-page) 14px; }
+.hdB .searchBar { display: flex; gap: 10px; max-width: 720px; margin: 0 auto; }
+.hdB .sbox { flex: 1; }
+
+/* C: 한 줄 오른쪽 */
+.hd.optC .sbox { width: 260px; }
+.hd.optC .spacer { flex: 1; }
+.hd.optC .ko { display: none; }
+
+/* AS-IS 버그 재현 */
+.buggy { position: relative; }
+.buggyPanel { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; padding: 20px var(--pad-page); background: var(--bg); border-bottom: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+.buggyPanel .searchBar { display: flex; gap: 10px; max-width: 620px; margin: 0 auto; }
+.buggyPanel .sbox { flex: 1; border-color: var(--point); box-shadow: 0 0 0 3px var(--point-weak); border-radius: var(--radius-card); }
+.buggyPanel .goBtn { border-radius: var(--radius-card); }
+.buggyStack { position: relative; z-index: 10; }
+.buggyStack .canvasBar { position: relative; z-index: 10; }
+
+/* 모바일 프레임 */
+.frame.mobile { --pad-page: 20px; }
+.frame.mobile .nav span.deskOnly { display: none; }
+.frame.mobile .ko { display: none; }
+.frame.mobile .wordmark { font-size: 18px; }
+.frame.mobile .nav { gap: 12px; }
+.frame.mobile .nav span { font-size: 13px; }
+.frame.mobile .hd.optA .sbox { max-width: none; }
+.frame.mobile .hd.optC .sbox { width: 130px; }
+
+/* 모바일 옵션별 변형 */
+.m2row .hd { flex-wrap: wrap; }
+.m2row .searchWrap { flex-basis: 100%; order: 3; }
+.m2row .sbox { width: 100% !important; max-width: none !important; }
+</style>
+</head>
+<body>
+<button class="themeBtn" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'">라이트/다크 전환</button>
+
+<h1>이슈 #117 상단 검색바 레이아웃 비교</h1>
+<p class="lead">실제 프로젝트 디자인 토큰(색/모서리/여백)을 그대로 써서 만든 목업입니다. 스크롤하며 A, B, C를 비교하고 하나를 골라주세요.</p>
+
+<h2>지금 상태 (AS-IS) <span class="tag bad">버그</span></h2>
+<p class="note">검색 아이콘을 누르면 열리는 패널이, 아래 캔버스 바에 가려집니다. 헤더가 만든 쌓임 순서 안에 패널이 갇혀 생기는 문제입니다.</p>
+<div class="frame desktop">
+  <div class="buggy">
+    <div class="hd">
+      <div class="brand"><span class="wordmark">Font<i>A</i>git</span><span class="ko">폰트 아지트</span></div>
+      <div style="flex:1"></div>
+      <div class="nav"><span>폰트</span><span>트렌드</span><span>캔버스</span><span>비교</span><span>컬렉션</span><span>등록</span></div>
+      <div style="flex:1"></div>
+      <div class="actions"><button class="iconBtn">☾</button><button class="iconBtn">✕</button></div>
+    </div>
+    <div class="buggyPanel">
+      <div class="searchBar">
+        <div class="sbox"><input placeholder="폰트 이름을 검색하세요 (예: 프리텐다드)"></div>
+        <button class="goBtn">검색</button>
+      </div>
+    </div>
+    <div class="buggyStack">
+      <div class="pageBody">
+        <div class="canvasBar"><input placeholder="문구를 입력하세요"><button>초기화</button></div>
+        <div class="ghostRow short"></div>
+        <div class="ghostRow"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>A안 - 한 줄, 가운데 검색바 <span class="tag rec">추천</span></h2>
+<p class="note">헤더 높이가 지금과 같아 본문 공간을 뺏지 않습니다. 대신 메뉴 글자가 조금 작아지고 "폰트 아지트" 부제는 데스크톱에서도 숨깁니다.</p>
+<div class="viewRow">
+  <div>
+    <h3>데스크톱</h3>
+    <div class="frame desktop">
+      <div class="hd optA">
+        <div class="brand"><span class="wordmark">Font<i>A</i>git</span><span class="ko">폰트 아지트</span></div>
+        <div class="searchWrap">
+          <div class="sbox">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5" stroke-linecap="round"/></svg>
+            <input placeholder="폰트 이름으로 검색">
+            <span class="kbd">/</span>
+          </div>
+        </div>
+        <div class="nav"><span>폰트</span><span>트렌드</span><span>캔버스</span><span>비교</span><span>컬렉션</span><span>등록</span></div>
+        <div class="actions"><button class="iconBtn">☾</button></div>
+      </div>
+      <div class="pageBody">
+        <div class="canvasBar"><input placeholder="문구를 입력하세요"><button>초기화</button></div>
+        <div class="ghostRow short"></div>
+        <div class="ghostRow"></div>
+      </div>
+    </div>
+  </div>
+  <div class="m2row">
+    <h3>모바일 375px</h3>
+    <div class="frame mobile">
+      <div class="hd optA">
+        <div class="brand"><span class="wordmark">Font<i>A</i>git</span></div>
+        <div class="nav"><span>컬렉션</span><span>등록</span></div>
+        <div class="actions"><button class="iconBtn">☾</button></div>
+        <div class="searchWrap">
+          <div class="sbox">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5" stroke-linecap="round"/></svg>
+            <input placeholder="폰트 이름으로 검색">
+          </div>
+        </div>
+      </div>
+      <div class="pageBody">
+        <div class="canvasBar"><input placeholder="문구를 입력하세요"><button>초기화</button></div>
+        <div class="ghostRow short"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>B안 - 두 줄, 아래 넓은 검색바</h2>
+<p class="note">검색이 가장 눈에 띄고 메뉴도 안 좁아집니다. 대신 헤더가 약 60px 높아져 스크롤 중에도 본문을 그만큼 덮습니다.</p>
+<div class="viewRow">
+  <div>
+    <h3>데스크톱</h3>
+    <div class="frame desktop">
+      <div class="hdB">
+        <div class="row1">
+          <div class="brand"><span class="wordmark">Font<i>A</i>git</span><span class="ko">폰트 아지트</span></div>
+          <div class="nav"><span>폰트</span><span>트렌드</span><span>캔버스</span><span>비교</span><span>컬렉션</span><span>등록</span></div>
+          <div class="actions"><button class="iconBtn">☾</button></div>
+        </div>
+        <div class="row2">
+          <div class="searchBar">
+            <div class="sbox big">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5" stroke-linecap="round"/></svg>
+              <input placeholder="폰트 이름을 검색하세요 (예: 프리텐다드)">
+              <span class="kbd">/</span>
+            </div>
+            <button class="goBtn big">검색</button>
+          </div>
+        </div>
+      </div>
+      <div class="pageBody">
+        <div class="canvasBar"><input placeholder="문구를 입력하세요"><button>초기화</button></div>
+        <div class="ghostRow short"></div>
+        <div class="ghostRow"></div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <h3>모바일 375px</h3>
+    <div class="frame mobile">
+      <div class="hdB">
+        <div class="row1">
+          <div class="brand"><span class="wordmark">Font<i>A</i>git</span></div>
+          <div class="nav"><span>컬렉션</span><span>등록</span></div>
+          <div class="actions"><button class="iconBtn">☾</button></div>
+        </div>
+        <div class="row2">
+          <div class="searchBar">
+            <div class="sbox">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5" stroke-linecap="round"/></svg>
+              <input placeholder="폰트 이름으로 검색">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="pageBody">
+        <div class="canvasBar"><input placeholder="문구를 입력하세요"><button>초기화</button></div>
+        <div class="ghostRow short"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>C안 - 한 줄, 오른쪽 좁은 검색바</h2>
+<p class="note">기존 아이콘 자리를 그대로 대체해 변경이 가장 작습니다. 대신 폭이 좁아 강조 효과는 가장 약합니다.</p>
+<div class="viewRow">
+  <div>
+    <h3>데스크톱</h3>
+    <div class="frame desktop">
+      <div class="hd optC">
+        <div class="brand"><span class="wordmark">Font<i>A</i>git</span><span class="ko">폰트 아지트</span></div>
+        <div class="spacer"></div>
+        <div class="nav"><span>폰트</span><span>트렌드</span><span>캔버스</span><span>비교</span><span>컬렉션</span><span>등록</span></div>
+        <div class="sbox">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5" stroke-linecap="round"/></svg>
+          <input placeholder="폰트 검색">
+        </div>
+        <div class="actions"><button class="iconBtn">☾</button></div>
+      </div>
+      <div class="pageBody">
+        <div class="canvasBar"><input placeholder="문구를 입력하세요"><button>초기화</button></div>
+        <div class="ghostRow short"></div>
+        <div class="ghostRow"></div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <h3>모바일 375px</h3>
+    <div class="frame mobile">
+      <div class="hd optC">
+        <div class="brand"><span class="wordmark">Font<i>A</i>git</span></div>
+        <div class="spacer"></div>
+        <div class="sbox">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5" stroke-linecap="round"/></svg>
+          <input placeholder="검색">
+        </div>
+        <div class="actions"><button class="iconBtn">☾</button></div>
+      </div>
+      <div class="pageBody">
+        <div class="canvasBar"><input placeholder="문구를 입력하세요"><button>초기화</button></div>
+        <div class="ghostRow short"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>참고 - 검색 강화 요소</h2>
+<p class="note">위 A, B에 들어간 오른쪽 끝 회색 <span class="kbd">/</span> 표시는 "슬래시 키를 누르면 어디서든 검색창으로 커서가 간다"는 단축키 안내입니다. 필요 없으면 빼도 됩니다.</p>
+<div class="frame desktop" style="padding: 24px var(--pad-page);">
+  <div style="max-width: 520px; margin: 0 auto;">
+    <div class="sbox big" style="border-color: var(--point); box-shadow: 0 0 0 3px var(--point-weak);">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5" stroke-linecap="round"/></svg>
+      <input value="프리" style="color: var(--ink);">
+      <span class="kbd">/</span>
+    </div>
+    <div style="margin-top: 6px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); overflow: hidden;">
+      <div style="padding: 11px 16px; background: var(--point-weak); font-size: 14px;"><b style="color: var(--point)">프리</b>텐다드 <span style="color: var(--sub-2); font-size: 12px;">- OFL</span></div>
+      <div style="padding: 11px 16px; font-size: 14px;"><b style="color: var(--point)">프리</b>텐다드 JP <span style="color: var(--sub-2); font-size: 12px;">- OFL</span></div>
+      <div style="padding: 11px 16px; font-size: 14px;">에스코어드림 <span style="color: var(--sub-2); font-size: 12px;">- 커스텀 무료</span></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

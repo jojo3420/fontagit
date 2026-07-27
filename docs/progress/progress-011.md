@@ -16,6 +16,7 @@
 4. bash 한글 인접 변수(`$var종`)가 비UTF8 로케일에서 unbound variable — `${var}종` 필수(deploy.sh dd7381f 재발).
 5. 서브에이전트가 브리프 코드를 임의 변경(weight 범위 축소, Tier B combos 반환, familyName을 CSS 폴백 문자열로) — 태스크별 독립 리뷰어가 전부 검출, 5회 수정. "브리프 verbatim" 지시만으로 부족, 리뷰 게이트 필수.
 6. 감사 4단계는 Linux 게이트라 docker(fontagit-pipeline:local) 필수, 스크립트 실행 비트(chmod +x)와 deploy.sh main 브랜치 가드 주의.
+7. 릴리스 승격(develop→main) 시: (a) gh pr merge `--auto`는 이 저장소에서 비활성(직접 merge 필요), (b) main 전용 핫픽스와 develop 백포트로 progress.md 병합 충돌 발생 → main을 develop에 역병합해 해소 후 승격, (c) `.worktrees/`의 유령 워크트리가 develop 체크아웃을 잠가 `git worktree remove` 선행 필요.
 
 ## 결정 근거와 기각된 대안
 - timeout 해법: psql 직접 접속(터널) 기각 — 무인 체인의 재사용성(레거시 경로 회피, dev/prod 동일 경로) 때문에 청크 채택.

@@ -20,7 +20,7 @@ vi.mock('@/hooks/useDebouncedSuggestions', () => ({
 import { HeaderSearch } from './HeaderSearch';
 import { useDebouncedSuggestions } from '@/hooks/useDebouncedSuggestions';
 
-describe('HeaderSearch (헤더 클릭-펼침 검색)', () => {
+describe('HeaderSearch (항상 노출 검색바)', () => {
   beforeEach(() => {
     mockPush.mockClear();
     vi.mocked(useDebouncedSuggestions).mockReturnValue({
@@ -32,39 +32,40 @@ describe('HeaderSearch (헤더 클릭-펼침 검색)', () => {
     });
   });
 
-  it('초기에는 검색 패널이 닫혀 있다', () => {
+  it('검색 입력창이 처음부터 보인다', () => {
     render(<HeaderSearch />);
-    expect(screen.queryByPlaceholderText(/검색/)).not.toBeInTheDocument();
-  });
-
-  it('아이콘을 클릭하면 검색 입력창이 펼쳐진다', async () => {
-    const user = userEvent.setup();
-    render(<HeaderSearch />);
-    await user.click(screen.getByRole('button', { name: '검색' }));
     expect(screen.getByPlaceholderText(/검색/)).toBeInTheDocument();
   });
 
-  it('검색어 입력 후 제출하면 /search로 이동하고 패널이 닫힌다', async () => {
+  it('검색어 입력 후 Enter 제출하면 /search로 이동한다', async () => {
     const user = userEvent.setup();
     render(<HeaderSearch />);
-    await user.click(screen.getByRole('button', { name: '검색' }));
-    await user.type(screen.getByPlaceholderText(/검색/), '노토{Enter}');
+    const input = screen.getByPlaceholderText(/검색/);
+    await user.type(input, '노토{Enter}');
     expect(mockPush).toHaveBeenCalledWith('/search?q=%EB%85%B8%ED%86%A0');
-    expect(screen.queryByPlaceholderText(/검색/)).not.toBeInTheDocument();
   });
 
-  it('Escape를 누르면 패널이 닫힌다', async () => {
+  it('드롭다운이 열렸을 때 로딩 상태를 표시한다', async () => {
+    vi.mocked(useDebouncedSuggestions).mockReturnValue({ items: [], loading: true, error: false });
     const user = userEvent.setup();
     render(<HeaderSearch />);
-    await user.click(screen.getByRole('button', { name: '검색' }));
-    await user.keyboard('{Escape}');
-    expect(screen.queryByPlaceholderText(/검색/)).not.toBeInTheDocument();
+    const input = screen.getByRole('combobox');
+    await user.type(input, 'test');
+    expect(screen.getByText(/검색 중/)).toBeInTheDocument();
   });
 
-  it('↓ 후 Enter: 활성 항목 상세로 이동', async () => {
+  it('검색 결과가 없을 때 "일치하는 폰트가 없어요" 메시지를 표시한다', async () => {
+    vi.mocked(useDebouncedSuggestions).mockReturnValue({ items: [], loading: false, error: false });
     const user = userEvent.setup();
     render(<HeaderSearch />);
-    await user.click(screen.getByRole('button', { name: '검색' }));
+    const input = screen.getByRole('combobox');
+    await user.type(input, 'nonexistent');
+    expect(screen.getByText(/일치하는 폰트가 없어요/)).toBeInTheDocument();
+  });
+
+  it('ArrowDown 후 Enter로 활성 항목 상세로 이동한다', async () => {
+    const user = userEvent.setup();
+    render(<HeaderSearch />);
     const input = screen.getByRole('combobox');
     await user.type(input, '지마켓');
     fireEvent.keyDown(input, { key: 'ArrowDown' });
@@ -72,25 +73,13 @@ describe('HeaderSearch (헤더 클릭-펼침 검색)', () => {
     expect(mockPush).toHaveBeenCalledWith('/fonts/gmarket-sans');
   });
 
-  it('한글 조합 중 Enter(isComposing)는 무시', async () => {
+  it('IME 조합 중 Enter 무시 및 조합 종료 후 드롭다운 노출', async () => {
     const user = userEvent.setup();
     render(<HeaderSearch />);
-    await user.click(screen.getByRole('button', { name: '검색' }));
     const input = screen.getByRole('combobox');
     await user.type(input, '지마켓');
-    fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
     expect(mockPush).not.toHaveBeenCalled();
-  });
-
-  it('조합 중에는 드롭다운이 안 열리고, 조합 종료 후 열린다', async () => {
-    const user = userEvent.setup();
-    render(<HeaderSearch />);
-    await user.click(screen.getByRole('button', { name: '검색' }));
-    const input = screen.getByRole('combobox');
-    fireEvent.compositionStart(input);
-    fireEvent.change(input, { target: { value: '지' } });
-    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     fireEvent.compositionEnd(input, { target: { value: '지마켓' } });
     expect(screen.getByRole('listbox')).toBeInTheDocument();
   });
@@ -99,8 +88,23 @@ describe('HeaderSearch (헤더 클릭-펼침 검색)', () => {
     vi.mocked(useDebouncedSuggestions).mockReturnValue({ items: [], loading: false, error: true });
     const user = userEvent.setup();
     render(<HeaderSearch />);
-    await user.click(screen.getByRole('button', { name: '검색' }));
     await user.type(screen.getByRole('combobox'), '지마켓');
     expect(screen.getByText(/검색 중 문제/)).toBeInTheDocument();
+  });
+
+  it('슬래시 키를 누르면 검색 입력창에 포커스가 간다', () => {
+    render(<HeaderSearch />);
+    const event = new KeyboardEvent('keydown', { key: '/', bubbles: true });
+    document.body.dispatchEvent(event);
+    expect(screen.getByRole('combobox')).toHaveFocus();
+  });
+
+  it('입력창에 포커스가 있으면 슬래시가 그대로 입력된다', async () => {
+    const user = userEvent.setup();
+    render(<HeaderSearch />);
+    const input = screen.getByRole('combobox');
+    await user.click(input);
+    await user.keyboard('/');
+    expect(input).toHaveValue('/');
   });
 });
