@@ -1,11 +1,10 @@
 """Tier A 공식 메타데이터 수집기 테스트."""
 
-from uuid import UUID, uuid4
-from dataclasses import dataclass
+from uuid import uuid4
 
 from fontagit_pipeline.audit_http import FetchResult
 from fontagit_pipeline.audit_policy import SourceRegistry, RegistryEntry
-from fontagit_pipeline.audit_store import FindingDraft, InMemoryAuditStore
+from fontagit_pipeline.audit_store import InMemoryAuditStore
 from fontagit_pipeline.tier_a_meta import (
     BrandEntry,
     BrandNormalization,
@@ -190,7 +189,7 @@ def test_collect_tier_a_meta_fetch_failure() -> None:
 
 
 def test_collect_tier_a_meta_downgrade_block() -> None:
-    """may_update_source_kind 강등 차단 시 발견 문제 처리."""
+    """may_update_source_kind 강등 차단: 현재 official인데 archive를 제안하면 건너뛴다."""
     run_id = uuid4()
     store = InMemoryAuditStore()
     font_id = uuid4()
@@ -222,6 +221,9 @@ def test_collect_tier_a_meta_downgrade_block() -> None:
             name_en="Test Font",
             license_type="OFL",
             noonnu_foundry=None,
+            # 현재 official 등급인데 archive를 제안받는 강등 시나리오
+            download_source_kind="official",
+            license_source_kind="official",
         )
     ]
 
@@ -260,8 +262,11 @@ fonts {
         fetcher=fake_fetcher,
     )
 
-    # Verify: 모든 URL이 archive로 분류되므로 모두 생성됨
-    # foundry + download_url + download_source_kind + license_source_url = 4개
+    # Verify: 현재(official)보다 낮은 archive 제안은 강등 차단되어 foundry만 생성됨
+    # (download_url/download_source_kind/license_source_url은 모두 강등이라 건너뜀)
     assert result["target_count"] == 1
     assert result["success_count"] == 1
-    assert result["findings_created"] == 4  # all 5 fields - no foundry_url (no norm entry)
+    assert result["findings_created"] == 1  # foundry만 (no foundry_url: no norm entry)
+
+    created_fields = {draft.field_name for draft in store._finding_drafts.values()}
+    assert created_fields == {"foundry"}

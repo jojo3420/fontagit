@@ -7,10 +7,8 @@ METADATA.pb(designer/copyright)를 근거 자료로 권리사(foundry)를 판정
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import re
-from pathlib import Path
 from typing import Callable, Sequence
 from urllib.parse import quote
 from uuid import UUID
@@ -18,7 +16,11 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from fontagit_pipeline.audit_http import FetchResult, fetch_public_url
-from fontagit_pipeline.audit_policy import SourceRegistry, may_update_source_kind
+from fontagit_pipeline.audit_policy import (
+    AUTO_APPLICABLE_SOURCE_KINDS,
+    SourceRegistry,
+    may_update_source_kind,
+)
 from fontagit_pipeline.audit_store import AuditStore, FindingDraft
 from fontagit_pipeline.licenses import _LICENSE_DIRS
 
@@ -135,6 +137,8 @@ class TierATarget(BaseModel):
     name_en: str
     license_type: str
     noonnu_foundry: str | None = None
+    download_source_kind: str | None = None
+    license_source_kind: str | None = None
 
 
 def collect_tier_a_meta(
@@ -145,7 +149,7 @@ def collect_tier_a_meta(
     normalization: BrandNormalization,
     *,
     dry_run: bool = False,
-    fetcher: Callable[[str], FetchResult] | None = None,
+    fetcher: Callable[..., FetchResult] | None = None,
 ) -> dict[str, object]:
     """Tier A 폰트 대상별로 METADATA.pb fetch-파싱해 권리사 판정 및 URL 제안을 생성한다.
 
@@ -205,7 +209,7 @@ def collect_tier_a_meta(
                 before_value=target.noonnu_foundry,
                 proposed_value=foundry_res.value,
                 evidence_id=None,  # Tier A는 스냅샷 없음
-                confidence="archive",
+                confidence="reference",
                 review_reason=foundry_res.reason,
                 auto_applicable=(foundry_res.status == "auto"),
             )
@@ -223,7 +227,7 @@ def collect_tier_a_meta(
                         before_value=None,
                         proposed_value=entry.evidence_url,
                         evidence_id=None,  # Tier A는 스냅샷 없음
-                        confidence="archive",
+                        confidence="reference",
                         review_reason="normalization_evidence",
                         auto_applicable=(entry.status == "approved"),
                     )
@@ -233,16 +237,16 @@ def collect_tier_a_meta(
 
             # 3. download_url + download_source_kind (쌍으로 생성)
             specimen_source_kind = registry.classify(specimen_url)
-            if may_update_source_kind(None, specimen_source_kind):
+            if may_update_source_kind(target.download_source_kind, specimen_source_kind):
                 finding_download_url = FindingDraft(
                     font_id=target.font_id,
                     field_name="download_url",
                     before_value=None,
                     proposed_value=specimen_url,
                     evidence_id=None,  # Tier A는 스냅샷 없음
-                    confidence="archive",
+                    confidence="reference",
                     review_reason="specimen_page_fallback",
-                    auto_applicable=True,
+                    auto_applicable=(specimen_source_kind in AUTO_APPLICABLE_SOURCE_KINDS),
                 )
                 if not dry_run:
                     store.save_finding(run_id, finding_download_url)
@@ -251,12 +255,12 @@ def collect_tier_a_meta(
                 finding_download_kind = FindingDraft(
                     font_id=target.font_id,
                     field_name="download_source_kind",
-                    before_value=None,
+                    before_value=target.download_source_kind,
                     proposed_value=specimen_source_kind,
                     evidence_id=None,  # Tier A는 스냅샷 없음
-                    confidence="archive",
+                    confidence="reference",
                     review_reason="specimen_page_fallback",
-                    auto_applicable=True,
+                    auto_applicable=(specimen_source_kind in AUTO_APPLICABLE_SOURCE_KINDS),
                 )
                 if not dry_run:
                     store.save_finding(run_id, finding_download_kind)
@@ -264,16 +268,16 @@ def collect_tier_a_meta(
 
             # 4. license_source_url 필드
             license_source_kind = registry.classify(license_source_url)
-            if may_update_source_kind(None, license_source_kind):
+            if may_update_source_kind(target.license_source_kind, license_source_kind):
                 finding_license_url = FindingDraft(
                     font_id=target.font_id,
                     field_name="license_source_url",
                     before_value=None,
                     proposed_value=license_source_url,
                     evidence_id=None,  # Tier A는 스냅샷 없음
-                    confidence="archive",
+                    confidence="reference",
                     review_reason="github_license_file",
-                    auto_applicable=True,
+                    auto_applicable=(license_source_kind in AUTO_APPLICABLE_SOURCE_KINDS),
                 )
                 if not dry_run:
                     store.save_finding(run_id, finding_license_url)

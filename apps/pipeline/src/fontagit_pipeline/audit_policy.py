@@ -19,6 +19,9 @@ CollectionMode = Literal["structured-only", "raw-retention"]
 # 출처 등급 우선순위 (높을수록 신뢰도 높음). 강등 금지 규칙에 사용.
 _SOURCE_KIND_RANK: dict[str | None, int] = {"official": 3, "public": 2, "archive": 1, None: 0}
 
+# 사람 검수 없이 자동 승인 가능한 출처 등급. archive/discovery는 반드시 사람 검수를 거친다.
+AUTO_APPLICABLE_SOURCE_KINDS: frozenset[str] = frozenset({"official", "public"})
+
 
 class RegistryEntry(BaseModel):
     """제작사 또는 공공 출처 한 곳의 승인 정보."""
@@ -107,7 +110,12 @@ class SourceRegistry(BaseModel):
 
 
 def may_update_source_kind(current: str | None, proposed: str | None) -> bool:
-    """출처 등급 강등을 차단한다. 같거나 높은 등급만 갱신을 허용한다."""
+    """출처 등급 강등을 차단한다. 같거나 높은 등급만 갱신을 허용한다.
+
+    proposed가 등급 체계에 없는 값(예: discovery)이면 fail-closed로 거부한다.
+    """
+    if proposed not in _SOURCE_KIND_RANK:
+        return False
     return _SOURCE_KIND_RANK.get(proposed, 0) >= _SOURCE_KIND_RANK.get(current, 0)
 
 

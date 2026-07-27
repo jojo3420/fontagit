@@ -198,3 +198,10 @@ def test_may_update_source_kind_rank() -> None:
     assert may_update_source_kind("archive", "official") is True
     assert may_update_source_kind("official", "archive") is False
     assert may_update_source_kind("public", "public") is True
+
+
+def test_may_update_source_kind_rejects_unknown_proposed_kind() -> None:
+    """fail-closed: proposed가 등급 체계에 없는 값(예: discovery)이면 항상 거부한다."""
+    assert may_update_source_kind(None, "discovery") is False
+    assert may_update_source_kind(None, "") is False
+    assert may_update_source_kind("archive", "discovery") is False

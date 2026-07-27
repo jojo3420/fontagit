@@ -1027,7 +1027,7 @@ def main_audit_review(args: argparse.Namespace) -> int:
             field_name = finding.get("field_name")
             evidence_id = finding.get("evidence_id")
             proposed_value = finding.get("proposed_value")
-            auto_applicable = finding.get("auto_applicable", True)  # 기존 DB 레코드는 auto_applicable이 없을 수 있으므로 True 기본값
+            auto_applicable = finding.get("auto_applicable", False)  # 기존 DB 레코드에 값이 없으면 fail-closed로 사람 검수 유지
 
             try:
                 if not isinstance(finding_id, str):
@@ -1040,15 +1040,21 @@ def main_audit_review(args: argparse.Namespace) -> int:
                     # auto_applicable=False는 needs_review 유지 (자동 승인 불가)
                     continue
 
-                # values-evidence 대조 (자동 승인 대상 필드)
-                if evidence_id and isinstance(evidence_id, str):
-                    extracted = evidence_by_id.get(evidence_id)
-                    if extracted:
-                        expected = derive_proposed_value(field_name, extracted)
-                        if expected != proposed_value:
-                            raise ValueError(
-                                f"evidence mismatch: field={field_name} expected={expected} proposed={proposed_value}"
-                            )
+                # values-evidence 대조 (자동 승인 대상 필드). evidence_id가 없거나
+                # 매칭되는 스냅샷을 찾지 못하면 fail-closed로 승인을 건너뛴다
+                # (검증 불가를 검증 통과로 취급하지 않는다).
+                if not isinstance(evidence_id, str) or not evidence_id:
+                    raise ValueError(f"missing evidence_id for auto-approvable field: field={field_name}")
+                extracted = evidence_by_id.get(evidence_id)
+                if not extracted:
+                    raise ValueError(
+                        f"evidence snapshot not found: field={field_name} evidence_id={evidence_id}"
+                    )
+                expected = derive_proposed_value(field_name, extracted)
+                if expected != proposed_value:
+                    raise ValueError(
+                        f"evidence mismatch: field={field_name} expected={expected} proposed={proposed_value}"
+                    )
 
                 store.approve_finding(UUID(finding_id), reviewed_by=reviewed_by)
                 approved_count += 1
@@ -1207,7 +1213,7 @@ def main_audit_tier_a_meta(args: argparse.Namespace) -> int:
         # published + source_tier='A' 폰트 조회
         query = (
             dev_schema.table("fonts")
-            .select("id,name_en")
+            .select("id,name_en,download_source_kind,license_source_kind")
             .eq("status", "published")
             .eq("source_tier", "A")
             .order("id")
@@ -1226,6 +1232,8 @@ def main_audit_tier_a_meta(args: argparse.Namespace) -> int:
             if not all([font_id, name_en]):
                 logger.warning("skipping invalid font row: %s", row)
                 continue
+            download_source_kind = row.get("download_source_kind")
+            license_source_kind = row.get("license_source_kind")
             # Tier A는 google-fonts 출처이고, 대부분 OFL 라이선스 사용
             # (apache, ufl도 있지만 메타데이터에서 판별 가능)
             targets.append(
@@ -1234,6 +1242,12 @@ def main_audit_tier_a_meta(args: argparse.Namespace) -> int:
                     name_en=name_en,
                     license_type="OFL",  # google-fonts 기본값
                     noonnu_foundry=None,  # dev에서는 눈누 매핑 미제공
+                    download_source_kind=(
+                        download_source_kind if isinstance(download_source_kind, str) else None
+                    ),
+                    license_source_kind=(
+                        license_source_kind if isinstance(license_source_kind, str) else None
+                    ),
                 )
             )
 
@@ -1336,22 +1350,32 @@ def main_audit_kogl_preview(args: argparse.Namespace) -> int:
         dev_client = create_client(dev_url, dev_secret_key)
         dev_schema = dev_client.schema("fontagit")
 
-        # 3. 라이선스 스냅샷 조회 (metadata 문서 종류)
-        logger.info("라이선스 스냅샷 조회 (metadata)...")
-        snapshots_response = (
-            dev_schema.table("font_source_snapshots")
-            .select("font_id,extracted")
-            .eq("document_kind", "metadata")
-            .order("collected_at", desc=True)
-            .execute()
-        )
+        # 3. 라이선스 스냅샷 조회 (metadata 문서 종류, 1,000행 제한 회피용 페이지네이션)
+        from typing import cast
 
-        if not isinstance(snapshots_response.data, list):
-            raise ValueError("snapshots query returned invalid data")
+        logger.info("라이선스 스냅샷 조회 (metadata)...")
+        snapshots_data: list[dict[str, object]] = []
+        page_size = 1000
+        offset = 0
+        while True:
+            page_response = (
+                dev_schema.table("font_source_snapshots")
+                .select("font_id,extracted")
+                .eq("document_kind", "metadata")
+                .order("collected_at", desc=True)
+                .range(offset, offset + page_size - 1)
+                .execute()
+            )
+            if not isinstance(page_response.data, list):
+                raise ValueError("snapshots query returned invalid data")
+            snapshots_data.extend(cast(list[dict[str, object]], page_response.data))
+            if len(page_response.data) < page_size:
+                break
+            offset += page_size
 
         # 4. font_id별로 최신 스냅샷만 유지 (collected_at desc=True 정렬로 미래 데이터도 대응)
         latest_snapshots: dict[str, dict] = {}
-        for snap in snapshots_response.data:
+        for snap in snapshots_data:
             font_id = snap.get("font_id")
             if font_id and font_id not in latest_snapshots:
                 latest_snapshots[font_id] = snap

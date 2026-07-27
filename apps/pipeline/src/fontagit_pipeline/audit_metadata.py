@@ -111,6 +111,12 @@ class _MetadataTarget(Protocol):
     @property
     def foundry(self) -> str | None: ...
 
+    @property
+    def download_url(self) -> str | None: ...
+
+    @property
+    def download_source_kind(self) -> str | None: ...
+
 
 class _MetadataSnapshot(Protocol):
     @property
@@ -389,39 +395,53 @@ def compare_metadata(
     download_url = official_snapshot.extracted.get("download_url")
     download_source_kind = official_snapshot.extracted.get("download_source_kind")
     if download_url is not None:
-        from fontagit_pipeline.audit_policy import may_update_source_kind
+        from fontagit_pipeline.audit_policy import (
+            AUTO_APPLICABLE_SOURCE_KINDS,
+            may_update_source_kind,
+        )
 
-        # 출처 강등 체크: may_update_source_kind(현재 kind, 제안 kind)
-        if may_update_source_kind(target.download_source_kind, download_source_kind):
-            # download_url finding 생성
-            if download_url != target.download_url:
-                findings.append(
-                    FindingDraft(
-                        font_id=target.font_id,
-                        field_name="download_url",
-                        before_value=target.download_url,
-                        proposed_value=download_url,
-                        evidence_id=None,
-                        confidence="reference",
-                        review_reason="download URL from noonnu snapshot",
-                        auto_applicable=(download_source_kind in {"official", "public"}),
-                    )
-                )
+        proposed_download_kind = download_source_kind if isinstance(download_source_kind, str) else None
+        # 등급 체계 밖 값(discovery 등)은 kind 필드에 실으면 manifest 적용이 깨진다.
+        # 이때도 URL 자체는 사람 검수 대상으로 남긴다(스펙: 화이트리스트 밖은 해당 필드만 needs_review).
+        kind_is_applicable = proposed_download_kind in AUTO_APPLICABLE_SOURCE_KINDS or proposed_download_kind == "archive"
+        auto_applicable = proposed_download_kind in AUTO_APPLICABLE_SOURCE_KINDS
+        # 등급 체계 안의 값인데 강등이면 URL까지 함께 막는다(낮은 등급 출처로 덮어쓰기 방지).
+        is_downgrade = kind_is_applicable and not may_update_source_kind(
+            target.download_source_kind, proposed_download_kind
+        )
 
-            # download_source_kind finding 생성 (동일 evidence로)
-            if download_source_kind != target.download_source_kind:
-                findings.append(
-                    FindingDraft(
-                        font_id=target.font_id,
-                        field_name="download_source_kind",
-                        before_value=target.download_source_kind,
-                        proposed_value=download_source_kind,
-                        evidence_id=None,
-                        confidence="reference",
-                        review_reason="download source kind from noonnu snapshot",
-                        auto_applicable=(download_source_kind in {"official", "public"}),
-                    )
+        if not is_downgrade and download_url != target.download_url:
+            findings.append(
+                FindingDraft(
+                    font_id=target.font_id,
+                    field_name="download_url",
+                    before_value=target.download_url,
+                    proposed_value=download_url,
+                    evidence_id=None,
+                    confidence="reference",
+                    review_reason="download URL from noonnu snapshot",
+                    auto_applicable=auto_applicable,
                 )
+            )
+
+        # kind는 등급 체계 안의 값이고 강등이 아닐 때만 제안한다.
+        if (
+            kind_is_applicable
+            and download_source_kind != target.download_source_kind
+            and may_update_source_kind(target.download_source_kind, proposed_download_kind)
+        ):
+            findings.append(
+                FindingDraft(
+                    font_id=target.font_id,
+                    field_name="download_source_kind",
+                    before_value=target.download_source_kind,
+                    proposed_value=download_source_kind,
+                    evidence_id=None,
+                    confidence="reference",
+                    review_reason="download source kind from noonnu snapshot",
+                    auto_applicable=auto_applicable,
+                )
+            )
 
     return findings
 

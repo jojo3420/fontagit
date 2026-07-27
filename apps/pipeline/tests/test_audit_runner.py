@@ -1501,9 +1501,21 @@ def test_compare_metadata_emits_foundry_and_download(monkeypatch: pytest.MonkeyP
         name_ko="흰꼬리수리",
         candidates=(),
     )
+    # kind는 등급 체계 안의 값일 때만 제안되므로 다운로드 도메인을 archive로 등록한다.
+    archive_registry = {
+        "version": 1,
+        "entries": [
+            {
+                "maker": "clova archive",
+                "domain": "clova.ai",
+                "roles": ["download"],
+                "source_kind": "archive",
+            }
+        ],
+    }
     store = InMemoryAuditStore()
     report = run_metadata_audit(
-        [target], store, registry={"version": 1, "entries": []}, fetcher=noonnu_fetch, font_fetcher=font_fetch
+        [target], store, registry=archive_registry, fetcher=noonnu_fetch, font_fetcher=font_fetch
     )
 
     if report.broken_count > 0:
@@ -1616,16 +1628,29 @@ def test_download_only_file_links_skips_draft(monkeypatch: pytest.MonkeyPatch) -
         name_ko="흰꼬리수리",
         candidates=(),
     )
+    # 현재 official인 폰트에 archive 등급 출처를 제안 = 강등
+    target = replace(target, download_source_kind="official", download_url="https://official.example/dl")
+    archive_registry = {
+        "version": 1,
+        "entries": [
+            {
+                "maker": "clova archive",
+                "domain": "clova.ai",
+                "roles": ["download"],
+                "source_kind": "archive",
+            }
+        ],
+    }
     store = InMemoryAuditStore()
     report = run_metadata_audit(
-        [target], store, registry={"version": 1, "entries": []}, fetcher=noonnu_fetch, font_fetcher=font_fetch
+        [target], store, registry=archive_registry, fetcher=noonnu_fetch, font_fetcher=font_fetch
     )
 
     if report.broken_count > 0:
         raise AssertionError(f"Broken count: {report.broken_count}, errors: {report.errors}")
 
     drafts = [store.finding_draft(item) for item in report.finding_ids]
-    # download_url/download_source_kind draft가 없어야 한다
+    # 강등이므로 download_url/download_source_kind draft가 없어야 한다
     download_drafts = [
         d for d in drafts if d.field_name in ("download_url", "download_source_kind")
     ]

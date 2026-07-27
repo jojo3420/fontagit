@@ -137,7 +137,10 @@ def _evidence_role_is_valid(
 ) -> bool:
     if field_name.startswith("download_"):
         required_document = "download"
-        allowed_source_kinds = {"official", "public", "archive"}
+        # font_source_snapshots.source_kind CHECK는 official/public/noonnu만 허용해
+        # archive는 스냅샷 근거로 절대 도달하지 않는다(archive 등급은 근거 없는
+        # reference finding으로만 생성됨). 여기 포함하면 죽은 코드가 된다.
+        allowed_source_kinds = {"official", "public"}
     elif field_name.startswith("license_") or field_name in {
         "allow_commercial",
         "allow_font_sale",
@@ -611,6 +614,7 @@ def build_manifest(
     entries: list[ManifestEntry] = []
     exported_snapshots: dict[UUID, dict[str, object]] = {}
     exported_findings: dict[UUID, dict[str, object]] = {}
+    downgrade_skipped_count = 0
     for font_id, findings in grouped.items():
         row = rows_by_id[font_id]
         key = _source_key(row)
@@ -619,18 +623,21 @@ def build_manifest(
         skip_entry = False
         for finding in findings:
             if finding.get("field_name") == "download_source_kind":
-                current_kind = row.get("download_source_kind")
-                proposed_kind = finding.get("proposed_value")
+                current_kind_raw = row.get("download_source_kind")
+                proposed_kind_raw = finding.get("proposed_value")
+                current_kind = current_kind_raw if isinstance(current_kind_raw, str) else None
+                proposed_kind = proposed_kind_raw if isinstance(proposed_kind_raw, str) else None
                 if not may_update_source_kind(current_kind, proposed_kind):
                     _logger.warning(
                         "entry excluded due to source kind downgrade: %s, current=%s proposed=%s",
                         key,
-                        current_kind,
-                        proposed_kind,
+                        current_kind_raw,
+                        proposed_kind_raw,
                     )
                     skip_entry = True
                     break
         if skip_entry:
+            downgrade_skipped_count += 1
             continue
 
         before: dict[str, object] = {}
@@ -684,31 +691,43 @@ def build_manifest(
             )
         )
 
+    if downgrade_skipped_count:
+        _logger.warning(
+            "manifest build skipped %d/%d entries due to source kind downgrade",
+            downgrade_skipped_count,
+            len(grouped),
+        )
+    if not entries:
+        raise ManifestError("manifest requires at least one entry after downgrade exclusion")
+
     entries.sort(key=lambda item: (item.source_key.provider, item.source_key.provider_record_id))
     evidence = EvidenceBundle(
         run={**run_data, "id": str(run_id)},
         snapshots=[exported_snapshots[key] for key in sorted(exported_snapshots, key=str)],
         findings=[exported_findings[key] for key in sorted(exported_findings, key=str)],
     )
-    forward = FontAuditManifest(
-        run_id=run_id,
-        baseline_sha256=baseline_sha256,
-        generated_at=generated_at,
-        rollback_mode=False,
-        evidence_bundle=evidence,
-        entries=entries,
-    )
-    reverse = FontAuditManifest(
-        run_id=run_id,
-        baseline_sha256=baseline_sha256,
-        generated_at=generated_at,
-        rollback_mode=True,
-        evidence_bundle=evidence,
-        entries=[
-            entry.model_copy(update={"before": entry.after, "after": entry.before})
-            for entry in entries
-        ],
-    )
+    try:
+        forward = FontAuditManifest(
+            run_id=run_id,
+            baseline_sha256=baseline_sha256,
+            generated_at=generated_at,
+            rollback_mode=False,
+            evidence_bundle=evidence,
+            entries=entries,
+        )
+        reverse = FontAuditManifest(
+            run_id=run_id,
+            baseline_sha256=baseline_sha256,
+            generated_at=generated_at,
+            rollback_mode=True,
+            evidence_bundle=evidence,
+            entries=[
+                entry.model_copy(update={"before": entry.after, "after": entry.before})
+                for entry in entries
+            ],
+        )
+    except ValidationError as exc:
+        raise ManifestError(f"manifest failed pydantic validation: {exc}") from exc
     return ManifestBundle(
         forward=forward,
         reverse=reverse,

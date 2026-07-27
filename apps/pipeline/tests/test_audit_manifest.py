@@ -11,6 +11,8 @@ from uuid import UUID
 import pytest
 
 from fontagit_pipeline.audit_manifest import (
+    ManifestBundle,
+    ManifestEntry,
     ManifestError,
     _evidence_role_is_valid,
     build_manifest,

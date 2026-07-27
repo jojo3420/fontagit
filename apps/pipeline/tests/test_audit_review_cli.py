@@ -36,6 +36,21 @@ def _mock_finding(run_id: str, field_name: str = "tags", auto_applicable: bool =
     }
 
 
+def _matching_snapshot(finding: dict) -> dict:
+    """finding의 proposed_value와 일치하는 evidence snapshot을 만든다.
+
+    fail-closed 승인 게이트는 evidence_id가 실제 스냅샷과 매칭돼야만 승인하므로,
+    성공 케이스 테스트는 derive_proposed_value가 되돌릴 값을 extracted에 채워야 한다.
+    """
+    field_name = finding["field_name"]
+    proposed_value = finding["proposed_value"]
+    if field_name == "weights":
+        extracted = {"weight": proposed_value[0]}
+    else:
+        extracted = {field_name: proposed_value}
+    return {"id": finding["evidence_id"], "extracted": extracted}
+
+
 def test_audit_review_auto_approve_all_findings_success() -> None:
     """정상: 모든 findings를 승인하면 exit 0."""
     run = _mock_run()
@@ -55,7 +70,7 @@ def test_audit_review_auto_approve_all_findings_success() -> None:
 
         # Mock _schema.table(...).select(...).in_(...).execute()
         mock_execute_result = MagicMock()
-        mock_execute_result.data = []  # snapshots 데이터 (빈 리스트)
+        mock_execute_result.data = [_matching_snapshot(f) for f in findings]  # 실제 매칭 스냅샷
         mock_table = MagicMock()
         mock_table.select.return_value.in_.return_value.execute.return_value = mock_execute_result
         mock_store._schema.table.return_value = mock_table
@@ -119,7 +134,7 @@ def test_audit_review_partial_approval_failure() -> None:
 
         # Mock _schema for snapshot query
         mock_execute_result = MagicMock()
-        mock_execute_result.data = []
+        mock_execute_result.data = [_matching_snapshot(f) for f in findings]  # 실제 매칭 스냅샷
         mock_table = MagicMock()
         mock_table.select.return_value.in_.return_value.execute.return_value = mock_execute_result
         mock_store._schema.table.return_value = mock_table
@@ -175,7 +190,7 @@ def test_audit_review_runtime_error_mixed_with_success() -> None:
 
         # Mock _schema for snapshot query
         mock_execute_result = MagicMock()
-        mock_execute_result.data = []
+        mock_execute_result.data = [_matching_snapshot(f) for f in findings]  # 실제 매칭 스냅샷
         mock_table = MagicMock()
         mock_table.select.return_value.in_.return_value.execute.return_value = mock_execute_result
         mock_store._schema.table.return_value = mock_table
@@ -317,6 +332,37 @@ def test_audit_review_evidence_mismatch() -> None:
         assert mock_store.approve_finding.call_count == 1
 
 
+def test_audit_review_missing_evidence_fails_closed() -> None:
+    """비정상: auto_applicable=True인데 evidence_id가 없으면 fail-closed로 승인을 건너뛴다."""
+    run = _mock_run()
+    finding = _mock_finding(run["id"], "tags", auto_applicable=True)
+    finding["evidence_id"] = None  # DB 이상값: auto_applicable=True인데 evidence 없음
+
+    args = argparse.Namespace(
+        action="auto-approve",
+        run_id=run["id"],
+        reviewed_by="auto",
+    )
+
+    with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_store_ctor:
+        mock_store = MagicMock()
+        mock_store.get_run.return_value = run
+        mock_store.get_proposed_findings.return_value = [finding]
+
+        mock_execute_result = MagicMock()
+        mock_execute_result.data = []
+        mock_table = MagicMock()
+        mock_table.select.return_value.in_.return_value.execute.return_value = mock_execute_result
+        mock_store._schema.table.return_value = mock_table
+
+        mock_store_ctor.return_value = mock_store
+
+        result = main_audit_review(args)
+
+        assert result == 3, f"Expected exit code 3 but got {result}"
+        mock_store.approve_finding.assert_not_called()
+
+
 def test_audit_review_success_log_all_approved(caplog):  # type: ignore[no-untyped-def]
     """정상: 모든 findings 승인 성공 시 명확한 성공 로그 출력 검증."""
     run = _mock_run()
@@ -337,7 +383,7 @@ def test_audit_review_success_log_all_approved(caplog):  # type: ignore[no-untyp
 
             # Mock _schema for snapshot query
             mock_execute_result = MagicMock()
-            mock_execute_result.data = []
+            mock_execute_result.data = [_matching_snapshot(f) for f in findings]  # 실제 매칭 스냅샷
             mock_table = MagicMock()
             mock_table.select.return_value.in_.return_value.execute.return_value = mock_execute_result
             mock_store._schema.table.return_value = mock_table
