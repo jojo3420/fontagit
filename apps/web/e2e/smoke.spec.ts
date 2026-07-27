@@ -151,6 +151,17 @@ test('theme toggle switches data-theme', async ({ page }) => {
   expect(['light', 'dark']).toContain(after);
 });
 
+test('home has no horizontal overflow at narrow viewports (#125)', async ({ page }) => {
+  for (const width of [375, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/', { waitUntil: 'networkidle' });
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow, `viewport ${width}px`).toBe(0);
+  }
+});
+
 test('header nav hides canvas and compare links (desktop)', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.goto('/', { waitUntil: 'networkidle' });
