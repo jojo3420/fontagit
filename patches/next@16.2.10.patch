@@ -1,0 +1,54 @@
+diff --git a/dist/esm/server/dev/next-dev-server.js b/dist/esm/server/dev/next-dev-server.js
+index a40156fd38f39241517029aa9fb12e7b61bd8eb5..286218d492dca0df4de65ebcee68a47aea68ea4d 100644
+--- a/dist/esm/server/dev/next-dev-server.js
++++ b/dist/esm/server/dev/next-dev-server.js
+@@ -535,8 +535,20 @@ export default class DevServer extends Server {
+                             configurable: true
+                         });
+                     }
+-                    if (!prerenderedRoutes.some((item)=>item.pathname === urlPathname)) {
+-                        throw Object.defineProperty(new Error(`Page "${page}" is missing param "${pathname}" in "generateStaticParams()", which is required with "output: export" config.`), "__NEXT_ERROR_CODE", {
++                    if (!prerenderedRoutes.some((item)=>{
++                        // upstream vercel/next.js#92194: 요청 경로는 퍼센트 인코딩, item.pathname은 원문이라
++                        // 비ASCII slug가 항상 불일치했다. 인코딩본과 디코딩 결과까지 비교한다.
++                        if (item.pathname === urlPathname || item.encodedPathname === urlPathname) return true;
++                        if (urlPathname.includes('%')) {
++                            try {
++                                return item.pathname === decodeURIComponent(urlPathname);
++                            } catch  {
++                                return false;
++                            }
++                        }
++                        return false;
++                    })) {
++                        throw Object.defineProperty(new Error(`Page "${page}" is missing param "${urlPathname}" in "generateStaticParams()", which is required with "output: export" config.`), "__NEXT_ERROR_CODE", {
+                             value: "E443",
+                             enumerable: false,
+                             configurable: true
+diff --git a/dist/server/dev/next-dev-server.js b/dist/server/dev/next-dev-server.js
+index d0ec8291d06bf6dfddf53d8df680121c9de709c0..2cd551d0e2f63bfb9a25496b74a213205b3a5837 100644
+--- a/dist/server/dev/next-dev-server.js
++++ b/dist/server/dev/next-dev-server.js
+@@ -591,8 +591,20 @@ class DevServer extends _nextserver.default {
+                             configurable: true
+                         });
+                     }
+-                    if (!prerenderedRoutes.some((item)=>item.pathname === urlPathname)) {
+-                        throw Object.defineProperty(new Error(`Page "${page}" is missing param "${pathname}" in "generateStaticParams()", which is required with "output: export" config.`), "__NEXT_ERROR_CODE", {
++                    if (!prerenderedRoutes.some((item)=>{
++                        // upstream vercel/next.js#92194: 요청 경로는 퍼센트 인코딩, item.pathname은 원문이라
++                        // 비ASCII slug가 항상 불일치했다. 인코딩본과 디코딩 결과까지 비교한다.
++                        if (item.pathname === urlPathname || item.encodedPathname === urlPathname) return true;
++                        if (urlPathname.includes('%')) {
++                            try {
++                                return item.pathname === decodeURIComponent(urlPathname);
++                            } catch  {
++                                return false;
++                            }
++                        }
++                        return false;
++                    })) {
++                        throw Object.defineProperty(new Error(`Page "${page}" is missing param "${urlPathname}" in "generateStaticParams()", which is required with "output: export" config.`), "__NEXT_ERROR_CODE", {
+                             value: "E443",
+                             enumerable: false,
+                             configurable: true
