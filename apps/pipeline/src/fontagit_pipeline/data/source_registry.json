@@ -9,6 +9,33 @@
       "approved_by": null,
       "approved_at": null,
       "evidence_snapshot_id": null
+    },
+    {
+      "maker": "Google Fonts (archive)",
+      "domain": "fonts.google.com",
+      "roles": ["download", "homepage"],
+      "source_kind": "archive",
+      "approved_by": null,
+      "approved_at": null,
+      "evidence_snapshot_id": null
+    },
+    {
+      "maker": "google/fonts GitHub (archive)",
+      "domain": "raw.githubusercontent.com",
+      "roles": ["license", "metadata"],
+      "source_kind": "archive",
+      "approved_by": null,
+      "approved_at": null,
+      "evidence_snapshot_id": null
+    },
+    {
+      "maker": "google/fonts GitHub (archive)",
+      "domain": "github.com",
+      "roles": ["download", "license"],
+      "source_kind": "archive",
+      "approved_by": null,
+      "approved_at": null,
+      "evidence_snapshot_id": null
     }
   ]
 }

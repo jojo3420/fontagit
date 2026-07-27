@@ -161,7 +161,7 @@ def _evidence_role_is_valid(
         return False
     source_kind = snapshot.get("source_kind")
     return (
-        source_kind in {"official", "public"}
+        source_kind in {"official", "public", "archive"}
         and snapshot.get("document_kind") == required_document
         and confidence == source_kind
     )
@@ -430,7 +430,7 @@ def _validated_value(field_name: str, value: object) -> object:
         if value is not None and not isinstance(value, str):
             raise ManifestError(f"field {field_name} requires text or null")
     elif field_name in _SOURCE_KIND_FIELDS:
-        if value is not None and value not in {"official", "public"}:
+        if value is not None and value not in {"official", "public", "archive"}:
             raise ManifestError(f"field {field_name} has invalid source kind")
     elif field_name in _EVIDENCE_FIELDS:
         if value is not None:
