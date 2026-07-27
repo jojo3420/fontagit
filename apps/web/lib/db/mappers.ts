@@ -76,6 +76,7 @@ export function rowToFont(row: FontRow, aliases: string[]): Font {
     },
     officialUrl: row.official_url ?? "",
     downloadUrl: downloadStatus === "verified" ? row.download_url ?? null : null,
+    downloadSourceKind: row.download_source_kind ?? null,
     foundryUrl: row.foundry_url ?? null,
     legacyOfficialUrl,
     downloadStatus,

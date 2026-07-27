@@ -90,7 +90,7 @@ describe("LicenseSummaryCard", () => {
     const commercialDescriptionId = commercialHelp.getAttribute("aria-describedby");
     expect(commercialDescriptionId).toBeTruthy();
     expect(document.getElementById(commercialDescriptionId!)).toHaveTextContent(
-      "광고·상품·웹사이트·영상 등 상업 활동의 결과물에 폰트를 사용할 수 있는지 뜻해요.",
+      "광고-상품-웹사이트-영상 등 상업 활동의 결과물에 폰트를 사용할 수 있는지 뜻해요.",
     );
 
     const fontSaleHelp = screen.getByRole("button", { name: "폰트 판매 설명" });
@@ -137,5 +137,21 @@ describe("LicenseSummaryCard", () => {
     expect(screen.getByText("라이선스 재확인 필요")).toBeInTheDocument();
     expect(screen.queryByText("상업적 사용")).not.toBeInTheDocument();
     expect(screen.queryByText("수정")).not.toBeInTheDocument();
+  });
+  it("archive 등급 다운로드는 아카이브 라벨, official은 기존 라벨", () => {
+    const base = fonts.find((f) => f.slug === "nanum-myeongjo") ?? fonts[0];
+    const verified: Font = {
+      ...base,
+      tier: "free",
+      downloadStatus: "verified",
+      downloadUrl: "https://fonts.google.com/specimen/Nanum+Myeongjo",
+      downloadSourceKind: "archive",
+      licenseAudit: { ...base.licenseAudit!, status: "verified" },
+    };
+    const { rerender } = render(<LicenseSummaryCard font={verified} />);
+    expect(screen.getByText("다운로드 페이지로 이동(아카이브 제공)")).toBeInTheDocument();
+
+    rerender(<LicenseSummaryCard font={{ ...verified, downloadSourceKind: "official" }} />);
+    expect(screen.getByText("공식 페이지에서 내려받기")).toBeInTheDocument();
   });
 });

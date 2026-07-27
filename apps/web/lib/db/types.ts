@@ -20,7 +20,7 @@ export interface FontRow {
   download_url?: string | null;
   license_source_url?: string | null;
   license_summary?: string | null;
-  download_source_kind?: "official" | "public" | null;
+  download_source_kind?: "official" | "public" | "archive" | null;
   license_source_kind?: "official" | "public" | null;
   download_status?: AuditStatus;
   license_status?: Exclude<AuditStatus, "broken">;
