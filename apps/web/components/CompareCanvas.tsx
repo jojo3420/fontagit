@@ -37,7 +37,7 @@ export function CompareCanvas() {
 
   return (
     <div className={styles.container}>
-      <h2 className={styles.title}>폰트 비교</h2>
+      <h2 id="compare-heading" className={styles.title}>폰트 비교</h2>
 
       {/* 입력 섹션 */}
       <div className={styles.inputRow}>
