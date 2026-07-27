@@ -17,7 +17,7 @@
 
 | # | 지적 | 위치 | 출처 | 심각도 | Claude 판정 | 근거 |
 |---|------|------|------|--------|------------|------|
-| 1 | 청크 참조 무결성 예외 단정 부재 | audit_manifest.py 분할부 | Codex | High | 동의 → Should-fix(후속) | 사실. 단 apply RPC가 적용 시점에 evidence 재검증(조용한 실패 불가) + dev/prod 청크 22개 전량 적용 실측으로 위험 낮음. PR 설명의 "무결성 검증 포함"은 과장 — 정정 대상 |
+| 1 | 청크 참조 무결성 예외 단정 부재 | audit_manifest.py 분할부 | Codex | High | 동의 → Should-fix(후속) | 사실. 단 apply RPC가 적용 시점에 evidence 재검증(조용한 실패 불가) + dev/prod 청크 22개 전량 적용 실측으로 위험 낮음. PR 설명의 "무결성 검증 포함"은 과장 — 정정 대상. **#114에서 수정 완료**: build 시 _validate_chunk_references로 단정, apply는 해시 검증 |
 | 2 | 테스트가 1엔트리 청크 중심 | test_audit_manifest.py | Codex | High | 동의 → Should-fix(후속) | 다중 청크 케이스 보강 필요 |
 | 3 | 부분 적용 상태 명시-멱등 문서화 | audit-chain.sh 청크 루프 | Codex | High | 부분 동의 → Should-fix(후속) | 재빌드 복구 설계는 성립(적용분은 diff에서 제외), 안내문 존재. 명시 강화는 타당 |
 | 4 | --chunk-size argparse validator | __main__.py | Codex | Medium | 동의(후속) | |

@@ -289,6 +289,9 @@ for chunk_dir in "$manifest_dir"/chunk-[0-9][0-9][0-9]; do
   else
     echo "ERROR [7/7]: $chunk_num 적용 실패 (exit code: $step_exit)" >&2
     echo ""
+    echo "[audit-chain] 부분 적용 상태: 청크 ${chunk_count}/${total_chunks} 실패. 이전 청크는 적용 유지됨." >&2
+    echo "[audit-chain] 원인 수정 후 동일 명령 재실행 시 이미 적용된 청크는 멱등 처리된다." >&2
+    echo ""
     echo "복구 방법:"
     echo "  ./scripts/audit-chain.sh --run-id ${RUN_ID}"
     exit "$step_exit"

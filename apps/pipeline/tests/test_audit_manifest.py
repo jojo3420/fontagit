@@ -385,3 +385,169 @@ def test_write_chunked_manifest_bundles_creates_index(tmp_path: Path) -> None:
     assert (chunk_dirs[0] / "forward.sha256").exists()
     assert (chunk_dirs[0] / "reverse.json").exists()
     assert (chunk_dirs[0] / "reverse.sha256").exists()
+
+
+def _bundle_with_three_entries() -> "ManifestBundle":
+    """3개의 서로 다른 폰트 엔트리를 가진 manifest bundle을 생성한다."""
+    from copy import deepcopy
+
+    findings_data = []
+    rows_data = []
+
+    for idx in range(3):
+        font_id = UUID(int=FONT_ID.int + idx * 100)  # 큰 간격으로 구분
+        snapshot_id = UUID(int=SNAPSHOT_ID.int + idx * 100)
+        license_snapshot_id = UUID(int=LICENSE_SNAPSHOT_ID.int + idx * 100)
+        download_finding_id = UUID(int=FINDING_ID.int + idx * 100)
+        license_finding_id = UUID(int=FINDING_ID.int + idx * 100 + 50)
+
+        # 각 폰트별 snapshot과 license_snapshot 생성
+        snapshot_data = {
+            "id": str(snapshot_id),
+            "run_id": str(RUN_ID),
+            "font_id": str(font_id),
+            "provider": "noonnu",
+            "provider_record_id": str(613 + idx),
+            "source_kind": "official",
+            "document_kind": "download",
+            "request_url": "https://clova.ai/handwriting/list.html",
+            "final_url": "https://clova.ai/handwriting/list.html",
+            "http_status": 200,
+            "raw_text": "내부 원문은 정책 승인 전 내보내지 않는다.",
+            "raw_retention_allowed": False,
+            "raw_sha256": "b" * 64,
+            "normalized_sha256": "c" * 64,
+            "extracted": {"download_url": f"https://clova.ai/font{idx}.zip"},
+            "evidence_locations": {"download_url": "a.download"},
+            "extraction_rule_id": "official-download-v1",
+            "parser_version": "audit-v1",
+            "collected_at": NOW.isoformat(),
+        }
+
+        license_snapshot_data = deepcopy(snapshot_data)
+        license_snapshot_data.update({
+            "id": str(license_snapshot_id),
+            "document_kind": "license",
+            "raw_sha256": "d" * 64,
+            "normalized_sha256": "e" * 64,
+        })
+
+        # 각 폰트별 finding 생성
+        download_finding = {
+            "id": str(download_finding_id),
+            "run_id": str(RUN_ID),
+            "font_id": str(font_id),
+            "field_name": "download_url",
+            "before_value": None,
+            "proposed_value": f"https://clova.ai/font{idx}.zip",
+            "evidence_id": str(snapshot_id),
+            "confidence": "official",
+            "auto_applicable": False,
+            "review_reason": "사람 검수 완료",
+            "status": "approved",
+            "reviewed_by": "reviewer",
+            "reviewed_at": NOW.isoformat(),
+        }
+
+        license_finding = {
+            "id": str(license_finding_id),
+            "run_id": str(RUN_ID),
+            "font_id": str(font_id),
+            "field_name": "license_status",
+            "before_value": "pending",
+            "proposed_value": "needs_review",
+            "evidence_id": str(license_snapshot_id),
+            "confidence": "official",
+            "auto_applicable": False,
+            "review_reason": "사람 검수 완료",
+            "status": "approved",
+            "reviewed_by": "reviewer",
+            "reviewed_at": NOW.isoformat(),
+        }
+
+        # 각 폰트별 row 생성
+        row = {
+            "id": str(font_id),
+            "source_key": {"provider": "noonnu", "provider_record_id": str(613 + idx)},
+            "slug": f"폰트{idx}",
+            "name_ko": f"폰트{idx}",
+            "name_en": None,
+            "foundry": None,
+            "official_url": f"https://example.com/font{idx}",
+            "status": "published",
+            "updated_at": NOW.isoformat(),
+            "download_url": None,
+            "download_status": "pending",
+            "download_evidence_id": None,
+            "license_status": "pending",
+            "license_verified": True,
+            "evidence_snapshots": [snapshot_data, license_snapshot_data],
+        }
+
+        findings_data.extend([download_finding, license_finding])
+        rows_data.append(row)
+
+    # manifest 생성
+    bundle = build_manifest(_run(), findings_data, rows_data)
+    return bundle
+
+
+def _entries_of(bundle: "ManifestBundle") -> list["ManifestEntry"]:
+    """번들의 forward entries를 반환한다."""
+    return bundle.forward.entries
+
+
+def _reverse_entries_of(bundle: "ManifestBundle") -> list["ManifestEntry"]:
+    """번들의 reverse entries를 반환한다."""
+    return bundle.reverse.entries
+
+
+def _evidence_ids_of(bundle: "ManifestBundle") -> set[str]:
+    """번들의 evidence (snapshot) id 집합을 반환한다."""
+    return {str(s["id"]) for s in bundle.forward.evidence_bundle.snapshots}
+
+
+def _finding_ids_of(bundle: "ManifestBundle") -> set[str]:
+    """번들의 finding id 집합을 반환한다."""
+    return {str(f["id"]) for f in bundle.forward.evidence_bundle.findings}
+
+
+def test_chunk_split_preserves_entry_union() -> None:
+    """3엔트리 chunk_size=2 분할 시 전체 엔트리 합집합이 보존된다."""
+    bundle = _bundle_with_three_entries()
+    chunks = split_manifest_into_chunks(bundle, chunk_size=2)
+    assert len(chunks) == 2
+    original = {str(e.source_key) for e in _entries_of(bundle)}
+    merged = {str(e.source_key) for c in chunks for e in _entries_of(c)}
+    assert merged == original
+
+
+def test_chunk_evidence_matches_entry_references() -> None:
+    """각 청크의 entries가 참조하는 evidence_ids가 그 청크의 evidence에 전부 포함된다."""
+    bundle = _bundle_with_three_entries()
+    for chunk in split_manifest_into_chunks(bundle, chunk_size=2):
+        included = _evidence_ids_of(chunk)
+        for entry in _entries_of(chunk):
+            entry_evidence = {str(i) for i in entry.evidence_ids}
+            entry_findings = {str(i) for i in entry.finding_ids}
+            assert entry_evidence <= included
+            assert entry_findings <= _finding_ids_of(chunk)
+
+
+def test_chunk_reverse_swaps_before_after() -> None:
+    """청크 분할 후에도 reverse 매니페스트의 before/after가 forward와 대칭이다."""
+    bundle = _bundle_with_three_entries()
+    for chunk in split_manifest_into_chunks(bundle, chunk_size=2):
+        for fwd, rev in zip(_entries_of(chunk), _reverse_entries_of(chunk)):
+            assert fwd.before == rev.after
+            assert fwd.after == rev.before
+
+
+def test_chunk_missing_evidence_raises_manifest_error() -> None:
+    """엔트리가 참조하는 evidence가 청크 evidence 목록에서 빠지면 ManifestError."""
+    bundle = _bundle_with_three_entries()
+    # 번들에서 evidence 목록에서 1개를 제거하여 참조 무결성 위반 생성
+    if bundle.forward.evidence_bundle.snapshots:
+        bundle.forward.evidence_bundle.snapshots.pop(0)
+    with pytest.raises(ManifestError):
+        split_manifest_into_chunks(bundle, chunk_size=2)

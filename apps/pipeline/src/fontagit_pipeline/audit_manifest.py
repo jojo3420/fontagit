@@ -750,6 +750,23 @@ def verify_manifest_file(path: Path, sha256_path: Path) -> FontAuditManifest:
     return verify_manifest_bytes(content, expected)
 
 
+def _validate_chunk_references(chunk_index: int, chunk: ManifestBundle) -> None:
+    """청크 entries가 참조하는 evidence/finding id가 청크에 실재하는지 단정한다.
+
+    잔여 참조가 있으면 부분 적용 사고로 이어지므로 ManifestError로 차단한다.
+    """
+    included_evidence = {str(s["id"]) for s in chunk.forward.evidence_bundle.snapshots}
+    included_findings = {str(f["id"]) for f in chunk.forward.evidence_bundle.findings}
+    for entry in chunk.forward.entries:
+        missing_ev = {str(i) for i in entry.evidence_ids} - included_evidence
+        missing_fd = {str(i) for i in entry.finding_ids} - included_findings
+        if missing_ev or missing_fd:
+            raise ManifestError(
+                f"청크 {chunk_index}: 참조 무결성 위반 evidence={sorted(map(str, missing_ev))} "
+                f"finding={sorted(map(str, missing_fd))}"
+            )
+
+
 def split_manifest_into_chunks(bundle: ManifestBundle, chunk_size: int) -> list[ManifestBundle]:
     """manifest를 청크로 분할한다.
 
@@ -767,7 +784,7 @@ def split_manifest_into_chunks(bundle: ManifestBundle, chunk_size: int) -> list[
     chunks: list[ManifestBundle] = []
 
     # 청크 나누기
-    for i in range(0, len(forward.entries), chunk_size):
+    for chunk_index, i in enumerate(range(0, len(forward.entries), chunk_size)):
         chunk_entries = forward.entries[i : i + chunk_size]
 
         # 참조하는 evidence_id, finding_id 수집 (문자열로 비교)
@@ -800,36 +817,42 @@ def split_manifest_into_chunks(bundle: ManifestBundle, chunk_size: int) -> list[
         )
 
         # forward 청크
-        chunk_forward = FontAuditManifest(
-            run_id=forward.run_id,
-            baseline_sha256=forward.baseline_sha256,
-            generated_at=forward.generated_at,
-            rollback_mode=False,
-            evidence_bundle=filtered_evidence,
-            entries=chunk_entries,
-        )
+        try:
+            chunk_forward = FontAuditManifest(
+                run_id=forward.run_id,
+                baseline_sha256=forward.baseline_sha256,
+                generated_at=forward.generated_at,
+                rollback_mode=False,
+                evidence_bundle=filtered_evidence,
+                entries=chunk_entries,
+            )
+        except ValidationError as exc:
+            raise ManifestError(f"청크 {chunk_index} forward manifest validation 실패: {exc}") from exc
 
         # reverse 청크
-        chunk_reverse = FontAuditManifest(
-            run_id=forward.run_id,
-            baseline_sha256=forward.baseline_sha256,
-            generated_at=forward.generated_at,
-            rollback_mode=True,
-            evidence_bundle=filtered_evidence,
-            entries=[
-                entry.model_copy(update={"before": entry.after, "after": entry.before})
-                for entry in chunk_entries
-            ],
-        )
-
-        chunks.append(
-            ManifestBundle(
-                forward=chunk_forward,
-                reverse=chunk_reverse,
-                forward_sha256=_digest(chunk_forward),
-                reverse_sha256=_digest(chunk_reverse),
+        try:
+            chunk_reverse = FontAuditManifest(
+                run_id=forward.run_id,
+                baseline_sha256=forward.baseline_sha256,
+                generated_at=forward.generated_at,
+                rollback_mode=True,
+                evidence_bundle=filtered_evidence,
+                entries=[
+                    entry.model_copy(update={"before": entry.after, "after": entry.before})
+                    for entry in chunk_entries
+                ],
             )
+        except ValidationError as exc:
+            raise ManifestError(f"청크 {chunk_index} reverse manifest validation 실패: {exc}") from exc
+
+        chunk_bundle = ManifestBundle(
+            forward=chunk_forward,
+            reverse=chunk_reverse,
+            forward_sha256=_digest(chunk_forward),
+            reverse_sha256=_digest(chunk_reverse),
         )
+        _validate_chunk_references(chunk_index, chunk_bundle)
+        chunks.append(chunk_bundle)
 
     return chunks
 
