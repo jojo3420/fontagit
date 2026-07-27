@@ -1317,7 +1317,7 @@ def main_audit_tier_a_meta(args: argparse.Namespace) -> int:
 
 
 def main_audit_kogl_preview(args: argparse.Namespace) -> int:
-    """KOGL 후보 폰트 조회 및 유형 판별 미리보기."""
+    """KOGL 후보 폰트 조회 및 유형 판별 미리보기 (preview 전용, DB 쓰기 없음)."""
     import json
 
     from fontagit_pipeline.audit_kogl import detect_kogl_type
@@ -1336,24 +1336,8 @@ def main_audit_kogl_preview(args: argparse.Namespace) -> int:
         dev_client = create_client(dev_url, dev_secret_key)
         dev_schema = dev_client.schema("fontagit")
 
-        # 3. published fonts 조회
-        logger.info("dev에서 published 폰트 조회...")
-        fonts_response = (
-            dev_schema.table("fonts")
-            .select("id,name_en,license_type,license_evidence_id")
-            .eq("status", "published")
-            .order("id")
-            .execute()
-        )
-
-        if not isinstance(fonts_response.data, list):
-            raise ValueError("fonts query returned invalid data")
-
-        fonts = {f["id"]: f for f in fonts_response.data}
-        logger.info("published 폰트: %d건", len(fonts))
-
-        # 4. 라이선스 스냅샷 조회 (metadata에서 license_text 추출)
-        logger.info("라이선스 스냅샷 조회 및 필터링...")
+        # 3. 라이선스 스냅샷 조회 (metadata 문서 종류)
+        logger.info("라이선스 스냅샷 조회 (metadata)...")
         snapshots_response = (
             dev_schema.table("font_source_snapshots")
             .select("font_id,extracted")
@@ -1364,41 +1348,66 @@ def main_audit_kogl_preview(args: argparse.Namespace) -> int:
         if not isinstance(snapshots_response.data, list):
             raise ValueError("snapshots query returned invalid data")
 
-        # 5. font_id별로 최신 스냅샷만 유지
+        # 4. font_id별로 최신(최근) 스냅샷만 유지
         latest_snapshots: dict[str, dict] = {}
         for snap in snapshots_response.data:
             font_id = snap.get("font_id")
-            if font_id and font_id in fonts:
-                if font_id not in latest_snapshots:
-                    latest_snapshots[font_id] = snap
+            if font_id and font_id not in latest_snapshots:
+                latest_snapshots[font_id] = snap
 
-        logger.info("라이선스 스냅샷: %d건", len(latest_snapshots))
+        logger.info("라이선스 스냅샷: %d건 (폰트별 최신 1건씩)", len(latest_snapshots))
 
-        # 6. 각 폰트의 license_text로 detect_kogl_type 실행
+        # 5. 각 스냅샷의 license_text로 detect_kogl_type 실행
         results: dict[str, object] = {
-            "total_count": len(latest_snapshots),
+            "source": "font_source_snapshots (metadata, latest per font_id)",
+            "query_count": len(latest_snapshots),
             "by_type": {1: [], 2: [], 3: [], 4: []},
             "undetected": [],
+            "extraction_errors": [],
             "summary": {},
         }
 
         for font_id, snapshot in latest_snapshots.items():
-            font_info = fonts.get(font_id)
-            if not font_info:
+            extracted = snapshot.get("extracted")
+
+            # 타입 검증: extracted 필드가 dict인지 확인
+            if not isinstance(extracted, dict):
+                results["extraction_errors"].append(
+                    {
+                        "font_id": font_id,
+                        "slug": "unknown",
+                        "reason": f"extracted is {type(extracted).__name__}, not dict",
+                    }
+                )
                 continue
 
-            extracted = snapshot.get("extracted", {})
-            license_text = extracted.get("license_text", "") if isinstance(extracted, dict) else ""
+            license_text = extracted.get("license_text")
+
+            # license_text가 없거나 None이면 skip (정상 데이터, 오류 아님)
+            if license_text is None:
+                continue
+
+            # 타입 검증: license_text 필드가 str인지 확인 (기대 범위 외)
+            if not isinstance(license_text, str):
+                slug = extracted.get("target_slug", "unknown")
+                results["extraction_errors"].append(
+                    {
+                        "font_id": font_id,
+                        "slug": slug,
+                        "reason": f"license_text is {type(license_text).__name__}, not str",
+                    }
+                )
+                continue
 
             # '공공누리' 포함 여부 확인
-            if "공공누리" not in (license_text or ""):
+            if "공공누리" not in license_text:
                 continue
 
-            detection = detect_kogl_type(license_text or "")
+            detection = detect_kogl_type(license_text)
+            slug = extracted.get("target_slug", "unknown")
             font_entry = {
-                "id": font_id,
-                "name_en": font_info.get("name_en"),
-                "license_type": font_info.get("license_type"),
+                "font_id": font_id,
+                "slug": slug,
                 "detection_reason": detection.reason,
             }
 
@@ -1414,10 +1423,9 @@ def main_audit_kogl_preview(args: argparse.Namespace) -> int:
         for kogl_type in (1, 2, 3, 4):
             summary[f"type_{kogl_type}"] = len(results["by_type"][kogl_type])
         summary["undetected"] = len(results["undetected"])
-        summary["total"] = (
-            sum(len(v) for v in results["by_type"].values())
-            + summary["undetected"]
-        )
+        summary["total_detected"] = sum(len(v) for v in results["by_type"].values())
+        summary["extraction_errors"] = len(results["extraction_errors"])
+        summary["total_with_kogl_text"] = summary["total_detected"] + summary["undetected"]
         results["summary"] = summary
 
         # 8. JSON 저장
@@ -1427,12 +1435,13 @@ def main_audit_kogl_preview(args: argparse.Namespace) -> int:
             encoding="utf-8",
         )
         logger.info(
-            "KOGL preview 완료: type_1=%d type_2=%d type_3=%d type_4=%d undetected=%d (출력=%s)",
+            "KOGL preview 완료: type_1=%d type_2=%d type_3=%d type_4=%d undetected=%d extraction_errors=%d (출력=%s)",
             summary["type_1"],
             summary["type_2"],
             summary["type_3"],
             summary["type_4"],
             summary["undetected"],
+            summary["extraction_errors"],
             args.out,
         )
         return 0

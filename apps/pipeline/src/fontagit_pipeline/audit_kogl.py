@@ -8,7 +8,6 @@ from pydantic import BaseModel
 
 # "공공누리"를 포함하는 텍스트에서 모든 "제X유형" 패턴을 찾는다.
 _KOGL_TYPE_RE = re.compile(r"제\s*(?P<n>[1-4])\s*유형")
-_KOGL_CONTEXT_RE = re.compile(r"공공누리")
 _NEGATION_MARKERS = ("아님", "아닙니다", "해당하지 않", "적용되지 않", "제외")
 _NEGATION_WINDOW = 30
 
@@ -68,7 +67,7 @@ def detect_kogl_type(license_text: str) -> KoglDetection:
     text = license_text or ""
 
     # "공공누리"가 없으면 미검출
-    if not _KOGL_CONTEXT_RE.search(text):
+    if "공공누리" not in text:
         return KoglDetection(kogl_type=None, reason="no_match")
 
     # "공공누리" 컨텍스트 내에서 모든 "제X유형" 찾기
