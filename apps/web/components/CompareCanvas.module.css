@@ -1,136 +1,28 @@
-.container {
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
-  padding: 40px;
-  width: 100%;
-}
-
-.title {
-  font-size: 24px;
-  font-weight: 700;
-  margin: 0;
-}
-
-.subtitle {
-  font-size: 14px;
-  color: var(--gray-600);
-  margin: 0;
-}
-
-.inputRow {
-  display: flex;
-  gap: 12px;
-  height: 60px;
-  border: 1.5px solid var(--point);
-  border-radius: 14px;
-  max-width: 720px;
-  padding: 0;
-  overflow: hidden;
-}
-
-.icon {
-  width: 20px;
-  height: 20px;
-}
-
-.input {
-  flex: 1;
-  border: none;
-  outline: none;
-  padding: 0 16px;
-  font-size: 16px;
-}
-
-.clear {
-  border: none;
-  background: none;
-  padding: 0 16px;
-  cursor: pointer;
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-.presets {
-  display: flex;
-  gap: 8px;
-}
-
-.preset {
-  padding: 4px 8px;
-  background: var(--gray-100);
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.select {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid var(--gray-300);
-  border-radius: 8px;
-  font-size: 14px;
-}
-
-.heroSection {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  padding-top: 24px;
-  border-top: 1px solid var(--gray-200);
-}
-
-.heroLabel {
-  font-weight: 600;
-  font-size: 14px;
-  min-width: 100px;
-}
-
-.heroLabel h3 {
-  margin: 0;
-  font-size: 14px;
-}
-
-.heroRight {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex: 1;
-  max-width: 400px;
-}
-
-.heroSize {
-  font-size: 56px;
-  line-height: 1.4;
-  padding: 32px;
-  word-break: break-all;
-}
-
-.gridSection {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 24px;
-}
-
-.gridCell {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.gridSpecimen {
-  font-size: 20px;
-  line-height: 1.4;
-  padding: 16px;
-  border: 1px solid var(--gray-200);
-  border-radius: 8px;
-  min-height: 120px;
-  word-break: break-all;
-}
-
-.gridInfo {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  font-size: 12px;
+.wrap { display: flex; flex-direction: column; }
+.head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+.title { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -.02em; color: var(--ink); }
+.subtitle { font-size: 13px; color: var(--sub); }
+.inputRow { display: flex; align-items: center; gap: 12px; height: 60px; padding: 0 20px; background: var(--surface); border: 1.5px solid var(--point); border-radius: 14px; max-width: 720px; }
+.icon { flex: none; color: var(--point); }
+.input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; font-size: 20px; font-weight: 600; color: var(--ink); }
+.clear { flex: none; border: none; background: transparent; font-size: 12px; font-weight: 500; color: var(--sub-2); cursor: pointer; }
+.presets { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.preset { padding: 7px 14px; border: 1px solid var(--border); border-radius: var(--radius-pill); font-size: 12.5px; font-weight: 500; color: var(--ink); background: var(--surface); cursor: pointer; }
+.select { border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; font-family: inherit; font-size: 13px; font-weight: 700; color: var(--ink); background: var(--bg); cursor: pointer; min-width: 0; }
+.hero { padding: 44px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-top: 26px; }
+.heroLabel { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 8px; flex-wrap: wrap; }
+.heroRight { display: flex; gap: 10px; align-items: center; }
+.heroSize { font-size: 12px; font-weight: 600; color: var(--sub-2); }
+.heroSpecimen { font-weight: 800; font-size: 96px; line-height: 1; color: var(--ink); letter-spacing: -.03em; word-break: break-all; overflow-wrap: anywhere; }
+.gridHead { font-size: 13px; font-weight: 700; color: var(--ink); margin: 28px 0 16px; }
+.count { font-size: 12px; font-weight: 400; color: var(--sub-2); }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.cell { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 18px 20px; }
+.cellHead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; }
+.cellRight { display: flex; gap: 10px; align-items: center; flex: none; }
+.cellDetail { font-size: 11px; font-weight: 500; color: var(--sub-2); }
+.cellSpecimen { font-size: 36px; line-height: 1.1; color: var(--ink); word-break: break-all; overflow-wrap: anywhere; }
+@media (max-width: 620px) {
+  .heroSpecimen { font-size: 60px; }
+  .grid { grid-template-columns: 1fr; }
 }
