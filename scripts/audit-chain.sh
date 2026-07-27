@@ -23,8 +23,18 @@
 #   ├── bootstrap-manifest.json          (크롤 대상 manifest) + .sha256
 #   ├── audit-report.json                (감사 결과) + .sha256, audit-report.md
 #   └── manifest/
-#       ├── forward.json + forward.sha256
-#       └── reverse.json + reverse.sha256
+#       ├── index.json                   (청크 메타데이터)
+#       ├── chunk-001/
+#       │   ├── forward.json + forward.sha256
+#       │   └── reverse.json + reverse.sha256
+#       ├── chunk-002/
+#       │   ├── forward.json + forward.sha256
+#       │   └── reverse.json + reverse.sha256
+#       └── ...
+#
+# 복구 정책:
+#   - 7단계 중단 시: ./scripts/audit-chain.sh --run-id <run_id>로 재실행
+#   - 빌드부터 재수행되어 이미 적용된 항목은 자동 제외
 #
 set -euo pipefail
 
@@ -221,34 +231,75 @@ step_exit=0
 
 log_success "Findings 자동 승인 완료" "$(($(date +%s) - start_time))"
 
-# --- 6단계: Manifest build ---
-log_step "6/7" "Manifest 빌드 (run_id: ${RUN_ID:0:8}...)"
+# --- 6단계: Manifest build (청크 분할) ---
+log_step "6/7" "Manifest 빌드 (run_id: ${RUN_ID:0:8}..., chunk_size=100)"
 start_time=$(date +%s)
 
 mkdir -p "$manifest_dir"
 step_exit=0
 (cd apps/pipeline && uv run python -m fontagit_pipeline font-audit-manifest build \
   --run-id "$RUN_ID" \
+  --chunk-size 100 \
   --out "$ROOT/$manifest_dir") >>"$LOG_FILE" 2>&1 || step_exit=$?
 [[ $step_exit -eq 0 ]] || fail_step "6/7" "manifest build 실패" "$step_exit"
 
-forward_sha256=$(tr -d '[:space:]' <"$manifest_dir/forward.sha256")
-reverse_sha256=$(tr -d '[:space:]' <"$manifest_dir/reverse.sha256")
-log_success "Manifest 빌드 완료 (forward: ${forward_sha256:0:8}..., reverse: ${reverse_sha256:0:8}...)" "$(($(date +%s) - start_time))"
+# index.json 확인
+if [[ ! -f "$manifest_dir/index.json" ]]; then
+  fail_step "6/7" "index.json 생성 실패" 1
+fi
 
-# --- 7단계: Manifest apply (dev) ---
-log_step "7/7" "Manifest 적용 (dev, forward)"
+total_chunks=$(jq -r '.total_chunks' "$manifest_dir/index.json")
+total_entries=$(jq -r '.total_entries' "$manifest_dir/index.json")
+log_success "Manifest 빌드 완료 (청크: ${total_chunks}, 엔트리: ${total_entries})" "$(($(date +%s) - start_time))"
+
+# --- 7단계: Manifest apply (청크 순차 적용) ---
+log_step "7/7" "Manifest 적용 (dev, 청크 순차 적용)"
 start_time=$(date +%s)
 
-step_exit=0
-(cd apps/pipeline && uv run python -m fontagit_pipeline font-audit-manifest apply \
-  --manifest "$ROOT/$manifest_dir/forward.json" \
-  --sha256 "$ROOT/$manifest_dir/forward.sha256" \
-  --target dev \
-  --confirm-hash "$forward_sha256") >>"$LOG_FILE" 2>&1 || step_exit=$?
-[[ $step_exit -eq 0 ]] || fail_step "7/7" "manifest apply 실패" "$step_exit"
+# 청크 디렉터리 순회 (chunk-001, chunk-002, ...)
+chunk_count=0
+chunk_success=0
+for chunk_dir in "$manifest_dir"/chunk-[0-9][0-9][0-9]; do
+  if [[ ! -d "$chunk_dir" ]]; then
+    continue
+  fi
 
-log_success "Manifest 적용 완료 (dev)" "$(($(date +%s) - start_time))"
+  chunk_num=$(basename "$chunk_dir")
+  forward_manifest="$chunk_dir/forward.json"
+  forward_sha="$chunk_dir/forward.sha256"
+
+  if [[ ! -f "$forward_manifest" ]] || [[ ! -f "$forward_sha" ]]; then
+    echo "ERROR [7/7]: 청크 파일 누락 ($chunk_num)" >&2
+    fail_step "7/7" "청크 파일 누락: $chunk_num" 1
+  fi
+
+  chunk_count=$((chunk_count + 1))
+  forward_sha256=$(tr -d '[:space:]' <"$forward_sha")
+
+  step_exit=0
+  (cd apps/pipeline && uv run python -m fontagit_pipeline font-audit-manifest apply \
+    --manifest "$ROOT/$forward_manifest" \
+    --sha256 "$ROOT/$forward_sha" \
+    --target dev \
+    --confirm-hash "$forward_sha256") >>"$LOG_FILE" 2>&1 || step_exit=$?
+
+  if [[ $step_exit -eq 0 ]]; then
+    chunk_success=$((chunk_success + 1))
+    echo "    ✓ $chunk_num 적용 완료 (SHA256: ${forward_sha256:0:8}...)"
+  else
+    echo "ERROR [7/7]: $chunk_num 적용 실패 (exit code: $step_exit)" >&2
+    echo ""
+    echo "복구 방법:"
+    echo "  ./scripts/audit-chain.sh --run-id ${RUN_ID}"
+    exit "$step_exit"
+  fi
+done
+
+if [[ $chunk_count -eq 0 ]]; then
+  fail_step "7/7" "청크 디렉터리를 찾을 수 없습니다" 1
+fi
+
+log_success "Manifest 적용 완료 (${chunk_success}/${chunk_count} 청크 적용됨)" "$(($(date +%s) - start_time))"
 
 echo ""
 echo "✓ 감사 체인 완료"

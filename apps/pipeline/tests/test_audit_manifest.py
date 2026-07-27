@@ -14,8 +14,10 @@ from fontagit_pipeline.audit_manifest import (
     ManifestError,
     _evidence_role_is_valid,
     build_manifest,
+    split_manifest_into_chunks,
     verify_manifest_bytes,
     verify_manifest_file,
+    write_chunked_manifest_bundles,
     write_manifest_bundle,
 )
 
@@ -105,7 +107,9 @@ def _row() -> dict[str, object]:
     }
 
 
-def _finding(field_name: str, before: object, proposed: object) -> dict[str, object]:
+def _finding(
+    field_name: str, before: object, proposed: object, font_id: str | None = None
+) -> dict[str, object]:
     evidence_id = (
         LICENSE_SNAPSHOT_ID
         if field_name.startswith("license_") or field_name == "license_verified"
@@ -114,7 +118,7 @@ def _finding(field_name: str, before: object, proposed: object) -> dict[str, obj
     return {
         "id": str(FINDING_ID if field_name == "download_url" else UUID(int=FINDING_ID.int + 1)),
         "run_id": str(RUN_ID),
-        "font_id": str(FONT_ID),
+        "font_id": font_id or str(FONT_ID),
         "field_name": field_name,
         "before_value": before,
         "proposed_value": proposed,
@@ -314,3 +318,70 @@ def test_build_manifest_snapshot_run_id_invalid_uuid() -> None:
 
     with pytest.raises(ManifestError, match="snapshot.run_id"):
         build_manifest(_run(), [_finding("download_url", None, "https://clova.ai/font.zip")], [row])
+
+
+def test_split_manifest_into_chunks_basic() -> None:
+    """청크 분할: chunk_size=1로 1개 엔트리 bundle을 분할해도 1개 청크 생성."""
+    findings = [
+        _finding("download_url", None, "https://clova.ai/font.zip"),
+    ]
+    bundle = build_manifest(_run(), findings, [_row()])
+
+    chunks = split_manifest_into_chunks(bundle, chunk_size=1)
+
+    assert len(chunks) == 1
+    assert len(chunks[0].forward.entries) == 1
+
+
+def test_split_manifest_into_chunks_evidence_filtering() -> None:
+    """청크 분할: 각 청크의 evidence_bundle은 참조하는 snapshot/finding만 포함."""
+    findings = [
+        _finding("download_url", None, "https://clova.ai/font.zip"),
+    ]
+    bundle = build_manifest(_run(), findings, [_row()])
+    chunks = split_manifest_into_chunks(bundle, chunk_size=1)
+
+    assert len(chunks) == 1
+    chunk = chunks[0]
+    assert len(chunk.forward.evidence_bundle.snapshots) >= 1
+    assert len(chunk.forward.evidence_bundle.findings) == 1
+
+
+def test_split_manifest_into_chunks_sha_consistency() -> None:
+    """청크 분할: 각 청크의 SHA는 계산한 값과 일치."""
+    from fontagit_pipeline.audit_manifest import _digest
+
+    findings = [
+        _finding("download_url", None, "https://clova.ai/font.zip"),
+    ]
+    bundle = build_manifest(_run(), findings, [_row()])
+    chunks = split_manifest_into_chunks(bundle, chunk_size=1)
+
+    for chunk in chunks:
+        expected_sha = _digest(chunk.forward)
+        assert chunk.forward_sha256 == expected_sha
+
+
+def test_write_chunked_manifest_bundles_creates_index(tmp_path: Path) -> None:
+    """청크 저장: index.json이 생성되고 메타데이터가 포함된다."""
+    findings = [
+        _finding("download_url", None, "https://clova.ai/font.zip"),
+    ]
+    bundle = build_manifest(_run(), findings, [_row()])
+    chunks = split_manifest_into_chunks(bundle, chunk_size=1)
+
+    index = write_chunked_manifest_bundles(chunks, tmp_path)
+
+    assert index["total_chunks"] == 1
+    assert index["total_entries"] == 1
+    assert len(index["chunks"]) == 1
+
+    index_file = tmp_path / "index.json"
+    assert index_file.exists()
+
+    chunk_dirs = sorted([d for d in tmp_path.iterdir() if d.is_dir() and d.name.startswith("chunk-")])
+    assert len(chunk_dirs) == 1
+    assert (chunk_dirs[0] / "forward.json").exists()
+    assert (chunk_dirs[0] / "forward.sha256").exists()
+    assert (chunk_dirs[0] / "reverse.json").exists()
+    assert (chunk_dirs[0] / "reverse.sha256").exists()

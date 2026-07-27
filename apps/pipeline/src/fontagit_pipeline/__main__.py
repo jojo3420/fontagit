@@ -796,13 +796,19 @@ def main_audit_manifest_build(args: argparse.Namespace) -> int:
     - 해당 run의 approved findings 조회
     - 현재 font 스냅샷 조회
     - build_manifest로 번들 생성
-    - write_manifest_bundle로 파일 저장
+    - write_manifest_bundle로 파일 저장 (또는 --chunk-size로 청크 분할)
 
     build는 approve를 하지 않는다 — 이미 approved인 finding만 조회한다.
     """
     from uuid import UUID
 
-    from fontagit_pipeline.audit_manifest import ManifestError, build_manifest, write_manifest_bundle
+    from fontagit_pipeline.audit_manifest import (
+        ManifestError,
+        build_manifest,
+        split_manifest_into_chunks,
+        write_chunked_manifest_bundles,
+        write_manifest_bundle,
+    )
     from fontagit_pipeline.audit_store import SupabaseAuditStore
     from fontagit_pipeline.config import load_audit_settings
 
@@ -866,13 +872,29 @@ def main_audit_manifest_build(args: argparse.Namespace) -> int:
             bundle.reverse_sha256[:8] + "...",
         )
 
-        # 5. 파일 저장
-        paths = write_manifest_bundle(bundle, args.out)
-        logger.info(
-            "manifest 번들 저장: forward=%s reverse=%s",
-            paths.forward,
-            paths.reverse,
-        )
+        # 5. 파일 저장 (청크 분할 여부)
+        chunk_size = getattr(args, "chunk_size", 0)
+        if chunk_size > 0:
+            chunks = split_manifest_into_chunks(bundle, chunk_size)
+            logger.info(
+                "manifest 청크 분할: chunk_size=%d total_chunks=%d",
+                chunk_size,
+                len(chunks),
+            )
+            index = write_chunked_manifest_bundles(chunks, args.out)
+            logger.info(
+                "청크 manifest 저장: chunk_count=%d total_entries=%d out=%s",
+                index.get("total_chunks"),
+                index.get("total_entries"),
+                args.out,
+            )
+        else:
+            paths = write_manifest_bundle(bundle, args.out)
+            logger.info(
+                "manifest 번들 저장: forward=%s reverse=%s",
+                paths.forward,
+                paths.reverse,
+            )
 
         return 0
     except ValueError as exc:
@@ -1328,6 +1350,7 @@ if __name__ == "__main__":
     manifest_build_parser.add_argument("--run-id", required=True, help="조회할 감사 run의 UUID")
     manifest_build_parser.add_argument("--target", choices=["dev", "prod"], default="dev", help="현재 상태 조회 대상")
     manifest_build_parser.add_argument("--out", type=Path, required=True, help="manifest 번들 저장 디렉터리")
+    manifest_build_parser.add_argument("--chunk-size", type=int, default=0, help="청크 분할 크기 (0=분할 안함, 기본값)")
     manifest_build_parser.set_defaults(func=main_audit_manifest_build)
 
     review_parser = subparsers.add_parser(
