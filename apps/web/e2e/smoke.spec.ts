@@ -6,7 +6,6 @@ const routes = [
   { path: '/fonts/pretendard', name: 'Pretendard Detail' },
   { path: '/fonts/sandoll-gothic-neo', name: 'Sandoll Gothic Neo Detail' },
   { path: '/trends', name: 'Trends' },
-  { path: '/playground', name: 'Playground' },
   { path: '/collections', name: 'Collections' },
   { path: '/collections/dawn-serif', name: 'Collection Detail' },
   { path: '/submit', name: 'Submit' },
@@ -51,16 +50,21 @@ test('smoke: 404 Page renders branded content', async ({ page }) => {
   await expect(page.getByRole('link', { name: '홈으로 돌아가기' })).toBeVisible();
 });
 
-test('playground canvas updates all specimens live', async ({ page }) => {
-  await page.goto('/playground/', { waitUntil: 'networkidle' });
-  await page.getByLabel('캔버스 입력').fill('불꽃');
+test('home compare canvas updates specimens live', async ({ page }) => {
+  await page.goto('/', { waitUntil: 'networkidle' });
+  const compare = page.locator('#compare');
+  await compare.scrollIntoViewIfNeeded();
+  const input = page.getByLabel('비교 문장 입력');
+  await input.fill('불꽃');
   await expect(page.getByText('불꽃').first()).toBeVisible();
 });
 
-test('playground preset fills the input', async ({ page }) => {
-  await page.goto('/playground/', { waitUntil: 'networkidle' });
+test('home compare canvas preset fills the input', async ({ page }) => {
+  await page.goto('/', { waitUntil: 'networkidle' });
+  const compare = page.locator('#compare');
+  await compare.scrollIntoViewIfNeeded();
   await page.getByRole('button', { name: '당신의 폰트 아지트' }).click();
-  await expect(page.getByLabel('캔버스 입력')).toHaveValue('당신의 폰트 아지트');
+  await expect(page.getByLabel('비교 문장 입력')).toHaveValue('당신의 폰트 아지트');
 });
 
 test('smoke: 404 Page captures screenshot (desktop/mobile)', async ({ page }) => {
@@ -152,12 +156,10 @@ test('theme toggle switches data-theme', async ({ page }) => {
   expect(['light', 'dark']).toContain(after);
 });
 
-test('header nav contains canvas and compare links (desktop)', async ({ page }) => {
+test('header nav hides canvas and compare links (desktop)', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.goto('/', { waitUntil: 'networkidle' });
   const nav = page.getByRole('navigation').first();
-  await expect(nav.getByRole('link', { name: '캔버스' })).toBeVisible();
-  await expect(nav.getByRole('link', { name: '캔버스' })).toHaveAttribute('href', /^\/playground\/?$/);
-  await expect(nav.getByRole('link', { name: '비교' })).toBeVisible();
-  await expect(nav.getByRole('link', { name: '비교' })).toHaveAttribute('href', /^\/#compare$/);
+  await expect(nav.getByRole('link', { name: '캔버스' })).toBeHidden();
+  await expect(nav.getByRole('link', { name: '비교' })).toBeHidden();
 });
