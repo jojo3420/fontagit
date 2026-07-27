@@ -7,6 +7,7 @@ import {
   type AuditPermission,
 } from "@/types/font";
 import { FontRow, CollectionRow } from "./types";
+import { normalizeWeights } from "@/lib/weightLabels";
 
 const SLUG_TO_FONTKEY: Record<string, FontKey | null> = {
   pretendard: "pretendard",
@@ -63,6 +64,8 @@ export function rowToFont(row: FontRow, aliases: string[]): Font {
     category: row.category_ko as Category,
     foundry: row.foundry ?? "",
     availableWeights: row.weights.length > 0 ? row.weights : [400],
+    confirmedWeights: normalizeWeights(row.weights) ?? null,
+    variants: row.variants,
     moves: 0,
     license: {
       commercial: row.is_commercial_free ? "yes" : "no",

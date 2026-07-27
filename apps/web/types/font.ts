@@ -47,6 +47,8 @@ export interface Font {
   category: Category;
   foundry: string;
   availableWeights: number[]; // 단일 굵기 폰트는 [400]
+  confirmedWeights?: number[] | null;
+  variants?: string[];
   moves: number;
   license: License;
   /** 이전 데이터 호환용 주소. 신규 화면은 아래 감사 필드를 우선한다. */

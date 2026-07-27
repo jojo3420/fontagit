@@ -4,7 +4,7 @@ import { getFontBySlug, getAllSlugs, resolveFreeAlternatives } from "@/lib/data"
 import { getSiteUrl } from "@/lib/seo";
 import { isGlyphCheckSupported } from "@/lib/glyphSupport";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import { SpecimenBox } from "@/components/SpecimenBox";
+import { DetailSpecimenPanel } from "@/components/DetailSpecimenPanel";
 import { GlyphChecker } from "@/components/GlyphChecker";
 import { LicenseSummaryCard } from "@/components/LicenseSummaryCard";
 import { AlternativesCard } from "@/components/AlternativesCard";
@@ -122,9 +122,9 @@ function PublishedFontDetail({ font, alternatives }: { font: Font; alternatives:
             <TierChip tier={font.tier} />
           </div>
           <p className={styles.meta}>
-            {font.foundry} {String.fromCharCode(183)} {font.availableWeights.length}가지 굵기 {String.fromCharCode(183)} 이동 {font.moves.toLocaleString()}회
+            {font.foundry} {String.fromCharCode(183)} {font.confirmedWeights?.length ? `${font.confirmedWeights.length}가지 굵기` : "굵기 정보 미확인"} {String.fromCharCode(183)} 이동 {font.moves.toLocaleString()}회
           </p>
-          <SpecimenBox font={font} editable={!isPaid} caption={caption} />
+          <DetailSpecimenPanel font={font} editable={!isPaid} caption={caption} />
           {isGlyphCheckSupported(font.fontKey, font.tier) && (
             <GlyphChecker fontKey={font.fontKey} fontName={font.nameKo} tier={font.tier} />
           )}

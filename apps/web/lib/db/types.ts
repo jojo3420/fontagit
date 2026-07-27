@@ -9,6 +9,7 @@ export interface FontRow {
   source_tier?: SourceTier;
   category_ko: string;
   weights: number[];
+  variants: string[];
   is_commercial_free: boolean;
   license_type: string | null;
   official_url: string | null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveFontPreview } from "@/lib/fontPreview";
+import { resolveFontPreview, resolveDetailFontPreview } from "@/lib/fontPreview";
 
 describe("resolveFontPreview", () => {
   it("미매핑 Tier A 폰트를 Google CSS2 URL과 실제 family로 연결한다", () => {
@@ -41,5 +41,39 @@ describe("resolveFontPreview", () => {
       fontFamily: '"Pretendard Variable", "Pretendard", sans-serif',
       stylesheetUrl: null,
     });
+  });
+});
+
+describe("resolveDetailFontPreview", () => {
+  it("Tier A는 정규화 조합으로 ital,wght URL을 만든다(튜플 오름차순)", () => {
+    const result = resolveDetailFontPreview({
+      fontKey: null,
+      nameEn: "Noto Sans KR",
+      sourceTier: "A",
+      variants: ["700italic", "regular", "700", "italic"],
+    });
+    expect(result.combos).toHaveLength(4);
+    expect(result.stylesheetUrl).toBe(
+      "https://fonts.googleapis.com/css2?family=Noto+Sans+KR%3Aital%2Cwght%400%2C400%3B0%2C700%3B1%2C400%3B1%2C700&display=swap"
+    );
+  });
+
+  it("Tier B-C와 조합 없음은 외부 요청을 만들지 않는다", () => {
+    expect(
+      resolveDetailFontPreview({
+        fontKey: null,
+        nameEn: "어떤체",
+        sourceTier: "B",
+        variants: ["regular"],
+      })
+    ).toEqual({ fontFamily: expect.any(String), stylesheetUrl: null, combos: [] });
+    expect(
+      resolveDetailFontPreview({
+        fontKey: null,
+        nameEn: "Some Font",
+        sourceTier: "A",
+        variants: [],
+      }).stylesheetUrl
+    ).toBeNull();
   });
 });
