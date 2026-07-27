@@ -409,8 +409,11 @@ def compare_metadata(
         is_downgrade = kind_is_applicable and not may_update_source_kind(
             target.download_source_kind, proposed_download_kind
         )
+        # 등급 체계 밖 출처(discovery)의 URL은 현재 등급이 없을 때만 제안한다.
+        # 이미 official/public URL이 있는 폰트에 미검증 URL이 들어가면 등급 표시와 실제 링크가 어긋난다.
+        url_allowed = not is_downgrade and (kind_is_applicable or target.download_source_kind is None)
 
-        if not is_downgrade and download_url != target.download_url:
+        if url_allowed and download_url != target.download_url:
             findings.append(
                 FindingDraft(
                     font_id=target.font_id,

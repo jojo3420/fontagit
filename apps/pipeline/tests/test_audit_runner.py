@@ -1594,6 +1594,42 @@ def test_download_official_domain_is_auto(monkeypatch: pytest.MonkeyPatch) -> No
         assert download_kind_drafts[0].auto_applicable is True
 
 
+def test_download_discovery_url_skipped_when_kind_already_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    """현재 등급이 official이면 등급 체계 밖(discovery) 출처의 URL은 제안하지 않는다."""
+    fixture = Path(__file__).parent / "fixtures" / "audit" / "noonnu-white-tailed-eagle.html"
+    reference_html = fixture.read_bytes()
+
+    def noonnu_fetch(url: str) -> FetchResult:
+        content = reference_html if url.endswith("/613") else b"<html><body>cta</body></html>"
+        return FetchResult(200, url, content, "1" * 64, 0)
+
+    def font_fetch(url: str, max_bytes: int = 32 * 1024 * 1024) -> FetchResult:
+        return _fetched(url)
+
+    monkeypatch.setattr("fontagit_pipeline.audit_runner.sys.platform", "linux")
+
+    target = replace(
+        _targets()[0],
+        foundry=None,
+        name_ko="흰꼬리수리",
+        candidates=(),
+        download_url="https://official.example/dl",
+        download_source_kind="official",
+    )
+    store = InMemoryAuditStore()
+    # 빈 registry = 모든 도메인이 discovery
+    report = run_metadata_audit(
+        [target], store, registry={"version": 1, "entries": []}, fetcher=noonnu_fetch, font_fetcher=font_fetch
+    )
+
+    if report.broken_count > 0:
+        raise AssertionError(f"Broken count: {report.broken_count}, errors: {report.errors}")
+
+    drafts = [store.finding_draft(item) for item in report.finding_ids]
+    download_drafts = [d for d in drafts if d.field_name in ("download_url", "download_source_kind")]
+    assert len(download_drafts) == 0
+
+
 def test_download_only_file_links_skips_draft(monkeypatch: pytest.MonkeyPatch) -> None:
     """직링크만 있으면 download draft를 생성하지 않는다."""
     fixture = Path(__file__).parent / "fixtures" / "audit" / "noonnu-white-tailed-eagle.html"
