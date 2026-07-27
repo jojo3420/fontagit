@@ -87,7 +87,7 @@ export function DetailSpecimenPanel({
   useEffect(() => {
     if (detail.combos.length === 0) return;
     let cancelled = false;
-    const familyName = detail.fontFamily.trim();
+    const familyName = font.nameEn.trim();
     const markAll = (status: ComboLoadStatus) => {
       if (cancelled) return;
       setStatuses(
@@ -135,7 +135,7 @@ export function DetailSpecimenPanel({
       cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, [detail]);
+  }, [detail, font.nameEn]);
 
   return (
     <>
