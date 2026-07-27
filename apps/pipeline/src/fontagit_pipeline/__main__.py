@@ -1213,7 +1213,7 @@ def main_audit_tier_a_meta(args: argparse.Namespace) -> int:
         # published + source_tier='A' 폰트 조회
         query = (
             dev_schema.table("fonts")
-            .select("id,name_en,download_source_kind,license_source_kind")
+            .select("id,slug,name_en,download_source_kind,license_source_kind")
             .eq("status", "published")
             .eq("source_tier", "A")
             .order("id")
@@ -1232,6 +1232,7 @@ def main_audit_tier_a_meta(args: argparse.Namespace) -> int:
             if not all([font_id, name_en]):
                 logger.warning("skipping invalid font row: %s", row)
                 continue
+            slug = row.get("slug")
             download_source_kind = row.get("download_source_kind")
             license_source_kind = row.get("license_source_kind")
             # Tier A는 google-fonts 출처이고, 대부분 OFL 라이선스 사용
@@ -1241,6 +1242,7 @@ def main_audit_tier_a_meta(args: argparse.Namespace) -> int:
                     font_id=font_id,
                     name_en=name_en,
                     license_type="OFL",  # google-fonts 기본값
+                    slug=slug if isinstance(slug, str) else None,
                     noonnu_foundry=None,  # dev에서는 눈누 매핑 미제공
                     download_source_kind=(
                         download_source_kind if isinstance(download_source_kind, str) else None
@@ -1270,6 +1272,8 @@ def main_audit_tier_a_meta(args: argparse.Namespace) -> int:
             )
             report["results"] = result
             report["target_count"] = len(targets)
+            report["findings"] = result.get("findings", [])
+            report["errors"] = result.get("errors", [])
             logger.info("Tier A 메타 dry-run 완료: %s", result)
         else:
             # 실제 저장: SupabaseAuditStore + run 생성
@@ -1308,6 +1312,8 @@ def main_audit_tier_a_meta(args: argparse.Namespace) -> int:
             report["results"] = result
             report["target_count"] = len(targets)
             report["run_id"] = str(run_id)
+            report["findings"] = result.get("findings", [])
+            report["errors"] = result.get("errors", [])
             logger.info("Tier A 메타 저장 완료: run_id=%s, %s", run_id, result)
 
         # 보고서 저장

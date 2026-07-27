@@ -136,9 +136,23 @@ class TierATarget(BaseModel):
     font_id: UUID
     name_en: str
     license_type: str
+    slug: str | None = None  # 검수 리포트 표시용(DB 저장에는 미사용)
     noonnu_foundry: str | None = None
     download_source_kind: str | None = None
     license_source_kind: str | None = None
+
+
+def _finding_detail(target: TierATarget, finding: FindingDraft) -> dict[str, object]:
+    """검수용 리포트에 담을 finding 상세 레코드를 만든다."""
+    return {
+        "slug": target.slug,
+        "name_en": target.name_en,
+        "field_name": finding.field_name,
+        "before_value": finding.before_value,
+        "proposed_value": finding.proposed_value,
+        "auto_applicable": finding.auto_applicable,
+        "review_reason": finding.review_reason,
+    }
 
 
 def collect_tier_a_meta(
@@ -163,7 +177,8 @@ def collect_tier_a_meta(
         fetcher: fetch 함수(기본값: fetch_public_url)
 
     Returns:
-        수집 결과 요약 dict (target_count, success_count, error_count, findings_count)
+        수집 결과 요약 dict (target_count, success_count, error_count, findings_created,
+        findings: 검수용 finding 상세 배열, errors: 실패 대상 상세 배열)
     """
     if fetcher is None:
         fetcher = fetch_public_url
@@ -171,6 +186,8 @@ def collect_tier_a_meta(
     success_count = 0
     error_count = 0
     findings_created = 0
+    findings_detail: list[dict[str, object]] = []
+    errors_detail: list[dict[str, object]] = []
 
     for target in targets:
         try:
@@ -188,6 +205,13 @@ def collect_tier_a_meta(
                     result.status,
                 )
                 error_count += 1
+                errors_detail.append(
+                    {
+                        "slug": target.slug,
+                        "name_en": target.name_en,
+                        "reason": f"metadata_pb_fetch_failed:http_{result.status}",
+                    }
+                )
                 continue
 
             # 파싱
@@ -216,6 +240,7 @@ def collect_tier_a_meta(
             if not dry_run:
                 store.save_finding(run_id, finding_foundry)
             findings_created += 1
+            findings_detail.append(_finding_detail(target, finding_foundry))
 
             # 2. foundry_url 필드 (정규화 사전의 evidence_url)
             if foundry_res.value is not None:
@@ -234,6 +259,7 @@ def collect_tier_a_meta(
                     if not dry_run:
                         store.save_finding(run_id, finding_foundry_url)
                     findings_created += 1
+                    findings_detail.append(_finding_detail(target, finding_foundry_url))
 
             # 3. download_url + download_source_kind (쌍으로 생성)
             specimen_source_kind = registry.classify(specimen_url)
@@ -251,6 +277,7 @@ def collect_tier_a_meta(
                 if not dry_run:
                     store.save_finding(run_id, finding_download_url)
                 findings_created += 1
+                findings_detail.append(_finding_detail(target, finding_download_url))
 
                 finding_download_kind = FindingDraft(
                     font_id=target.font_id,
@@ -265,6 +292,7 @@ def collect_tier_a_meta(
                 if not dry_run:
                     store.save_finding(run_id, finding_download_kind)
                 findings_created += 1
+                findings_detail.append(_finding_detail(target, finding_download_kind))
 
             # 4. license_source_url 필드
             license_source_kind = registry.classify(license_source_url)
@@ -282,6 +310,7 @@ def collect_tier_a_meta(
                 if not dry_run:
                     store.save_finding(run_id, finding_license_url)
                 findings_created += 1
+                findings_detail.append(_finding_detail(target, finding_license_url))
 
             success_count += 1
 
@@ -293,10 +322,19 @@ def collect_tier_a_meta(
                 str(exc),
             )
             error_count += 1
+            errors_detail.append(
+                {
+                    "slug": target.slug,
+                    "name_en": target.name_en,
+                    "reason": f"{type(exc).__name__}:{exc}",
+                }
+            )
 
     return {
         "target_count": len(targets),
         "success_count": success_count,
         "error_count": error_count,
         "findings_created": findings_created,
+        "findings": findings_detail,
+        "errors": errors_detail,
     }

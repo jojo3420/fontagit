@@ -94,6 +94,7 @@ def test_collect_tier_a_meta_success() -> None:
             font_id=font_id,
             name_en="Noto Sans",
             license_type="OFL",
+            slug="noto-sans",
             noonnu_foundry="네이버",
         )
     ]
@@ -141,6 +142,29 @@ fonts {
     # 5개 필드: foundry, foundry_url, download_url, download_source_kind, license_source_url
     assert result["findings_created"] >= 5
 
+    # dry-run 검수용 findings 상세: 개수가 findings_created와 일치하고 필수 키를 담는다
+    findings = result["findings"]
+    assert len(findings) == result["findings_created"]
+    expected_keys = {
+        "slug",
+        "name_en",
+        "field_name",
+        "before_value",
+        "proposed_value",
+        "auto_applicable",
+        "review_reason",
+    }
+    for finding in findings:
+        assert expected_keys.issubset(finding.keys())
+        assert finding["slug"] == "noto-sans"
+        assert finding["name_en"] == "Noto Sans"
+
+    foundry_finding = next(f for f in findings if f["field_name"] == "foundry")
+    assert foundry_finding["before_value"] == "네이버"
+    assert foundry_finding["proposed_value"] == "네이버"
+    assert foundry_finding["auto_applicable"] is True
+    assert result["errors"] == []
+
 
 def test_collect_tier_a_meta_fetch_failure() -> None:
     """fetch 실패 시 skip + 로그 + findings 0건."""
@@ -156,6 +180,7 @@ def test_collect_tier_a_meta_fetch_failure() -> None:
             font_id=font_id,
             name_en="Unknown Font",
             license_type="OFL",
+            slug="unknown-font",
             noonnu_foundry=None,
         )
     ]
@@ -186,6 +211,14 @@ def test_collect_tier_a_meta_fetch_failure() -> None:
     assert result["success_count"] == 0
     assert result["error_count"] == 1
     assert result["findings_created"] == 0
+    assert result["findings"] == []
+
+    # 실패 건 상세: slug/name_en/reason으로 사람이 원인을 확인할 수 있어야 한다
+    assert len(result["errors"]) == 1
+    error = result["errors"][0]
+    assert error["slug"] == "unknown-font"
+    assert error["name_en"] == "Unknown Font"
+    assert "404" in error["reason"]
 
 
 def test_collect_tier_a_meta_downgrade_block() -> None:
