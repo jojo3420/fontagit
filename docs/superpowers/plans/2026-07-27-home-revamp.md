@@ -32,7 +32,7 @@
 
 **Interfaces:**
 - Consumes: `fontagit_pipeline.config.load_audit_settings()` — `AuditSettings`에 `dev_write_credentials() -> tuple[str, str]`, `prod_write_credentials() -> tuple[str, str]` 존재 (ofl_verify.py:202-206 참고)
-- Produces: `resolve_category(tags: list[str], current: str) -> str`, `plan_recategorization(rows: list[dict]) -> dict`, CLI `python -m fontagit_pipeline.recategorize [--apply] [--target dev|prod]` (Task 2가 실행)
+- Produces: `resolve_category(tags: list[str] | None, current: str) -> str`, `plan_recategorization(rows: list[dict]) -> dict` (키: changes/counts/distribution_after — 구조는 Step 1 테스트가 고정), CLI `python -m fontagit_pipeline.recategorize [--apply] [--target dev|prod]` (Task 2가 실행)
 
 - [ ] **Step 1: 실패하는 테스트 작성**
 
@@ -303,6 +303,8 @@ git commit -m "feat: 태그 근거 분류 재정비 엔진 추가 (#128)"
 
 **Files:** 코드 변경 없음 (Task 1의 CLI 실행과 리포트 검증만)
 
+> 경로 기준: 셸 명령은 `apps/pipeline`에서 실행하며 리포트는 `apps/pipeline/output/audit/`에 생성된다. `git add`는 저장소 루트 기준 경로를 쓴다.
+
 **Interfaces:**
 - Consumes: Task 1의 CLI. env는 `apps/web/.env.local`(dev)-`.env.production`(prod)을 config.py가 로드함 (별도 .env 없음)
 
@@ -323,17 +325,28 @@ Expected: `PATCH 완료: 성공=N, 실패=0`
 Run(재실행): `uv run python -m fontagit_pipeline.recategorize --target dev`
 Expected: `changed=0` (모든 변경이 반영되어 더 바꿀 게 없음 = 수렴 증거)
 
+Run(리포트 JSON 기준 재확인): `jq '.counts.changed' output/audit/recategorize-dev-report.json`
+Expected: `0` (로그 문자열이 아닌 리포트 파일로 증명)
+
 - [ ] **Step 4: 🛑 prod 적용 전 사용자 확인 (게이트)**
 
 dev 리포트 요약(변경 수, 전후 분포)을 사용자에게 보여주고 prod 적용 승인을 받는다. **승인 없이 다음 스텝 진행 금지.**
 
-- [ ] **Step 5: prod dry-run - 적용 - 수렴 확인**
+- [ ] **Step 5: prod dry-run 및 리포트 검토 (이 스텝에서는 apply 금지)**
+
+```bash
+cd apps/pipeline && uv run python -m fontagit_pipeline.recategorize --target prod
+```
+
+`output/audit/recategorize-prod-report.json`의 changed 수와 분포를 확인한다. dev 리포트와 크게 다르면(prod 데이터 상이) 적용하지 말고 사용자에게 보고한다.
+
+- [ ] **Step 5-1: prod 적용 및 수렴 확인** (Step 4 승인 + Step 5 리포트 이상 없음 전제)
 
 ```bash
 cd apps/pipeline
-uv run python -m fontagit_pipeline.recategorize --target prod          # 리포트 확인
-uv run python -m fontagit_pipeline.recategorize --target prod --apply  # 적용
-uv run python -m fontagit_pipeline.recategorize --target prod          # changed=0 확인
+uv run python -m fontagit_pipeline.recategorize --target prod --apply
+uv run python -m fontagit_pipeline.recategorize --target prod          # 재실행 dry-run
+jq '.counts.changed' output/audit/recategorize-prod-report.json        # Expected: 0
 ```
 
 - [ ] **Step 6: 리포트 파일 커밋**
@@ -376,6 +389,8 @@ git commit -m "chore: 분류 재정비 dev/prod 적용 리포트 기록 (#128)"
 ```typescript
     createdAt: row.created_at,
 ```
+
+> 근거: `getAllFonts`는 `.select("*")`(lib/db/fonts.ts:13)라 `created_at`이 이미 조회된다. 쿼리 수정은 불필요.
 
 - [ ] **Step 2: 타입-테스트 회귀 확인**
 
@@ -492,14 +507,18 @@ export interface ChipDef {
   query: string;
 }
 
+// 기존 lib/filters.ts buildFilterQuery와 동일하게 URLSearchParams로 인코딩 통일
+const toQuery = (params: Record<string, string>): string =>
+  new URLSearchParams(params).toString();
+
 export const CHIP_DEFS: ChipDef[] = [
-  { key: "all", label: "전체", query: "sort=popular" },
-  { key: "고딕", label: "고딕", query: "category=고딕&sort=popular" },
-  { key: "명조", label: "명조", query: "category=명조&sort=popular" },
-  { key: "손글씨", label: "손글씨", query: "category=손글씨&sort=popular" },
-  { key: "장식", label: "장식", query: "category=장식&sort=popular" },
-  { key: "free", label: "무료", query: "tier=free&sort=popular" },
-  { key: "paid", label: "유료", query: "tier=paid&sort=popular" },
+  { key: "all", label: "전체", query: toQuery({ sort: "popular" }) },
+  { key: "고딕", label: "고딕", query: toQuery({ category: "고딕", sort: "popular" }) },
+  { key: "명조", label: "명조", query: toQuery({ category: "명조", sort: "popular" }) },
+  { key: "손글씨", label: "손글씨", query: toQuery({ category: "손글씨", sort: "popular" }) },
+  { key: "장식", label: "장식", query: toQuery({ category: "장식", sort: "popular" }) },
+  { key: "free", label: "무료", query: toQuery({ tier: "free", sort: "popular" }) },
+  { key: "paid", label: "유료", query: toQuery({ tier: "paid", sort: "popular" }) },
 ];
 
 export const PER_CHIP = 8;
@@ -582,6 +601,8 @@ git commit -m "feat: 홈 미리보기 큐레이션 유틸 추가 (#128)"
 **Interfaces:**
 - Consumes: Task 4의 `HomePreview`, `CHIP_DEFS`, `badgeFor`, `ChipKey`. 기존 `FilterChip`(`{active?, children, onClick?}`), `EmptyState`(`{title, description, actionHref?, actionLabel?}`), `FontCard`
 - Produces: `HomeExplorer({ preview }: { preview: HomePreview })` 클라이언트 컴포넌트, `FontCard`의 새 optional prop `badge?: "인기" | "NEW"`
+
+> "전체를 다음으로 교체" 공통 지시: 교체 전 반드시 현재 파일을 열어 이 계획이 전제한 구조(props-import)와 일치하는지 확인한다. 다르면(다른 작업이 먼저 수정한 경우) 전체 교체하지 말고 필요한 변경분만 이식하고 차이를 보고한다.
 
 - [ ] **Step 1: 실패하는 테스트 작성**
 
@@ -680,6 +701,15 @@ export function FontCard({
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
+}
+
+/* 긴 폰트명이 뱃지-티어칩과 겹치지 않게 말줄임 */
+.foot .name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .badge {
@@ -1486,7 +1516,11 @@ git commit -m "feat: 페어링 프리셋과 비교 보드 프리셋 로드 추�
 # apps/pipeline/tests/test_collections_seed.py
 """collections_seed 후보 선정 로직 테스트."""
 
-from fontagit_pipeline.collections_seed import NEW_COLLECTIONS, pick_candidates
+from fontagit_pipeline.collections_seed import (
+    NEW_COLLECTIONS,
+    pick_candidates,
+    should_create,
+)
 
 
 def _font(slug: str, tags: list[str]) -> dict:
@@ -1514,6 +1548,11 @@ def test_신규_컬렉션은_4종이고_sort_order가_기존_10개_뒤다() -> N
     assert len(NEW_COLLECTIONS) == 4
     assert [c["sort_order"] for c in NEW_COLLECTIONS] == [10, 11, 12, 13]
     assert all(c["status"] == "published" for c in NEW_COLLECTIONS)
+
+
+def test_후보가_최소_기준_미만이면_생성하지_않는다() -> None:
+    assert should_create({"candidates": [{}] * 4}) is False
+    assert should_create({"candidates": [{}] * 5}) is True
 ```
 
 - [ ] **Step 2: 테스트 실패 확인**
@@ -1544,6 +1583,7 @@ logger = logging.getLogger(__name__)
 
 PAGE_SIZE = 500
 ITEM_LIMIT = 15
+MIN_ITEMS = 5
 
 NEW_COLLECTIONS: list[dict] = [
     {
@@ -1588,6 +1628,11 @@ def pick_candidates(fonts: list[dict], spec: dict, limit: int = ITEM_LIMIT) -> l
     return picked[:limit]
 
 
+def should_create(plan: dict) -> bool:
+    """후보 수가 최소 기준(MIN_ITEMS) 이상일 때만 컬렉션을 생성한다."""
+    return len(plan["candidates"]) >= MIN_ITEMS
+
+
 def fetch_published_fonts(
     client: httpx.Client, base: str, headers: dict[str, str]
 ) -> list[dict]:
@@ -1609,8 +1654,9 @@ def fetch_published_fonts(
         offset += PAGE_SIZE
 
 
-def build_report(fonts: list[dict]) -> dict:
-    """컬렉션별 후보 리포트를 만든다 (사용자 검수용)."""
+def build_report(fonts: list[dict], existing: list[dict]) -> dict:
+    """컬렉션별 후보 리포트를 만든다 (사용자 검수용). 기존 컬렉션과의 충돌 정보 포함."""
+    existing_orders = {c["sort_order"] for c in existing}
     plans = []
     for spec in NEW_COLLECTIONS:
         picked = pick_candidates(fonts, spec)
@@ -1623,13 +1669,27 @@ def build_report(fonts: list[dict]) -> dict:
                 for f in picked
             ],
         })
-    return {"collections": plans}
+    return {
+        "existing": {
+            "count": len(existing),
+            "slugs": sorted(c["slug"] for c in existing),
+            "sort_orders": sorted(existing_orders),
+        },
+        "sort_order_conflicts": sorted(
+            existing_orders & {c["sort_order"] for c in NEW_COLLECTIONS}
+        ),
+        "collections": plans,
+    }
 
 
 def insert_collection(
     client: httpx.Client, base: str, headers: dict[str, str], spec: dict, plan: dict
 ) -> bool:
-    """컬렉션 1건과 그 아이템들을 INSERT한다. 이미 있으면 건너뛴다."""
+    """컬렉션 1건과 아이템을 멱등하게 반영한다.
+
+    재실행 안전성: 직전 실행이 items INSERT에서 실패해 "컬렉션은 있는데
+    아이템이 없는 반쪽 상태"가 되면, 다음 실행에서 아이템만 보정한다.
+    """
     write_headers = {
         **headers,
         "Content-Profile": "fontagit",
@@ -1639,19 +1699,32 @@ def insert_collection(
         f"{base}/collections?slug=eq.{spec['slug']}&select=id", headers=headers
     )
     exists.raise_for_status()
-    if exists.json():
-        logger.info("이미 존재하는 컬렉션 건너뜀: %s", spec["slug"])
-        return True
-    body = {
-        "slug": spec["slug"],
-        "title": spec["title"],
-        "intro": spec["intro"],
-        "status": spec["status"],
-        "sort_order": spec["sort_order"],
-    }
-    created = client.post(f"{base}/collections", json=body, headers=write_headers)
-    created.raise_for_status()
-    collection_id = created.json()[0]["id"]
+    rows = exists.json()
+    if rows:
+        collection_id = rows[0]["id"]
+        current = client.get(
+            f"{base}/collection_items?collection_id=eq.{collection_id}&select=font_id",
+            headers=headers,
+        )
+        current.raise_for_status()
+        if current.json():
+            logger.info(
+                "이미 존재하는 컬렉션 건너뜀: %s (아이템 %d종)",
+                spec["slug"], len(current.json()),
+            )
+            return True
+        logger.info("빈 컬렉션 감지 - 아이템만 보정: %s", spec["slug"])
+    else:
+        body = {
+            "slug": spec["slug"],
+            "title": spec["title"],
+            "intro": spec["intro"],
+            "status": spec["status"],
+            "sort_order": spec["sort_order"],
+        }
+        created = client.post(f"{base}/collections", json=body, headers=write_headers)
+        created.raise_for_status()
+        collection_id = created.json()[0]["id"]
     items = [
         {
             "collection_id": collection_id,
@@ -1664,7 +1737,7 @@ def insert_collection(
     if items:
         resp = client.post(f"{base}/collection_items", json=items, headers=write_headers)
         resp.raise_for_status()
-    logger.info("컬렉션 생성 완료: %s (%d종)", spec["slug"], len(items))
+    logger.info("컬렉션 반영 완료: %s (%d종)", spec["slug"], len(items))
     return True
 
 
@@ -1687,17 +1760,36 @@ def main(apply: bool = False, report_path: str | None = None, target: str = "dev
             report_path = f"output/audit/collections-seed-{target}-report.json"
 
         with httpx.Client(timeout=10.0) as client:
+            existing_resp = client.get(
+                f"{base}/collections?select=slug,sort_order", headers=headers
+            )
+            existing_resp.raise_for_status()
             fonts = fetch_published_fonts(client, base, headers)
-            report = build_report(fonts)
+            report = build_report(fonts, existing_resp.json())
             Path(report_path).parent.mkdir(parents=True, exist_ok=True)
             Path(report_path).write_text(
                 json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+            logger.info(
+                "기존 컬렉션 %d개, sort_order 충돌: %s",
+                report["existing"]["count"], report["sort_order_conflicts"],
             )
             for plan in report["collections"]:
                 logger.info("%s: 후보 %d종", plan["slug"], len(plan["candidates"]))
 
             if apply:
+                if report["sort_order_conflicts"]:
+                    logger.error(
+                        "sort_order 충돌로 중단: %s", report["sort_order_conflicts"]
+                    )
+                    return 1
                 for spec, plan in zip(NEW_COLLECTIONS, report["collections"]):
+                    if not should_create(plan):
+                        logger.warning(
+                            "후보 %d종(<%d) - %s 생성 건너뜀",
+                            len(plan["candidates"]), MIN_ITEMS, spec["slug"],
+                        )
+                        continue
                     if not insert_collection(client, base, headers, spec, plan):
                         return 1
         return 0
@@ -1722,7 +1814,7 @@ if __name__ == "__main__":
 - [ ] **Step 4: 테스트 통과 확인**
 
 Run: `cd apps/pipeline && uv run pytest tests/test_collections_seed.py -v`
-Expected: PASS (3개)
+Expected: PASS (4개)
 
 - [ ] **Step 5: 커밋**
 
@@ -1744,12 +1836,15 @@ cd apps/pipeline
 uv run python -m fontagit_pipeline.collections_seed --target dev --apply
 ```
 
-dev 확인: 웹 로컬 빌드 또는 REST로 `collections?status=eq.published` 카운트가 14인지 확인. 이상 없으면 **사용자에게 prod 적용 승인을 다시 받고**:
+dev 확인(Expected): dry-run 재실행 시 리포트의 `existing.count`가 14이고, 신규 4개 slug가 `existing.slugs`에 포함되며, 적용 로그에 각 컬렉션 "반영 완료 (N종, N >= 5)"가 찍혀야 한다. 이상 없으면 **사용자에게 prod 적용 승인을 다시 받고**:
 
 ```bash
-uv run python -m fontagit_pipeline.collections_seed --target prod          # dry-run 확인
+uv run python -m fontagit_pipeline.collections_seed --target prod          # dry-run: existing/sort_order 충돌 확인
 uv run python -m fontagit_pipeline.collections_seed --target prod --apply
+uv run python -m fontagit_pipeline.collections_seed --target prod          # 재실행 dry-run: existing.count=14 = 수렴
 ```
+
+prod 확인(Expected): 재실행 dry-run 리포트에서 `existing.count` = 14, 신규 4개 slug 포함. apply 로그에서 각 신규 컬렉션 아이템 5종 이상.
 
 ---
 
@@ -1780,6 +1875,7 @@ Expected: 성공. `out/` 산출물에 `collections/` 상세 페이지들이 존�
 - Header 컬렉션 → 홈 컬렉션 섹션으로 스크롤
 - 페어링 카드 클릭 → 비교 보드로 스크롤 + 대표/본문 폰트 반영
 - TOP 10 패널이 기존과 동일하게 렌더 (변경 없음 확인)
+- 모바일 폭(375px, 개발자도구): 칩 줄바꿈 정상, 그리드 2열 유지(가로 넘침 없음), 컬렉션 스트립 가로 스크롤 동작, 카드 뱃지-폰트명 말줄임 정상
 
 - [ ] **Step 5: 커밋 (잔여 변경이 있으면)**
 
