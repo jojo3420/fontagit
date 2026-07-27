@@ -10,6 +10,7 @@
 - **권리사(rights holder)**: 폰트의 권리를 보유한 주체(copyright 기준, 예: NHN/네이버). 화면 "제작사" 표기는 권리사의 정규화 브랜드명
 - **디자인 스튜디오(designer)**: 실제 디자인 수행사(예: 산돌). 이번 사이클 미노출
 - **아카이브(archive)**: 폰트를 재배포하는 서비스(구글폰트, GitHub google/fonts, 눈누). 제작사가 아니므로 출처/다운로드의 fallback으로만 사용
+- 축 구분: "링크 대상 등급"(사용자에게 보여줄 URL의 공식성)과 "판단 근거 자료"는 별개. 아카이브가 보존한 공식 원문(예: METADATA.pb의 copyright 문자열)은 권리사 판단의 근거 자료로 사용 가능하되, 아카이브 링크 자체는 archive 등급
 
 ## 1. 목표
 
@@ -64,6 +65,12 @@
 - `download_source_kind`로 구분: 'official'(제작사) / 'public'(공공기관) / 'archive'(fallback) — 화면 라벨 분기
 - Tier A 확보 경로: 눈누에 페이지가 있으면 제작사 링크 우선(S2 크롤 결과 활용), 없으면 구글폰트 specimen 페이지를 'archive'로 백필. #96 원안(webfonts `files["regular"]` 직링크)은 이 결정으로 대체됨
 
+#### 등급 우선순위와 덮어쓰기 규칙 (S1/S2 실행 순서 무관 수렴)
+
+- 등급 우선순위: **official > public > archive > null**
+- 덮어쓰기 규칙: **같거나 더 높은 등급의 값만 기존 값을 갱신**(archive가 official을 강등 불가). 이 규칙으로 S1(archive 백필)과 S2(공식 승격)의 실행 순서와 무관하게 최종 상태가 동일하게 수렴
+- 자동 게이트 이원화: 공식 도메인 화이트리스트(official 판정)와 별도로 **archive allowlist**(fonts.google.com, github.com/google/fonts 등)를 두어 archive 등급 백필이 게이트에 차단되지 않게 함. archive allowlist는 official로 오인 판정에 사용 금지
+
 ### S2. 눈누 재크롤 + 적용 스코프 확장 (#90 22종, #120)
 
 - 과거 크롤 오류 22종 재현 확인 후 실패 지속 건만 재크롤(전량 재크롤 금지). 실패는 HTTP 오류/파싱 실패/차단 응답/데이터 누락으로 분류해 기록하고, 분류별 처리(재시도/파서 수정/보류)를 계획 단계에서 확정
@@ -76,15 +83,17 @@
 - license_text에서 공공누리 제1~4유형 자동 판별(신규 파서 — 파이프라인에 KOGL 코드 전무 확인)
 - 유형별 권한 매핑(초안 — 그룹 승인 시 공공누리 공식 유형 설명과 대조 후 확정):
 
-| 유형 | allow_commercial | allow_modify | 공통 |
-|---|---|---|---|
-| 제1유형 | O | O | 출처표시 필수, 재배포 O(출처표시 조건), 폰트판매 X(보수 기본) |
-| 제2유형 | X | O | 상동 |
-| 제3유형 | O | X | 상동 |
-| 제4유형 | X | X | 상동 |
+| 유형 | allow_commercial | allow_modify | allow_redistribute | allow_font_sale | allow_embedding | 출처표시 |
+|---|---|---|---|---|---|---|
+| 제1유형 | O | O | O(출처표시 조건) | X(보수 기본) | 승인 시 확정 | 필수 |
+| 제2유형 | X | O | O(출처표시 조건) | X | 승인 시 확정 | 필수 |
+| 제3유형 | O | X | O(출처표시 조건) | X | 승인 시 확정 | 필수 |
+| 제4유형 | X | X | O(출처표시 조건) | X | 승인 시 확정 | 필수 |
 
-- 유형 미검출 → needs_review 그룹 (허용 승격 금지)
-- 적용은 유형 그룹 단위(최대 4그룹 + 미검출)로 사용자 일괄 승인 후 진행
+- 표의 각 열은 DB 권한 필드(allow_*)에 1:1 저장. allow_embedding은 공공누리 원문에 명시가 없어 초안값을 두지 않고 그룹 승인 시 공식 기준 대조로 확정
+- 파서 안전 규칙: 복수 유형 동시 검출, 부정문("제1유형이 아님"), 빈 값-형식 이상은 전부 needs_review
+- **유형 미검출 그룹은 승인 대상이 아님** — 적용 없이 보류 확인만 가능(허용 승격 금지)
+- 적용은 유형 그룹 단위(최대 4그룹)로 사용자 일괄 승인 후 진행
 - 승인 기록: 그룹별 승인 시 findings의 reviewed_by/reviewed_at 기록 + 승인 근거(공식 기준 링크, 샘플 목록)를 리포트 문서로 보관
 
 ### S4. 웹 슬라이스 — 표기 정리 + 견본 문구 풀 (#120 문제점 1, 견본 다양화)
@@ -95,7 +104,7 @@
 ### 적용 절차 (S1~S3 공통)
 
 1. dev 적용(자동 게이트: 기존 `audit_policy.py` 공식 도메인 화이트리스트 기준. 화이트리스트 밖 도메인-대조 불일치는 해당 필드만 needs_review) → 실측 쿼리 검증
-2. 검증 기준: **기대 변경 수 = 실제 변경 수**(manifest 엔트리 수 대비 DB 반영 수) + 무작위 샘플 대조. dry-run 산출물에 변경 대상 수/needs_review 수/유형별 수 포함
+2. 검증 기준: **기대 변경 수 = 실제 변경 수** + 무작위 샘플 대조. 집계는 planned/changed/unchanged(이미 동일 값)/rejected/failed로 구분해 청크별-전체 합계 검증. dry-run 산출물에 변경 대상 수/needs_review 수/유형별 수 포함
 3. prod 적용은 사용자 확인(`FONTAGIT_PROD_MANIFEST_ENABLED=true`) 후 청크 100, in-list 40
 4. **rollback**: prod 적용 manifest마다 reverse manifest(기존 `audit_manifest.py` rollback_mode-reverse 기능)를 사전 산출-보관. 오적용 시 reverse manifest 재적용으로 복구
 5. dev 조회 Accept-Profile, 쓰기 Content-Profile: fontagit 헤더 준수
@@ -103,8 +112,9 @@
 ## 5. 제작사 매핑 규칙
 
 - 원칙: **제작사 = 권리사** (디자인 스튜디오는 이번 미노출)
+- 저장 필드는 기존 `fonts.foundry` 그대로 사용. 기존 값(눈누 '제작' 표기)도 권리사 브랜드명 성격이라 의미가 연속되며, 본 사이클은 그 정의를 명문화-정정하는 것
 - 절차: 눈누 제작사 표기(제안값)를 공식 copyright 권리사와 대조 → 일치 시 자동 승인, 불일치 시 needs_review
-- 브랜드 정규화 사전 1개 허용(데이터 파일, 예: "NHN Corporation" → "네이버"). 하드코딩 금지
+- 브랜드 정규화 사전 1개 허용(데이터 파일, 예: "NHN Corporation" → "네이버"). 하드코딩 금지. 사전 항목은 원본명-표시명-근거 URL-검수 상태를 포함하고, 신규 항목은 기본 needs_review(근거 확인 후 승인)
 - 공식 소스가 없는 Tier B는 눈누 값 + needs_review
 
 ## 6. 에러 처리
