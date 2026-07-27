@@ -21,6 +21,14 @@ FontAgit는 한글 폰트를 찾고 라이선스-미리보기 정보를 확인�
 
 ## 진행 기록
 
+## 2026-07-27 - 라이선스 검수 + 크롤 고도화 (#90 #96 #114 #120, PR #132)
+- 상태: 부분 완료 (코드-리뷰 완료, PR 대기. dev 마이그레이션 적용과 실데이터 반영은 미실행)
+- 요약: 폰트 출처를 제작사(official)/공공기관(public)/재배포 아카이브(archive) 등급으로 나누고 낮은 등급이 높은 등급을 덮어쓰지 못하게 막았다. 구글폰트 공식 메타데이터에서 권리사를 읽어오는 Tier A 수집기와 공공누리 유형 판별기(preview 전용)를 추가했고, 웹에는 폰트별 견본 문구 30개 풀과 아카이브 다운로드 구분 라벨을 넣었다. dev 실측으로 나눔명조 제작사가 구글폰트가 아닌 "네이버"로 정정됨을 확인(#120 핵심 목적).
+- 커밋/PR: 24커밋 `1b5cb9d`~`807777d`, PR #132 (https://github.com/jojo3420/fontagit/pull/132)
+- 남은 일: (1)dev에 마이그레이션 0021-0022 psql 적용(사용자 몫, 미적용 시 archive 값 쓰기 차단) (2)Tier A findings 130종 사람 검수 후 적용 (3)눈누 크롤(S2) 실행으로 다운로드 링크 공식 승격 (4)KOGL 유형 그룹 승인 후 권한 적용 (5)#131 Task3/4 findings의 manifest 적용 경로 미완(fail-closed라 오염 위험 없음)
+- 관련 문서: docs/superpowers/specs/2026-07-27-license-audit-crawl-design.md, docs/superpowers/plans/2026-07-27-license-audit-pipeline.md, docs/superpowers/plans/2026-07-27-web-attribution-specimen.md
+- 상세: progress-013.md
+
 ## 2026-07-27 - 캔버스-비교 화면을 홈 통합 보드로 합침 (#118, PR #127)
 - 상태: 완료 (v0.9.0 태그 배포, fontagit.com 라이브, 302 실측 확인)
 - 요약: 신규 CompareCanvas가 홈 비교 섹션을 대체(전 칸 셀렉트 + 기본 문구 "다람쥐 헌 쳇바퀴에 타고파 1234 !@#$"), /playground-구 비교 보드-네비 항목 삭제 + 302 리다이렉트. 기능 PR base를 develop → main으로 변경(사용자 결정). E2E 상세 페이지 404 x4-preview x2는 기존 문제로 미해결.
