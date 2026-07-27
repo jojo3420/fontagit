@@ -5,7 +5,8 @@
 .compareSection { padding: 48px var(--pad-page); scroll-margin-top: 64px; }
 .comparePlaceholder { min-height: 480px; background: var(--surface-2); }
 @media (max-width: 900px) {
-  .grid { grid-template-columns: 1fr; gap: 28px; }
+  /* 1fr의 암묵 최소폭(auto)이 내부 nowrap 콘텐츠의 min-content로 컬럼을 벌려 모바일 가로 넘침 유발 (#125) */
+  .grid { grid-template-columns: minmax(0, 1fr); gap: 28px; }
   .compareSection { padding: 28px var(--pad-page); }
   .comparePlaceholder { min-height: 320px; }
 }

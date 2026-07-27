@@ -6,7 +6,7 @@
 .meta { font-size: 13.5px; color: var(--sub); margin: 0 0 8px; }
 .side { display: flex; flex-direction: column; gap: 18px; position: sticky; top: 88px; }
 @media (max-width: 900px) {
-  .grid { grid-template-columns: 1fr; gap: 24px; }
+  .grid { grid-template-columns: minmax(0, 1fr); gap: 24px; }
   .side { position: static; }
   .title { font-size: 32px; }
 }
