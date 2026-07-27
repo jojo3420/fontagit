@@ -1373,14 +1373,23 @@ def main_audit_kogl_preview(args: argparse.Namespace) -> int:
                 break
             offset += page_size
 
-        # 4. font_id별로 최신 스냅샷만 유지 (collected_at desc=True 정렬로 미래 데이터도 대응)
+        # 4. font_id별 스냅샷 선택 (collected_at이 전부 NULL이라 정렬이 무의미하므로
+        #    license_text 본문을 보유한 스냅샷을 우선 채택)
+        def _has_license_text(snap: dict[str, object]) -> bool:
+            extracted = snap.get("extracted")
+            return isinstance(extracted, dict) and isinstance(extracted.get("license_text"), str)
+
         latest_snapshots: dict[str, dict] = {}
         for snap in snapshots_data:
             font_id = snap.get("font_id")
-            if font_id and font_id not in latest_snapshots:
+            if not font_id:
+                continue
+            if font_id not in latest_snapshots:
+                latest_snapshots[font_id] = snap
+            elif _has_license_text(snap) and not _has_license_text(latest_snapshots[font_id]):
                 latest_snapshots[font_id] = snap
 
-        logger.info("라이선스 스냅샷: %d건 (폰트별 최신 1건씩)", len(latest_snapshots))
+        logger.info("라이선스 스냅샷: %d건 (폰트별 1건, 본문 보유 우선)", len(latest_snapshots))
 
         # 5. 각 스냅샷의 license_text로 detect_kogl_type 실행
         results: dict[str, object] = {
