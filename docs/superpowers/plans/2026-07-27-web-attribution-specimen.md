@@ -43,7 +43,7 @@ describe("specimenPhrases", () => {
     expect(new Set(all.map((p) => p.id)).size).toBe(30);
   });
 
-  it("같은 slug는 항상 같은 문구(결정적), 다른 slug는 그룹 내 분산", () => {
+  it("같은 slug는 항상 같은 문구(결정적)", () => {
     const font = { slug: "nanum-myeongjo", category: "명조" };
     expect(pickPhrase(font)).toEqual(pickPhrase(font));
   });
