@@ -2,8 +2,8 @@
 
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 
-const CompareBoard = lazy(() =>
-  import("./CompareBoard").then((m) => ({ default: m.CompareBoard }))
+const CompareCanvas = lazy(() =>
+  import("./CompareCanvas").then((m) => ({ default: m.CompareCanvas }))
 );
 
 export function CompareLazy({ placeholder }: { placeholder: ReactNode }) {
@@ -33,7 +33,7 @@ export function CompareLazy({ placeholder }: { placeholder: ReactNode }) {
     <div ref={ref}>
       {shown ? (
         <Suspense fallback={placeholder}>
-          <CompareBoard />
+          <CompareCanvas />
         </Suspense>
       ) : (
         placeholder

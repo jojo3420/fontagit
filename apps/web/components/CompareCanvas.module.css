@@ -8,20 +8,20 @@
 .clear { flex: none; border: none; background: transparent; font-size: 12px; font-weight: 500; color: var(--sub-2); cursor: pointer; }
 .presets { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 .preset { padding: 7px 14px; border: 1px solid var(--border); border-radius: var(--radius-pill); font-size: 12.5px; font-weight: 500; color: var(--ink); background: var(--surface); cursor: pointer; }
+.select { border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; font-family: inherit; font-size: 13px; font-weight: 700; color: var(--ink); background: var(--bg); cursor: pointer; min-width: 0; }
 .hero { padding: 44px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-top: 26px; }
-.heroLabel { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
-.heroLabel span { font-size: 12px; font-weight: 600; color: var(--sub-2); }
-.heroLabel a { font-size: 12px; font-weight: 600; color: var(--point); }
-.heroSpecimen { font-weight: 800; font-size: 96px; line-height: 1; color: var(--ink); letter-spacing: -.03em; word-break: break-all; }
+.heroLabel { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 8px; flex-wrap: wrap; }
+.heroRight { display: flex; gap: 10px; align-items: center; }
+.heroSize { font-size: 12px; font-weight: 600; color: var(--sub-2); }
+.heroSpecimen { font-weight: 800; font-size: 96px; line-height: 1; color: var(--ink); letter-spacing: -.03em; word-break: break-all; overflow-wrap: anywhere; }
 .gridHead { font-size: 13px; font-weight: 700; color: var(--ink); margin: 28px 0 16px; }
 .count { font-size: 12px; font-weight: 400; color: var(--sub-2); }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .cell { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 18px 20px; }
-.cellHead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.cellName { font-size: 13px; font-weight: 600; color: var(--ink); }
-.cellRight { display: flex; gap: 10px; align-items: center; }
+.cellHead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; }
+.cellRight { display: flex; gap: 10px; align-items: center; flex: none; }
 .cellDetail { font-size: 11px; font-weight: 500; color: var(--sub-2); }
-.cellSpecimen { font-size: 36px; line-height: 1.1; color: var(--ink); word-break: break-all; }
+.cellSpecimen { font-size: 36px; line-height: 1.1; color: var(--ink); word-break: break-all; overflow-wrap: anywhere; }
 @media (max-width: 620px) {
   .heroSpecimen { font-size: 60px; }
   .grid { grid-template-columns: 1fr; }

@@ -7,8 +7,6 @@ const TABS = [
   { href: "/", label: "홈" },
   { href: "/fonts", label: "폰트" },
   { href: "/trends", label: "트렌드" },
-  { href: "/playground", label: "캔버스" },
-  { href: "/#compare", label: "비교" },
 ];
 
 export function MobileTabBar() {

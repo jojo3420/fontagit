@@ -3,7 +3,14 @@
 - 날짜: 2026-07-27
 - 대상 이슈: #90(일부), #96, #114(Should-fix), #120
 - 접근법: A안 — 기존 감사 체인(수집 → findings → manifest 청크 → apply RPC) 확장
-- 상태: 사용자 설계 승인 완료 (2026-07-27)
+- 상태: 사용자 설계 승인 완료 (2026-07-27), 듀얼 리뷰 반영(Degraded: Codex 단독, `docs/review/review-result-dual-20260727-141527.md`)
+
+## 0. 용어 정의
+
+- **권리사(rights holder)**: 폰트의 권리를 보유한 주체(copyright 기준, 예: NHN/네이버). 화면 "제작사" 표기는 권리사의 정규화 브랜드명
+- **디자인 스튜디오(designer)**: 실제 디자인 수행사(예: 산돌). 이번 사이클 미노출
+- **아카이브(archive)**: 폰트를 재배포하는 서비스(구글폰트, GitHub google/fonts, 눈누). 제작사가 아니므로 출처/다운로드의 fallback으로만 사용
+- 축 구분: "링크 대상 등급"(사용자에게 보여줄 URL의 공식성)과 "판단 근거 자료"는 별개. 아카이브가 보존한 공식 원문(예: METADATA.pb의 copyright 문자열)은 권리사 판단의 근거 자료로 사용 가능하되, 아카이브 링크 자체는 archive 등급
 
 ## 1. 목표
 
@@ -46,32 +53,48 @@
 
 ### S1. Tier A 공식 수집기 (#96, #120 문제점 1)
 
-- 입력: google/fonts 저장소 METADATA.pb(designer, copyright), webfonts API(files) — 약 130종
+- 입력: google/fonts 저장소 METADATA.pb(designer, copyright) — 약 130종
 - 산출 findings: `foundry`, `foundry_url`, `download_url`, `download_source_kind`, `license_source_url`
-- download_url: webfonts API `files["regular"]` (#96 원안 유지)
 - 실측 확인 완료: METADATA.pb designer 필드 실존(나눔명조 = "Sandoll Communication", copyright = "NHN Corporation")
-- 스키마 변경 없음: fonts에 필요한 컬럼 전부 존재(0017 마이그레이션)
+- 스키마 변경 1건: `download_source_kind` 체크 제약에 'archive' 값 추가 마이그레이션(아래 download_url 의미 참조)
+
+#### download_url 의미 (사용자 결정 2026-07-27)
+
+- **download_url = 사용자용 다운로드 페이지 URL. 폰트 파일 직링크 금지**(파일 후보는 기존 `font_file_candidates`가 담당)
+- **우선순위: 제작사(권리사) 공식 배포 페이지 > 아카이브 fallback**(구글폰트 specimen 페이지, GitHub 등). 눈누-구글폰트-GitHub는 제작 주체가 아니므로 공식으로 취급하지 않음
+- `download_source_kind`로 구분: 'official'(제작사) / 'public'(공공기관) / 'archive'(fallback) — 화면 라벨 분기
+- Tier A 확보 경로: 눈누에 페이지가 있으면 제작사 링크 우선(S2 크롤 결과 활용), 없으면 구글폰트 specimen 페이지를 'archive'로 백필. #96 원안(webfonts `files["regular"]` 직링크)은 이 결정으로 대체됨
+
+#### 등급 우선순위와 덮어쓰기 규칙 (S1/S2 실행 순서 무관 수렴)
+
+- 등급 우선순위: **official > public > archive > null**
+- 덮어쓰기 규칙: **같거나 더 높은 등급의 값만 기존 값을 갱신**(archive가 official을 강등 불가). 이 규칙으로 S1(archive 백필)과 S2(공식 승격)의 실행 순서와 무관하게 최종 상태가 동일하게 수렴
+- 자동 게이트 이원화: 공식 도메인 화이트리스트(official 판정)와 별도로 **archive allowlist**(fonts.google.com, github.com/google/fonts 등)를 두어 archive 등급 백필이 게이트에 차단되지 않게 함. archive allowlist는 official로 오인 판정에 사용 금지
 
 ### S2. 눈누 재크롤 + 적용 스코프 확장 (#90 22종, #120)
 
-- 과거 크롤 오류 22종 재현 확인 후 실패 지속 건만 재크롤(전량 재크롤 금지)
+- 과거 크롤 오류 22종 재현 확인 후 실패 지속 건만 재크롤(전량 재크롤 금지). 실패는 HTTP 오류/파싱 실패/차단 응답/데이터 누락으로 분류해 기록하고, 분류별 처리(재시도/파서 수정/보류)를 계획 단계에서 확정
 - 기존 파서(audit_noonnu.NoonnuFontSnapshot)가 #120 요구 6개 영역을 이미 수집 — 신규 개발이 아니라 **적용 스코프 확장**: 스냅샷의 foundry/download_candidates를 findings로 승격
 - 눈누 크롤 실행은 사용자 승인 후(기존 하드 게이트 관례)
 
 ### S3. KOGL 271종 유형 판별 (#90)
 
+- **선행 체크포인트**: 공공누리 공식 유형 설명(kogl.or.kr)과 아래 매핑표 대조-확정 전에는 권한값(findings)을 생성하지 않음. 확정 전에는 유형 판별 preview만 산출
 - license_text에서 공공누리 제1~4유형 자동 판별(신규 파서 — 파이프라인에 KOGL 코드 전무 확인)
 - 유형별 권한 매핑(초안 — 그룹 승인 시 공공누리 공식 유형 설명과 대조 후 확정):
 
-| 유형 | allow_commercial | allow_modify | 공통 |
-|---|---|---|---|
-| 제1유형 | O | O | 출처표시 필수, 재배포 O(출처표시 조건), 폰트판매 X(보수 기본) |
-| 제2유형 | X | O | 상동 |
-| 제3유형 | O | X | 상동 |
-| 제4유형 | X | X | 상동 |
+| 유형 | allow_commercial | allow_modify | allow_redistribute | allow_font_sale | allow_embedding | 출처표시 |
+|---|---|---|---|---|---|---|
+| 제1유형 | O | O | O(출처표시 조건) | X(보수 기본) | 승인 시 확정 | 필수 |
+| 제2유형 | X | O | O(출처표시 조건) | X | 승인 시 확정 | 필수 |
+| 제3유형 | O | X | O(출처표시 조건) | X | 승인 시 확정 | 필수 |
+| 제4유형 | X | X | O(출처표시 조건) | X | 승인 시 확정 | 필수 |
 
-- 유형 미검출 → needs_review 그룹 (허용 승격 금지)
-- 적용은 유형 그룹 단위(최대 4그룹 + 미검출)로 사용자 일괄 승인 후 진행
+- 표의 각 열은 DB 권한 필드(allow_*)에 1:1 저장. allow_embedding은 공공누리 원문에 명시가 없어 초안값을 두지 않고 그룹 승인 시 공식 기준 대조로 확정
+- 파서 안전 규칙: 복수 유형 동시 검출, 부정문("제1유형이 아님"), 빈 값-형식 이상은 전부 needs_review
+- **유형 미검출 그룹은 승인 대상이 아님** — 적용 없이 보류 확인만 가능(허용 승격 금지)
+- 적용은 유형 그룹 단위(최대 4그룹)로 사용자 일괄 승인 후 진행
+- 승인 기록: 그룹별 승인 시 findings의 reviewed_by/reviewed_at 기록 + 승인 근거(공식 기준 링크, 샘플 목록)를 리포트 문서로 보관
 
 ### S4. 웹 슬라이스 — 표기 정리 + 견본 문구 풀 (#120 문제점 1, 견본 다양화)
 
@@ -80,15 +103,18 @@
 
 ### 적용 절차 (S1~S3 공통)
 
-1. dev 적용(자동 게이트: 공식 도메인 화이트리스트) → 실측 쿼리 검증(건수-샘플)
-2. prod 적용은 사용자 확인(`FONTAGIT_PROD_MANIFEST_ENABLED=true`) 후 청크 100, in-list 40
-3. dev 조회 Accept-Profile, 쓰기 Content-Profile: fontagit 헤더 준수
+1. dev 적용(자동 게이트: 기존 `audit_policy.py` 공식 도메인 화이트리스트 기준. 화이트리스트 밖 도메인-대조 불일치는 해당 필드만 needs_review) → 실측 쿼리 검증
+2. 검증 기준: **기대 변경 수 = 실제 변경 수** + 무작위 샘플 대조. 집계는 planned/changed/unchanged(이미 동일 값)/rejected/failed로 구분해 청크별-전체 합계 검증. dry-run 산출물에 변경 대상 수/needs_review 수/유형별 수 포함
+3. prod 적용은 사용자 확인(`FONTAGIT_PROD_MANIFEST_ENABLED=true`) 후 청크 100, in-list 40
+4. **rollback**: prod 적용 manifest마다 reverse manifest(기존 `audit_manifest.py` rollback_mode-reverse 기능)를 사전 산출-보관. 오적용 시 reverse manifest 재적용으로 복구
+5. dev 조회 Accept-Profile, 쓰기 Content-Profile: fontagit 헤더 준수
 
 ## 5. 제작사 매핑 규칙
 
 - 원칙: **제작사 = 권리사** (디자인 스튜디오는 이번 미노출)
+- 저장 필드는 기존 `fonts.foundry` 그대로 사용. 기존 값(눈누 '제작' 표기)도 권리사 브랜드명 성격이라 의미가 연속되며, 본 사이클은 그 정의를 명문화-정정하는 것
 - 절차: 눈누 제작사 표기(제안값)를 공식 copyright 권리사와 대조 → 일치 시 자동 승인, 불일치 시 needs_review
-- 브랜드 정규화 사전 1개 허용(데이터 파일, 예: "NHN Corporation" → "네이버"). 하드코딩 금지
+- 브랜드 정규화 사전 1개 허용(데이터 파일, 예: "NHN Corporation" → "네이버"). 하드코딩 금지. 사전 항목은 원본명-표시명-근거 URL-검수 상태를 포함하고, 신규 항목은 기본 needs_review(근거 확인 후 승인)
 - 공식 소스가 없는 Tier B는 눈누 값 + needs_review
 
 ## 6. 에러 처리
@@ -107,4 +133,4 @@
 
 - copyright 문자열 파싱 편차(법인명 표기 다양) → 정규화 사전 + needs_review로 흡수
 - KOGL 유형이 license_text에 명시되지 않은 개체 존재 가능 → 미검출 그룹 규모 확인 후 후속 결정
-- 웹폰트 files URL(gstatic)은 다운로드 UX로 부적절할 수 있음 → S4에서 노출 방식은 기존 UI 유지, 데이터만 백필
+- Tier B 눈누 다운로드 후보가 제작사 도메인이 아닌 경우(중개 페이지 등) → audit_policy 화이트리스트 불일치로 needs_review 처리, 'archive' fallback 강등 여부는 검수 시 판단
