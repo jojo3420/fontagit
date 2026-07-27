@@ -1316,6 +1316,132 @@ def main_audit_tier_a_meta(args: argparse.Namespace) -> int:
         return 1
 
 
+def main_audit_kogl_preview(args: argparse.Namespace) -> int:
+    """KOGL 후보 폰트 조회 및 유형 판별 미리보기."""
+    import json
+
+    from fontagit_pipeline.audit_kogl import detect_kogl_type
+    from fontagit_pipeline.config import load_audit_settings
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+
+    try:
+        # 1. 설정 로드
+        settings = load_audit_settings()
+        dev_url, dev_secret_key = settings.dev_write_credentials()
+
+        # 2. Supabase 클라이언트 생성
+        from supabase import create_client
+
+        dev_client = create_client(dev_url, dev_secret_key)
+        dev_schema = dev_client.schema("fontagit")
+
+        # 3. published fonts 조회
+        logger.info("dev에서 published 폰트 조회...")
+        fonts_response = (
+            dev_schema.table("fonts")
+            .select("id,name_en,license_type,license_evidence_id")
+            .eq("status", "published")
+            .order("id")
+            .execute()
+        )
+
+        if not isinstance(fonts_response.data, list):
+            raise ValueError("fonts query returned invalid data")
+
+        fonts = {f["id"]: f for f in fonts_response.data}
+        logger.info("published 폰트: %d건", len(fonts))
+
+        # 4. 라이선스 스냅샷 조회 (metadata에서 license_text 추출)
+        logger.info("라이선스 스냅샷 조회 및 필터링...")
+        snapshots_response = (
+            dev_schema.table("font_source_snapshots")
+            .select("font_id,extracted")
+            .eq("document_kind", "metadata")
+            .execute()
+        )
+
+        if not isinstance(snapshots_response.data, list):
+            raise ValueError("snapshots query returned invalid data")
+
+        # 5. font_id별로 최신 스냅샷만 유지
+        latest_snapshots: dict[str, dict] = {}
+        for snap in snapshots_response.data:
+            font_id = snap.get("font_id")
+            if font_id and font_id in fonts:
+                if font_id not in latest_snapshots:
+                    latest_snapshots[font_id] = snap
+
+        logger.info("라이선스 스냅샷: %d건", len(latest_snapshots))
+
+        # 6. 각 폰트의 license_text로 detect_kogl_type 실행
+        results: dict[str, object] = {
+            "total_count": len(latest_snapshots),
+            "by_type": {1: [], 2: [], 3: [], 4: []},
+            "undetected": [],
+            "summary": {},
+        }
+
+        for font_id, snapshot in latest_snapshots.items():
+            font_info = fonts.get(font_id)
+            if not font_info:
+                continue
+
+            extracted = snapshot.get("extracted", {})
+            license_text = extracted.get("license_text", "") if isinstance(extracted, dict) else ""
+
+            # '공공누리' 포함 여부 확인
+            if "공공누리" not in (license_text or ""):
+                continue
+
+            detection = detect_kogl_type(license_text or "")
+            font_entry = {
+                "id": font_id,
+                "name_en": font_info.get("name_en"),
+                "license_type": font_info.get("license_type"),
+                "detection_reason": detection.reason,
+            }
+
+            if detection.kogl_type is not None:
+                results["by_type"][detection.kogl_type].append(font_entry)
+            else:
+                results["undetected"].append(
+                    {**font_entry, "undetected_reason": detection.reason}
+                )
+
+        # 7. 요약 집계
+        summary = {}
+        for kogl_type in (1, 2, 3, 4):
+            summary[f"type_{kogl_type}"] = len(results["by_type"][kogl_type])
+        summary["undetected"] = len(results["undetected"])
+        summary["total"] = (
+            sum(len(v) for v in results["by_type"].values())
+            + summary["undetected"]
+        )
+        results["summary"] = summary
+
+        # 8. JSON 저장
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(
+            json.dumps(results, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        logger.info(
+            "KOGL preview 완료: type_1=%d type_2=%d type_3=%d type_4=%d undetected=%d (출력=%s)",
+            summary["type_1"],
+            summary["type_2"],
+            summary["type_3"],
+            summary["type_4"],
+            summary["undetected"],
+            args.out,
+        )
+        return 0
+
+    except Exception as exc:
+        logger.error("KOGL preview 실패: %s (%s)", exc.__class__.__name__, exc)
+        return 3
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="FontAgit 파이프라인",
@@ -1556,6 +1682,15 @@ if __name__ == "__main__":
     tier_a_meta_parser.add_argument("--dry-run", action="store_true", help="DB 쓰기 없이 메모리만 사용")
     tier_a_meta_parser.add_argument("--out", type=Path, required=True, help="결과 보고서 JSON 경로")
     tier_a_meta_parser.set_defaults(func=main_audit_tier_a_meta)
+
+    kogl_preview_parser = subparsers.add_parser(
+        "font-audit-kogl-preview",
+        help="KOGL 후보 폰트 조회 및 유형 판별 미리보기 (preview 전용, DB 쓰기 없음)",
+    )
+    kogl_preview_parser.add_argument(
+        "--out", type=Path, required=True, help="KOGL 판별 결과 JSON 경로"
+    )
+    kogl_preview_parser.set_defaults(func=main_audit_kogl_preview)
 
     args = parser.parse_args()
 
