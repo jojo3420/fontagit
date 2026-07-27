@@ -45,8 +45,7 @@ export function normalizeVariants(variants: string[]): VariantCombination[] {
 
     const weight = weightStr ? parseInt(weightStr, 10) : 400;
 
-    if (isNaN(weight) || weight < 100 || weight > 900) continue;
-    if (weight % 100 !== 0) continue;
+    if (!Number.isInteger(weight) || weight < 1 || weight > 1000) continue;
 
     const key = `${weight}-${isItalic ? "italic" : "normal"}`;
     if (!combos.has(key)) {
@@ -67,9 +66,7 @@ export function normalizeWeights(weights: number[]): number[] | null {
   const validWeights = new Set<number>();
 
   for (const weight of weights) {
-    if (typeof weight !== "number" || isNaN(weight)) continue;
-    if (weight < 100 || weight > 900) continue;
-    if (weight % 100 !== 0) continue;
+    if (!(Number.isInteger(weight) && weight >= 1 && weight <= 1000)) continue;
     validWeights.add(weight);
   }
 
