@@ -1383,3 +1383,94 @@ def test_default_font_fetcher_accepts_max_bytes(monkeypatch: pytest.MonkeyPatch)
     assert captured["url"] == "https://example.com/a.woff2"
     assert captured["max_body_bytes"] == 1234
     assert captured["delay_seconds"] == audit_runner._CRAWL_DELAY_SECONDS
+
+
+def test_metadata_audit_generates_foundry_finding_from_noonnu_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """눈누 스냅샷의 foundry 필드가 없으면 추가 finding을 생성한다."""
+    from fontagit_pipeline.audit_runner import _parse_candidate
+
+    fixture = Path(__file__).parent / "fixtures" / "audit" / "noonnu-white-tailed-eagle.html"
+    reference_html = fixture.read_bytes()
+
+    # First, test that parsed data contains foundry
+    parsed = _parse_candidate(
+        FetchResult(200, "test", reference_html, "1" * 64, 0),
+        CandidateUrl(
+            url="https://noonnu.cc/font_page/613",
+            document_role="metadata",
+            source="noonnu",
+            name_ko="흰꼬리수리",
+            maker=None,
+        ),
+    )
+    assert parsed is not None
+    assert parsed.foundry == "네이버", f"Expected foundry='네이버', got '{parsed.foundry}'"
+
+    def noonnu_fetch(url: str) -> FetchResult:
+        content = reference_html if url.endswith("/613") else b"<html><body>cta</body></html>"
+        return FetchResult(200, url, content, "1" * 64, 0)
+
+    def font_fetch(url: str, max_bytes: int = 32 * 1024 * 1024) -> FetchResult:
+        return _fetched(url)
+
+    monkeypatch.setattr("fontagit_pipeline.audit_runner.sys.platform", "linux")
+
+    target = replace(
+        _targets()[0],
+        foundry=None,  # 현재값: None (empty)
+        name_ko="흰꼬리수리",
+        candidates=(),
+    )
+    store = InMemoryAuditStore()
+    report = run_metadata_audit(
+        [target], store, registry={"version": 1, "entries": []}, fetcher=noonnu_fetch, font_fetcher=font_fetch
+    )
+
+    # Debug: check if there were any errors
+    if report.broken_count > 0:
+        raise AssertionError(f"Broken count: {report.broken_count}, errors: {report.errors}")
+
+    drafts = [store.finding_draft(item) for item in report.finding_ids]
+    # foundry finding이 생성되어야 한다
+    foundry_drafts = [d for d in drafts if d.field_name == "foundry"]
+    assert len(foundry_drafts) == 1, f"Expected 1 foundry draft, got {len(foundry_drafts)}. Field names: {[d.field_name for d in drafts]}"
+    # fixture의 foundry "네이버"를 제안해야 한다
+    assert foundry_drafts[0].before_value is None
+    assert foundry_drafts[0].proposed_value == "네이버"
+    assert foundry_drafts[0].confidence == "reference"  # Tier B는 reference
+    assert foundry_drafts[0].auto_applicable is False  # 수동 검수 필요
+
+
+def test_metadata_audit_skips_foundry_if_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """foundry가 변경되지 않았으면 finding을 생성하지 않는다."""
+    fixture = Path(__file__).parent / "fixtures" / "audit" / "noonnu-white-tailed-eagle.html"
+    reference_html = fixture.read_bytes()
+
+    def noonnu_fetch(url: str) -> FetchResult:
+        content = reference_html if url.endswith("/613") else b"<html><body>cta</body></html>"
+        return FetchResult(200, url, content, "1" * 64, 0)
+
+    def font_fetch(url: str, max_bytes: int = 32 * 1024 * 1024) -> FetchResult:
+        return _fetched(url)
+
+    monkeypatch.setattr("fontagit_pipeline.audit_runner.sys.platform", "linux")
+
+    target = replace(
+        _targets()[0],
+        foundry="네이버",  # fixture의 foundry 값과 동일
+        name_ko="흰꼬리수리",
+        candidates=(),
+    )
+    store = InMemoryAuditStore()
+    report = run_metadata_audit(
+        [target], store, registry={"version": 1, "entries": []}, fetcher=noonnu_fetch, font_fetcher=font_fetch
+    )
+
+    drafts = [store.finding_draft(item) for item in report.finding_ids]
+    # foundry finding이 생성되지 않아야 한다 (값이 변경되지 않았으므로)
+    foundry_drafts = [d for d in drafts if d.field_name == "foundry"]
+    assert len(foundry_drafts) == 0

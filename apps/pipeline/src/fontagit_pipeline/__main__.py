@@ -1032,8 +1032,8 @@ def main_audit_review(args: argparse.Namespace) -> int:
                 if not isinstance(finding_id, str):
                     raise ValueError(f"invalid finding_id: {finding_id}")
 
-                # values-evidence 대조 (tags/weights 전용)
-                if field_name in {"tags", "weights"} and evidence_id and isinstance(evidence_id, str):
+                # values-evidence 대조 (자동 승인 대상 필드)
+                if field_name in {"tags", "weights", "foundry", "download_url", "download_source_kind"} and evidence_id and isinstance(evidence_id, str):
                     extracted = evidence_by_id.get(evidence_id)
                     if extracted:
                         expected = derive_proposed_value(field_name, extracted)

@@ -108,6 +108,9 @@ class _MetadataTarget(Protocol):
     @property
     def tags(self) -> tuple[str, ...]: ...
 
+    @property
+    def foundry(self) -> str | None: ...
+
 
 class _MetadataSnapshot(Protocol):
     @property
@@ -365,6 +368,23 @@ def compare_metadata(
                     auto_applicable=False,
                 )
             )
+
+    # Tier B(눈누)에서 제작사(foundry) 필드 추가
+    foundry_value = official_snapshot.extracted.get("foundry")
+    if foundry_value is not None and foundry_value != target.foundry:
+        findings.append(
+            FindingDraft(
+                font_id=target.font_id,
+                field_name="foundry",
+                before_value=target.foundry,
+                proposed_value=foundry_value,
+                evidence_id=None,
+                confidence="reference",  # Tier B는 공식 대조 소스가 없으므로 reference
+                review_reason="foundry from noonnu snapshot",
+                auto_applicable=False,
+            )
+        )
+
     return findings
 
 
@@ -568,11 +588,17 @@ def derive_proposed_value(
     field_name: str,
     extracted: Mapping[str, object],
 ) -> object:
-    """증거에서 기대되는 proposed_value를 파생한다 (tags/weights 전용)."""
+    """증거에서 기대되는 proposed_value를 파생한다 (자동 승인 대상 필드)."""
     if field_name == "tags":
         return extracted.get("tags")
     if field_name == "weights":
         weight = extracted.get("weight")
         if weight is not None:
             return [weight]
+    if field_name == "foundry":
+        return extracted.get("foundry")
+    if field_name == "download_url":
+        return extracted.get("download_url")
+    if field_name == "download_source_kind":
+        return extracted.get("download_source_kind")
     return None
