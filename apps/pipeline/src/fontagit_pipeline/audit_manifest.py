@@ -748,3 +748,138 @@ def verify_manifest_file(path: Path, sha256_path: Path) -> FontAuditManifest:
     except OSError as exc:
         raise ManifestError("manifest 또는 SHA-256 파일을 읽을 수 없습니다") from exc
     return verify_manifest_bytes(content, expected)
+
+
+def split_manifest_into_chunks(bundle: ManifestBundle, chunk_size: int) -> list[ManifestBundle]:
+    """manifest를 청크로 분할한다.
+
+    - entries를 chunk_size개씩 분할
+    - 각 청크의 evidence_bundle은 해당 청크 entries가 참조하는 snapshot/finding만 포함
+    - run 메타데이터는 전 청크 동일 유지
+    - forward/reverse SHA는 각 청크별로 재계산
+
+    반환: 청크 개수만큼의 ManifestBundle 리스트
+    """
+    if chunk_size <= 0:
+        raise ManifestError("chunk_size must be positive integer")
+
+    forward = bundle.forward
+    chunks: list[ManifestBundle] = []
+
+    # 청크 나누기
+    for i in range(0, len(forward.entries), chunk_size):
+        chunk_entries = forward.entries[i : i + chunk_size]
+
+        # 참조하는 evidence_id, finding_id 수집 (문자열로 비교)
+        referenced_evidence_ids: set[str] = set()
+        referenced_finding_ids: set[str] = set()
+        for entry in chunk_entries:
+            for eid in entry.evidence_ids:
+                referenced_evidence_ids.add(str(eid))
+            for fid in entry.finding_ids:
+                referenced_finding_ids.add(str(fid))
+
+        # evidence_bundle 필터링 (snapshot과 finding의 id는 문자열)
+        filtered_snapshots: list[dict[str, object]] = []
+        for snap in forward.evidence_bundle.snapshots:
+            snap_id = snap.get("id")
+            if snap_id and str(snap_id) in referenced_evidence_ids:
+                filtered_snapshots.append(snap)
+
+        filtered_findings: list[dict[str, object]] = []
+        for find in forward.evidence_bundle.findings:
+            find_id = find.get("id")
+            if find_id and str(find_id) in referenced_finding_ids:
+                filtered_findings.append(find)
+
+        # 필터링된 evidence_bundle로 새 manifest 생성
+        filtered_evidence = EvidenceBundle(
+            run=forward.evidence_bundle.run,
+            snapshots=filtered_snapshots,
+            findings=filtered_findings,
+        )
+
+        # forward 청크
+        chunk_forward = FontAuditManifest(
+            run_id=forward.run_id,
+            baseline_sha256=forward.baseline_sha256,
+            generated_at=forward.generated_at,
+            rollback_mode=False,
+            evidence_bundle=filtered_evidence,
+            entries=chunk_entries,
+        )
+
+        # reverse 청크
+        chunk_reverse = FontAuditManifest(
+            run_id=forward.run_id,
+            baseline_sha256=forward.baseline_sha256,
+            generated_at=forward.generated_at,
+            rollback_mode=True,
+            evidence_bundle=filtered_evidence,
+            entries=[
+                entry.model_copy(update={"before": entry.after, "after": entry.before})
+                for entry in chunk_entries
+            ],
+        )
+
+        chunks.append(
+            ManifestBundle(
+                forward=chunk_forward,
+                reverse=chunk_reverse,
+                forward_sha256=_digest(chunk_forward),
+                reverse_sha256=_digest(chunk_reverse),
+            )
+        )
+
+    return chunks
+
+
+def write_chunked_manifest_bundles(chunks: list[ManifestBundle], out: Path) -> dict[str, object]:
+    """청크 manifest를 디렉터리 구조로 저장하고 인덱스를 반환한다.
+
+    산출물 구조:
+    - out/chunk-001/forward.json, forward.sha256, reverse.json, reverse.sha256
+    - out/chunk-002/...
+    - out/index.json (메타데이터)
+
+    반환: index.json 내용 (dict)
+    """
+    if not chunks:
+        raise ManifestError("no chunks to write")
+
+    total_entries = sum(len(chunk.forward.entries) for chunk in chunks)
+    index_data: dict[str, object] = {
+        "total_chunks": len(chunks),
+        "total_entries": total_entries,
+        "chunks": [],
+    }
+
+    for i, chunk in enumerate(chunks, start=1):
+        chunk_dir = out / f"chunk-{i:03d}"
+        chunk_paths = ManifestPaths(
+            forward=chunk_dir / "forward.json",
+            forward_sha256=chunk_dir / "forward.sha256",
+            reverse=chunk_dir / "reverse.json",
+            reverse_sha256=chunk_dir / "reverse.sha256",
+        )
+
+        _atomic_write(chunk_paths.forward, _canonical_bytes(chunk.forward))
+        _atomic_write(chunk_paths.forward_sha256, f"{chunk.forward_sha256}\n".encode("ascii"))
+        _atomic_write(chunk_paths.reverse, _canonical_bytes(chunk.reverse))
+        _atomic_write(chunk_paths.reverse_sha256, f"{chunk.reverse_sha256}\n".encode("ascii"))
+
+        chunk_info: dict[str, object] = {
+            "chunk_number": i,
+            "entry_count": len(chunk.forward.entries),
+            "forward_sha256": chunk.forward_sha256,
+            "reverse_sha256": chunk.reverse_sha256,
+        }
+        index_data["chunks"].append(chunk_info)
+
+    index_json_bytes = json.dumps(
+        index_data, ensure_ascii=False, indent=2, sort_keys=True, separators=(",", ": ")
+    ).encode("utf-8")
+    index_file = out / "index.json"
+    _atomic_write(index_file, index_json_bytes)
+
+    return index_data

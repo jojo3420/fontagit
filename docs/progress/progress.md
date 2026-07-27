@@ -15,18 +15,37 @@ FontAgit는 한글 폰트를 찾고 라이선스-미리보기 정보를 확인�
 
 - /fonts 용도별 섹션 계층화 + 타입 캔버스: 폰트를 용도 5섹션(본문/제목/브랜드/손글씨/장식)으로 자동 그룹화하고 에디터 추천을 앞에 노출, 상단 문구 입력창(타입 캔버스)으로 모든 견본을 실시간 미리보기(#60, PR #92) → v0.2.0으로 prod 라이브, 개요 모드 레이아웃/다크모드 버그는 v0.2.1 hotfix로 해결
 - 폰트 상세 글자 지원 검사: 폰트 상세 페이지에서 원하는 글자를 입력하면 해당 폰트가 그 글자를 지원하는지 canvas로 즉시 검출(검사 가능한 무료 웹폰트 대상). 기존 /playground에서 이동(#97, v0.3.0)
-- 폰트 metadata 무인 보강 파이프라인: 눈누 폰트 파일을 실검사(cmap)해 tags/weights 결측을 채우는 전자동 체인(감사→무인 승인→조립→적용). 라이브 파일럿으로 dev/prod 각 47종 적용-재검증 완료, fontagit.com 데이터에 반영(PR #102)
+- 폰트 metadata 무인 보강 파이프라인: 눈누 폰트 파일을 실검사(cmap)해 tags/weights 결측을 채우는 전자동 체인(감사→무인 승인→조립→적용). 파일럿(47종, PR #102)에 이어 **전체 1,110종 실행 완료(2026-07-27)** — Tier B weights 보유 1,075종으로 확장, fontagit.com 라이브 반영
 
 ## 진행 기록
 
-- 2026-07-25: 모바일 헤더의 하단 탭 중복 메뉴를 정리하고 `v0.4.1` 배포 완료(#100, `b45c171`; 테스트 236개·모바일 320/375/390px·fontagit.com 확인).
+## 2026-07-27 - 폰트 상세 굵기별 견본 + 이탤릭 지원 정보 (#107, PR #112)
+- 상태: 완료 (PR #112 오픈, 병합 전 수동 확인 체크리스트 PR 본문에 있음)
+- 요약: 상세 화면에 "지원 굵기" 섹션 신설 — 확인된 굵기x이탤릭 조합별 실제 견본 행, 미확인은 추정 없이 표기, font-synthesis:none + document.fonts 실로드 검증으로 브라우저 합성 굵기 차단. 페이지는 서버 컴포넌트 유지(클라 래퍼 분리).
+- 커밋/PR: `42ad7ad`..`9e34330` 14커밋, PR #112 (https://github.com/jojo3420/fontagit/pull/112)
+- 남은 일: (1)PR #112 codex 리뷰-병합(사용자) (2)수동 확인 6항목 (3)기존 lint 오류 2건(CompareLazy.tsx 등, develop 유래) 정리
+- 관련 문서: docs/superpowers/specs/2026-07-27-font-detail-weights-italic-design.md, docs/superpowers/plans/2026-07-27-font-detail-weights-italic.md
+- 상세: progress-011.md
 
+## 2026-07-27 - Tier B 1,110종 metadata 전체 실행 + 무인 체인 (#104, PR #113)
+- 상태: 완료 (데이터는 prod 라이브, 코드만 PR #113 병합 대기)
+- 요약: 무인 체인(scripts/audit-chain.sh)으로 1,110종 감사 → 1,073건 tags/weights를 dev/prod 적용-재검증(Tier B weights 316→1,075종) → fontagit.com 재배포. statement timeout은 manifest 청크 분할(--chunk-size 100), prod 게이트웨이 502는 in-list 배치 40으로 근본 해결.
+- 커밋/PR: `289793d`..`996f54b` 5커밋(main 핫픽스 백포트 2건 포함: turbopack root, pnpm-lock 동기화), PR #113 (https://github.com/jojo3420/fontagit/pull/113)
+- 남은 일: (1)PR #113 리뷰-병합(사용자) (2)deploy.sh에 .next 캐시 정리 단계 추가(후속 이슈)
+- 관련 문서: docs/progress/progress-010.md(파일럿), 이슈 #104
+- 상세: progress-011.md
+
+- 2026-07-26: 컬렉션 10종·56개 연결을 운영 DB에 적용하고 `v0.6.0`으로 배포 완료(#56, PR #109/#111, `80475c8`; 웹 테스트 236개·핵심 파이프라인 테스트 15개·상세 URL 10개 HTTP 200·SEO 1,256 URL 검증).
+
+||||||| c0b95c2
 ## 2026-07-26 - 컬렉션 에디토리얼 10종 dev 확장 (#56)
 - 상태: dev 완료, 운영 적용·배포·브라우저 시각 확인 대기
 - 요약: 마이그레이션 `0020`으로 기존 3종의 문구를 보존하면서 수동 큐레이션 10종·연결 56개로 확장. 로컬 실패 경로와 dev 2회 실행에서 최소 5개·중복 0·발행/OFL 위반 0·멱등 해시 일치를 확인.
 - 검증: Next.js production-mode Webpack 정적 빌드 2,508페이지 통과, SEO 1,256 URL(`fonts=1,240`, `collections=10`), 상세 10개와 폰트 링크 56개 HTTP 200. 브라우저 플러그인 미연결로 모바일·데스크톱 시각 확인은 미완료.
 - 커밋/브랜치: `e6c943e`, `feature/collections-editorial-expansion`. 운영 DB는 기존 3종 그대로이며, `pnpm --filter web lint`와 기본 Turbopack 빌드는 기준 브랜치의 기존 오류로 실패.
 - 관련 문서: `docs/superpowers/specs/2026-07-26-collections-editorial-expansion-design.md`, `docs/superpowers/plans/2026-07-26-collections-editorial-expansion.md`
+
+- 2026-07-25: 모바일 헤더의 하단 탭 중복 메뉴를 정리하고 `v0.4.1` 배포 완료(#100, `b45c171`; 테스트 236개·모바일 320/375/390px·fontagit.com 확인).
 
 ## 2026-07-23 - metadata 무인 승인 + 감사 파이프라인 라이브 파일럿 완주 (dev/prod 47종 적용, PR #102)
 - 상태: 완료 (PR #102 오픈, codex 리뷰 진행 중)

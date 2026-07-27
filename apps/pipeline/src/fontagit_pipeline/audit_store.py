@@ -916,9 +916,10 @@ class SupabaseAuditStore:
         if not evidence_ids or not font_ids:
             return []
 
-        # 2. snapshots를 id in-list 청크 조회 (100단위, 502 대응)
+        # 2. snapshots를 id in-list 청크 조회 (502 대응)
+        # UUID 100개 in-list는 URL 약 3.7KB로 prod(ollidam) 게이트웨이가 502로 거부한다 — 40개로 제한
         all_snapshots: list[dict[str, object]] = []
-        chunk_size = 100
+        chunk_size = 40
         evidence_ids_list = list(evidence_ids)
 
         for i in range(0, len(evidence_ids_list), chunk_size):
