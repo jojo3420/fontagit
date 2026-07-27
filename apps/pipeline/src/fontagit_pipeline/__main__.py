@@ -1348,7 +1348,7 @@ def main_audit_kogl_preview(args: argparse.Namespace) -> int:
         if not isinstance(snapshots_response.data, list):
             raise ValueError("snapshots query returned invalid data")
 
-        # 4. font_id별로 최신(최근) 스냅샷만 유지
+        # 4. font_id별로 최신 스냅샷만 유지 (collected_at desc=True 정렬로 미래 데이터도 대응)
         latest_snapshots: dict[str, dict] = {}
         for snap in snapshots_response.data:
             font_id = snap.get("font_id")
@@ -1426,6 +1426,9 @@ def main_audit_kogl_preview(args: argparse.Namespace) -> int:
         summary["total_detected"] = sum(len(v) for v in results["by_type"].values())
         summary["extraction_errors"] = len(results["extraction_errors"])
         summary["total_with_kogl_text"] = summary["total_detected"] + summary["undetected"]
+        # target_slug 추출 실패 카운트 ("unknown" fallback)
+        slug_extraction_failures = sum(1 for items in results["by_type"].values() for e in items if e.get("slug") == "unknown") + sum(1 for e in results["undetected"] if e.get("slug") == "unknown")
+        summary["slug_extraction_failures"] = slug_extraction_failures
         results["summary"] = summary
 
         # 8. JSON 저장
