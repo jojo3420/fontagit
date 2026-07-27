@@ -57,7 +57,7 @@ export function resolveDetailFontPreview(
     return {
       fontFamily: FALLBACK_FAMILY,
       stylesheetUrl: null,
-      combos: normalizeVariants(font.variants ?? []),
+      combos: [],
     };
   }
 
@@ -75,7 +75,6 @@ export function resolveDetailFontPreview(
     return {
       fontFamily: FALLBACK_FAMILY,
       stylesheetUrl: null,
-      combos,
     };
   }
 
