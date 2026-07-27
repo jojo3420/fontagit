@@ -16,22 +16,25 @@ FontAgit는 한글 폰트를 찾고 라이선스-미리보기 정보를 확인�
 - /fonts 용도별 섹션 계층화 + 타입 캔버스: 폰트를 용도 5섹션(본문/제목/브랜드/손글씨/장식)으로 자동 그룹화하고 에디터 추천을 앞에 노출, 상단 문구 입력창(타입 캔버스)으로 모든 견본을 실시간 미리보기(#60, PR #92) → v0.2.0으로 prod 라이브, 개요 모드 레이아웃/다크모드 버그는 v0.2.1 hotfix로 해결
 - 폰트 상세 글자 지원 검사: 폰트 상세 페이지에서 원하는 글자를 입력하면 해당 폰트가 그 글자를 지원하는지 canvas로 즉시 검출(검사 가능한 무료 웹폰트 대상). 기존 /playground에서 이동(#97, v0.3.0)
 - 폰트 metadata 무인 보강 파이프라인: 눈누 폰트 파일을 실검사(cmap)해 tags/weights 결측을 채우는 전자동 체인(감사→무인 승인→조립→적용). 파일럿(47종, PR #102)에 이어 **전체 1,110종 실행 완료(2026-07-27)** — Tier B weights 보유 1,075종으로 확장, fontagit.com 라이브 반영
+- 폰트 상세 '지원 굵기' 섹션: 확인된 굵기x이탤릭 조합별 실제 견본과 이탤릭 지원 배지 표시, 미확인 정보는 추정 없이 표기(v0.7.0)
 
 ## 진행 기록
 
+- 2026-07-27: 듀얼 리뷰(PR #112-#113) 후 squash 병합, 릴리스 PR #116으로 main 승격, `v0.7.0` 배포 완료(SSG 2,508페이지-SEO 1,256 URL, fontagit.com에서 지원 굵기 섹션 라이브 확인). 후속 백로그 #114-#115 등록.
+
 ## 2026-07-27 - 폰트 상세 굵기별 견본 + 이탤릭 지원 정보 (#107, PR #112)
-- 상태: 완료 (PR #112 오픈, 병합 전 수동 확인 체크리스트 PR 본문에 있음)
+- 상태: 완료 (PR #112 병합, v0.7.0 라이브)
 - 요약: 상세 화면에 "지원 굵기" 섹션 신설 — 확인된 굵기x이탤릭 조합별 실제 견본 행, 미확인은 추정 없이 표기, font-synthesis:none + document.fonts 실로드 검증으로 브라우저 합성 굵기 차단. 페이지는 서버 컴포넌트 유지(클라 래퍼 분리).
 - 커밋/PR: `42ad7ad`..`9e34330` 14커밋, PR #112 (https://github.com/jojo3420/fontagit/pull/112)
-- 남은 일: (1)PR #112 codex 리뷰-병합(사용자) (2)수동 확인 6항목 (3)기존 lint 오류 2건(CompareLazy.tsx 등, develop 유래) 정리
+- 남은 일: (1)모바일-네트워크 차단 수동 확인(실기기) (2)후속 보강 이슈 #115 (3)기존 lint 오류 2건(CompareLazy.tsx 등) 정리
 - 관련 문서: docs/superpowers/specs/2026-07-27-font-detail-weights-italic-design.md, docs/superpowers/plans/2026-07-27-font-detail-weights-italic.md
 - 상세: progress-011.md
 
 ## 2026-07-27 - Tier B 1,110종 metadata 전체 실행 + 무인 체인 (#104, PR #113)
-- 상태: 완료 (데이터는 prod 라이브, 코드만 PR #113 병합 대기)
+- 상태: 완료 (PR #113 병합, 데이터-코드 모두 라이브)
 - 요약: 무인 체인(scripts/audit-chain.sh)으로 1,110종 감사 → 1,073건 tags/weights를 dev/prod 적용-재검증(Tier B weights 316→1,075종) → fontagit.com 재배포. statement timeout은 manifest 청크 분할(--chunk-size 100), prod 게이트웨이 502는 in-list 배치 40으로 근본 해결.
 - 커밋/PR: `289793d`..`996f54b` 5커밋(main 핫픽스 백포트 2건 포함: turbopack root, pnpm-lock 동기화), PR #113 (https://github.com/jojo3420/fontagit/pull/113)
-- 남은 일: (1)PR #113 리뷰-병합(사용자) (2)deploy.sh에 .next 캐시 정리 단계 추가(후속 이슈)
+- 남은 일: 후속 보강 이슈 #114 (청크 무결성 단정, 다중 청크 테스트, deploy.sh 캐시 정리 등)
 - 관련 문서: docs/progress/progress-010.md(파일럿), 이슈 #104
 - 상세: progress-011.md
 
