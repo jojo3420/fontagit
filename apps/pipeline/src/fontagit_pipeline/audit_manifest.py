@@ -132,9 +132,43 @@ class ManifestError(ValueError):
     """manifest가 안전하게 생성-검증될 수 없을 때 발생한다."""
 
 
+# foundry/download/license_source_url은 링크-표기 등급이며 legal 필드(allow_*)나
+# license_source_kind와 달리 사람 검수 전 reference 신뢰도 근거(눈누 font-file-script,
+# Tier A google/fonts METADATA.pb)를 허용한다. legal 필드는 절대 포함하지 않는다.
+_REFERENCE_EVIDENCE_FIELDS = frozenset(
+    {"foundry", "foundry_url", "download_url", "download_source_kind", "license_source_url"}
+)
+
+
+def _is_reference_metadata_evidence(snapshot: Mapping[str, object]) -> bool:
+    """눈누 font-file-script 또는 Tier A(google-fonts) metadata 스냅샷인지 판정한다.
+
+    tags/weights에 이미 허용된 눈누 예외와 같은 신뢰 수준으로,
+    _REFERENCE_EVIDENCE_FIELDS 5개 필드에 한해서만 사용한다.
+    """
+    if snapshot.get("document_kind") != "metadata":
+        return False
+    extracted = snapshot.get("extracted")
+    if not isinstance(extracted, Mapping):
+        return False
+    source_kind = snapshot.get("source_kind")
+    evidence_role = extracted.get("evidence_role")
+    if source_kind == "noonnu" and evidence_role == "font-file-script":
+        return True
+    if (
+        source_kind == "public"
+        and snapshot.get("provider") == "google-fonts"
+        and evidence_role == "tier-a-metadata-pb"
+    ):
+        return True
+    return False
+
+
 def _evidence_role_is_valid(
     field_name: str, snapshot: Mapping[str, object], confidence: object
 ) -> bool:
+    if field_name in _REFERENCE_EVIDENCE_FIELDS and _is_reference_metadata_evidence(snapshot):
+        return confidence == "reference"
     if field_name.startswith("download_"):
         required_document = "download"
         # font_source_snapshots.source_kind CHECK는 official/public/noonnu만 허용해

@@ -1,6 +1,6 @@
 """Tier A 공식 메타데이터 수집기 테스트."""
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fontagit_pipeline.audit_http import FetchResult
 from fontagit_pipeline.audit_policy import SourceRegistry, RegistryEntry
@@ -164,6 +164,72 @@ fonts {
     assert foundry_finding["proposed_value"] == "네이버"
     assert foundry_finding["auto_applicable"] is True
     assert result["errors"] == []
+
+    # 이슈 #131: dry_run=False면 Tier A 근거 스냅샷이 저장되고,
+    # 5개 finding 모두 같은 evidence_id(스냅샷 id)로 연결된다.
+    evidence_ids = {finding["evidence_id"] for finding in findings}
+    assert None not in evidence_ids
+    assert len(evidence_ids) == 1
+    snapshot_id = UUID(next(iter(evidence_ids)))
+    run_id_stored, snapshot = store.snapshot_draft(snapshot_id)
+    assert run_id_stored == run_id
+    assert snapshot.provider == "google-fonts"
+    assert snapshot.provider_record_id == "Noto Sans"
+    assert snapshot.source_kind == "public"
+    assert snapshot.document_kind == "metadata"
+    assert snapshot.extracted["evidence_role"] == "tier-a-metadata-pb"
+
+
+def test_collect_tier_a_meta_dry_run_skips_snapshot() -> None:
+    """이슈 #131: dry_run=True면 스냅샷을 저장하지 않고 evidence_id는 None으로 남는다."""
+    run_id = uuid4()
+    store = InMemoryAuditStore()
+    font_id = uuid4()
+
+    registry = SourceRegistry(
+        version=1,
+        entries=[
+            RegistryEntry(
+                maker="Google Fonts (archive)",
+                domain="fonts.google.com",
+                roles=["download", "homepage"],
+                source_kind="archive",
+            ),
+            RegistryEntry(
+                maker="google/fonts GitHub (archive)",
+                domain="raw.githubusercontent.com",
+                roles=["license", "metadata"],
+                source_kind="archive",
+            ),
+        ],
+    )
+    norm = BrandNormalization(entries=[])
+    targets = [
+        TierATarget(font_id=font_id, name_en="Noto Sans", license_type="OFL", noonnu_foundry=None)
+    ]
+
+    def fake_fetcher(url: str, **kwargs: object) -> FetchResult:
+        if "METADATA.pb" in url:
+            content = '''name: "Noto Sans"
+designer: "Google"
+license: "OFL"
+fonts {
+  copyright: "Copyright © 2012 Google Inc."
+}
+'''
+            return FetchResult(
+                status=200, final_url=url, content=content.encode(),
+                content_sha256="abc123", redirect_count=0,
+            )
+        return FetchResult(status=404, final_url=url, content=b"", content_sha256="def456", redirect_count=0)
+
+    result = collect_tier_a_meta(run_id, targets, store, registry, norm, dry_run=True, fetcher=fake_fetcher)
+
+    assert result["success_count"] == 1
+    assert store._snapshot_drafts == {}
+    assert store._finding_drafts == {}
+    for finding in result["findings"]:
+        assert finding["evidence_id"] is None
 
 
 def test_collect_tier_a_meta_fetch_failure() -> None:

@@ -313,6 +313,78 @@ def test_evidence_role_is_valid_tags_noonnu_missing_evidence_role() -> None:
     assert _evidence_role_is_valid("tags", snapshot, "reference") is False
 
 
+_NOONNU_SCRIPT_EVIDENCE = {
+    "source_kind": "noonnu",
+    "document_kind": "metadata",
+    "extracted": {"evidence_role": "font-file-script"},
+}
+_TIER_A_EVIDENCE = {
+    "source_kind": "public",
+    "provider": "google-fonts",
+    "document_kind": "metadata",
+    "extracted": {"evidence_role": "tier-a-metadata-pb"},
+}
+_REFERENCE_EVIDENCE_TEST_FIELDS = (
+    "foundry",
+    "foundry_url",
+    "download_url",
+    "download_source_kind",
+    "license_source_url",
+)
+
+
+@pytest.mark.parametrize("snapshot", [_NOONNU_SCRIPT_EVIDENCE, _TIER_A_EVIDENCE], ids=["noonnu", "tier_a"])
+@pytest.mark.parametrize("field_name", _REFERENCE_EVIDENCE_TEST_FIELDS)
+def test_evidence_role_is_valid_reference_fields_allow_noonnu_and_tier_a(
+    field_name: str, snapshot: dict[str, object]
+) -> None:
+    """이슈 #131: foundry/foundry_url/download_url/download_source_kind/license_source_url은
+    눈누 font-file-script 및 Tier A(google-fonts) metadata를 reference 신뢰도로 허용한다."""
+    assert _evidence_role_is_valid(field_name, snapshot, "reference") is True
+    # confidence가 reference가 아니면(예: official) 여전히 거부된다.
+    assert _evidence_role_is_valid(field_name, snapshot, "official") is False
+
+
+@pytest.mark.parametrize("snapshot", [_NOONNU_SCRIPT_EVIDENCE, _TIER_A_EVIDENCE], ids=["noonnu", "tier_a"])
+@pytest.mark.parametrize(
+    "field_name", ["license_source_kind", "allow_commercial", "license_verified"]
+)
+def test_evidence_role_is_valid_protected_fields_reject_reference_evidence(
+    field_name: str, snapshot: dict[str, object]
+) -> None:
+    """legal 필드(allow_*)와 license_source_kind는 눈누/Tier A reference 우회 대상이 아니다."""
+    assert _evidence_role_is_valid(field_name, snapshot, "reference") is False
+
+
+def test_build_manifest_accepts_reference_evidence_for_link_role_fields() -> None:
+    """이슈 #131: foundry/foundry_url/download_url/download_source_kind/license_source_url이
+    눈누 font-file-script metadata 근거(reference 신뢰도)로 정상 승인된다."""
+    row = deepcopy(_row())
+    row["evidence_snapshots"][0].update(_NOONNU_SCRIPT_EVIDENCE)
+    row["evidence_snapshots"][1].update(_NOONNU_SCRIPT_EVIDENCE)
+
+    findings = []
+    for offset, (field_name, proposed) in enumerate(
+        (
+            ("foundry", "네이버"),
+            ("foundry_url", "https://hangeul.naver.com/fonts"),
+            ("download_url", "https://fonts.google.com/specimen/Noto+Sans"),
+            ("download_source_kind", "archive"),
+            (
+                "license_source_url",
+                "https://raw.githubusercontent.com/google/fonts/main/ofl/notosans/LICENSE.txt",
+            ),
+        )
+    ):
+        finding = _finding(field_name, None, proposed)
+        finding["id"] = str(UUID(int=FINDING_ID.int + 10 + offset))
+        finding["confidence"] = "reference"
+        findings.append(finding)
+
+    bundle = build_manifest(_run(), findings, [row])
+    assert set(bundle.forward.entries[0].after) == set(_REFERENCE_EVIDENCE_TEST_FIELDS)
+
+
 def test_build_manifest_snapshot_run_id_invalid_uuid() -> None:
     """비정상: snapshot run_id가 유효한 UUID가 아니면 ManifestError."""
     row = deepcopy(_row())

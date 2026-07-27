@@ -7,8 +7,11 @@ METADATA.pb(designer/copyright)를 근거 자료로 권리사(foundry)를 판정
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import re
+from datetime import UTC, datetime
 from typing import Callable, Sequence
 from urllib.parse import quote
 from uuid import UUID
@@ -21,7 +24,7 @@ from fontagit_pipeline.audit_policy import (
     SourceRegistry,
     may_update_source_kind,
 )
-from fontagit_pipeline.audit_store import AuditStore, FindingDraft
+from fontagit_pipeline.audit_store import AuditStore, FindingDraft, SnapshotDraft
 from fontagit_pipeline.licenses import _LICENSE_DIRS
 
 logger = logging.getLogger(__name__)
@@ -152,6 +155,8 @@ def _finding_detail(target: TierATarget, finding: FindingDraft) -> dict[str, obj
         "proposed_value": finding.proposed_value,
         "auto_applicable": finding.auto_applicable,
         "review_reason": finding.review_reason,
+        # dry_run이면 스냅샷을 저장하지 않아 None(evidence 없음)이 그대로 드러난다.
+        "evidence_id": str(finding.evidence_id) if finding.evidence_id else None,
     }
 
 
@@ -226,13 +231,50 @@ def collect_tier_a_meta(
             specimen_url = build_specimen_url(target.name_en)
             license_source_url = build_license_source_url(target.license_type, target.name_en)
 
+            # Tier A 근거 스냅샷: dry_run이면 저장을 건너뛰고 evidence_id는 None으로 남긴다
+            # (리포트에 evidence 없음이 그대로 드러남). font_source_snapshots.source_kind
+            # CHECK는 official/public/noonnu만 허용해 archive를 저장할 수 없으므로,
+            # google/fonts 공개 저장소 원문이라는 의미에서 'public'을 근거 등급으로 쓴다
+            # (링크 자체의 archive 등급과는 별개 축, 스펙 0장).
+            evidence_id: UUID | None = None
+            if not dry_run:
+                extracted = {
+                    "evidence_role": "tier-a-metadata-pb",
+                    "designer": meta.designer,
+                    "copyright": meta.copyright,
+                }
+                normalized_sha256 = hashlib.sha256(
+                    json.dumps(
+                        extracted, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+                    ).encode("utf-8")
+                ).hexdigest()
+                snapshot = SnapshotDraft(
+                    font_id=target.font_id,
+                    provider="google-fonts",
+                    provider_record_id=target.name_en,
+                    source_kind="public",
+                    document_kind="metadata",
+                    request_url=metadata_url,
+                    final_url=result.final_url,
+                    http_status=result.status,
+                    raw_text=None,
+                    raw_sha256=hashlib.sha256(result.content).hexdigest(),
+                    normalized_sha256=normalized_sha256,
+                    extracted=extracted,
+                    evidence_locations={"metadata_pb": metadata_url},
+                    extraction_rule_id="tier-a-metadata-pb-v1",
+                    parser_version="tier-a-meta-v1",
+                    collected_at=datetime.now(UTC),
+                )
+                evidence_id = store.save_snapshot(run_id, snapshot)
+
             # 1. foundry 필드
             finding_foundry = FindingDraft(
                 font_id=target.font_id,
                 field_name="foundry",
                 before_value=target.noonnu_foundry,
                 proposed_value=foundry_res.value,
-                evidence_id=None,  # Tier A는 스냅샷 없음
+                evidence_id=evidence_id,
                 confidence="reference",
                 review_reason=foundry_res.reason,
                 auto_applicable=(foundry_res.status == "auto"),
@@ -251,7 +293,7 @@ def collect_tier_a_meta(
                         field_name="foundry_url",
                         before_value=None,
                         proposed_value=entry.evidence_url,
-                        evidence_id=None,  # Tier A는 스냅샷 없음
+                        evidence_id=evidence_id,
                         confidence="reference",
                         review_reason="normalization_evidence",
                         auto_applicable=(entry.status == "approved"),
@@ -269,7 +311,7 @@ def collect_tier_a_meta(
                     field_name="download_url",
                     before_value=None,
                     proposed_value=specimen_url,
-                    evidence_id=None,  # Tier A는 스냅샷 없음
+                    evidence_id=evidence_id,
                     confidence="reference",
                     review_reason="specimen_page_fallback",
                     auto_applicable=(specimen_source_kind in AUTO_APPLICABLE_SOURCE_KINDS),
@@ -284,7 +326,7 @@ def collect_tier_a_meta(
                     field_name="download_source_kind",
                     before_value=target.download_source_kind,
                     proposed_value=specimen_source_kind,
-                    evidence_id=None,  # Tier A는 스냅샷 없음
+                    evidence_id=evidence_id,
                     confidence="reference",
                     review_reason="specimen_page_fallback",
                     auto_applicable=(specimen_source_kind in AUTO_APPLICABLE_SOURCE_KINDS),
@@ -302,7 +344,7 @@ def collect_tier_a_meta(
                     field_name="license_source_url",
                     before_value=None,
                     proposed_value=license_source_url,
-                    evidence_id=None,  # Tier A는 스냅샷 없음
+                    evidence_id=evidence_id,
                     confidence="reference",
                     review_reason="github_license_file",
                     auto_applicable=(license_source_kind in AUTO_APPLICABLE_SOURCE_KINDS),
