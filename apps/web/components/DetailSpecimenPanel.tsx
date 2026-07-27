@@ -13,23 +13,42 @@ import {
 const LOAD_TIMEOUT_MS = 5000;
 /** 판정 일관성을 위한 고정 검사 문자열(사용자 입력과 무관). */
 const PROBE_TEXT = "다람쥐 한글Aa1";
+/** 같은 url의 in-flight/완료 Promise를 재사용하여 경합 방지. */
+const stylesheetPromises = new Map<string, Promise<void>>();
 
 function ensureStylesheet(url: string): Promise<void> {
+  if (stylesheetPromises.has(url)) {
+    return stylesheetPromises.get(url)!;
+  }
+
   const existing = Array.from(
     document.querySelectorAll<HTMLLinkElement>(
       'link[data-fontagit-webfont="true"]'
     )
   ).find((link) => link.href === url);
-  if (existing) return Promise.resolve();
-  return new Promise((resolve, reject) => {
+  if (existing) {
+    const resolved = Promise.resolve();
+    stylesheetPromises.set(url, resolved);
+    return resolved;
+  }
+
+  const promise = new Promise<void>((resolve, reject) => {
     const link = document.createElement("link");
     link.rel = "stylesheet";
     link.href = url;
     link.dataset.fontagitWebfont = "true";
-    link.onload = () => resolve();
-    link.onerror = () => reject(new Error("stylesheet load failed"));
+    link.onload = () => {
+      resolve();
+    };
+    link.onerror = () => {
+      stylesheetPromises.delete(url);
+      reject(new Error("stylesheet load failed"));
+    };
     document.head.appendChild(link);
   });
+
+  stylesheetPromises.set(url, promise);
+  return promise;
 }
 
 /** 요청 조합과 로드된 FontFace의 weight/style이 실제로 일치하는지 대조한다. */
@@ -68,7 +87,7 @@ export function DetailSpecimenPanel({
   useEffect(() => {
     if (detail.combos.length === 0) return;
     let cancelled = false;
-    const familyName = font.nameEn.trim();
+    const familyName = detail.fontFamily.trim();
     const markAll = (status: ComboLoadStatus) => {
       if (cancelled) return;
       setStatuses(
@@ -116,7 +135,7 @@ export function DetailSpecimenPanel({
       cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, [detail, font.nameEn]);
+  }, [detail]);
 
   return (
     <>
