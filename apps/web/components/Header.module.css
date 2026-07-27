@@ -82,7 +82,7 @@
     font-size: 13px;
   }
 
-  .nav a.toolLink {
+  .nav a.mobileTabLink {
     display: none;
   }
 }

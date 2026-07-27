@@ -13,10 +13,10 @@ export function Header() {
         <span className={styles.ko}>폰트 아지트</span>
       </div>
       <nav className={styles.nav}>
-        <Link href="/fonts">폰트</Link>
-        <Link href="/trends">트렌드</Link>
-        <Link href="/playground" className={styles.toolLink}>캔버스</Link>
-        <Link href="/#compare" className={styles.toolLink}>비교</Link>
+        <Link href="/fonts" className={styles.mobileTabLink}>폰트</Link>
+        <Link href="/trends" className={styles.mobileTabLink}>트렌드</Link>
+        <Link href="/playground" className={styles.mobileTabLink}>캔버스</Link>
+        <Link href="/#compare" className={styles.mobileTabLink}>비교</Link>
         <Link href="/collections">컬렉션</Link>
         <Link href="/submit">등록</Link>
       </nav>

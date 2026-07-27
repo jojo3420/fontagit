@@ -176,7 +176,7 @@ if [[ -n "$NEW_TAG" ]]; then
 
   # 태그 중복 검사
   if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
-    echo "ERROR: 태그 $NEW_TAG가 이미 존재함 (덮어쓰기 금지)"
+    echo "ERROR: 태그 ${NEW_TAG}가 이미 존재함 (덮어쓰기 금지)"
     exit 1
   fi
 
@@ -188,14 +188,14 @@ fi
 # 기존 태그에서 배포인 경우: 태그 검증
 if [[ -n "$DEPLOY_TAG" ]]; then
   git ls-remote --tags origin "refs/tags/$DEPLOY_TAG" | grep -q . || {
-    echo "ERROR: 태그 $DEPLOY_TAG가 origin에 없음"
+    echo "ERROR: 태그 ${DEPLOY_TAG}가 origin에 없음"
     exit 1
   }
   git fetch origin --quiet "refs/tags/$DEPLOY_TAG:refs/tags/$DEPLOY_TAG" 2>/dev/null || true
 
   # 태그 배포: 임시 체크아웃 후 빌드, 완료 후 원래 상태 복원
   ORIGINAL_BRANCH="$(git branch --show-current)"
-  echo "==> 태그 $DEPLOY_TAG로 임시 전환"
+  echo "==> 태그 ${DEPLOY_TAG}로 임시 전환"
   git checkout "$DEPLOY_TAG" --quiet
   trap "echo '==> 원래 상태 복원: $ORIGINAL_BRANCH'; git checkout '$ORIGINAL_BRANCH' --quiet" EXIT
 else
@@ -205,7 +205,7 @@ else
     exit 1
   }
   [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/$TARGET_BRANCH)" ] || {
-    echo "ERROR: HEAD가 origin/$TARGET_BRANCH와 다름"
+    echo "ERROR: HEAD가 origin/${TARGET_BRANCH}와 다름"
     exit 1
   }
 fi
