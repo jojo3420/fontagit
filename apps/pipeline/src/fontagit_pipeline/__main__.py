@@ -1157,6 +1157,74 @@ def main_audit_crawl_all(args: argparse.Namespace) -> int:
         return 3
 
 
+def main_audit_tier_a_meta(args: argparse.Namespace) -> int:
+    """Tier A 공식 메타데이터(권리사/specimen URL)를 수집한다.
+
+    dry-run 모드에서만 실행 가능 또는 dev DB 로드 실패 시 건너뛴다.
+    """
+    import json
+    from fontagit_pipeline.tier_a_meta import (
+        BrandNormalization,
+        TierATarget,
+        collect_tier_a_meta,
+    )
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    report = {
+        "dry_run": args.dry_run,
+        "limit": args.limit,
+        "results": None,
+        "errors": [],
+    }
+
+    try:
+        # 정규화 테이블 로드
+        norm_path = Path(__file__).with_name("data") / "brand_normalization.json"
+        norm_data = json.loads(norm_path.read_text(encoding="utf-8"))
+        normalization = BrandNormalization.model_validate(norm_data)
+
+        if args.dry_run:
+            # dry-run: 메모리 저장소만 사용
+            from fontagit_pipeline.audit_store import InMemoryAuditStore
+
+            store = InMemoryAuditStore()
+
+            # 더미 대상 생성 (실제로는 dev DB에서 조회하지만, dry-run이므로 생략)
+            # 실제 구현에서는 여기서 dev DB 조회
+            targets: list[TierATarget] = []
+            result = collect_tier_a_meta(
+                targets,
+                store,
+                normalization,
+                dry_run=True,
+            )
+            report["results"] = result
+            logger.info("Tier A 메타 dry-run 완료: %s", result)
+        else:
+            # 실제 구현에서는 dev DB 로드 및 저장소 생성
+            report["errors"].append("일반 모드는 현재 미지원 (dev DB 환경 필요)")
+            logger.warning("Tier A 메타 수집: 일반 모드 미지원")
+
+        # 보고서 저장
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(
+            json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        logger.info("Tier A 메타 보고서 저장: %s", args.out)
+        return 0
+
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        logger.error("Tier A 메타 수집 중단: %s", exc)
+        report["errors"].append(str(exc))
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(
+            json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return 3
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="FontAgit 파이프라인",
@@ -1388,6 +1456,15 @@ if __name__ == "__main__":
     )
     crawl_all_parser.add_argument("--dry-run", action="store_true", help="dry-run 모드")
     crawl_all_parser.set_defaults(func=main_audit_crawl_all)
+
+    tier_a_meta_parser = subparsers.add_parser(
+        "font-audit-tier-a-meta",
+        help="Tier A 공식 메타데이터 수집 (권리사 판정+specimen URL fallback)",
+    )
+    tier_a_meta_parser.add_argument("--limit", type=int, default=50, help="수집 대상 한도 (기본값 50)")
+    tier_a_meta_parser.add_argument("--dry-run", action="store_true", help="DB 쓰기 없이 메모리만 사용")
+    tier_a_meta_parser.add_argument("--out", type=Path, required=True, help="결과 보고서 JSON 경로")
+    tier_a_meta_parser.set_defaults(func=main_audit_tier_a_meta)
 
     args = parser.parse_args()
 
