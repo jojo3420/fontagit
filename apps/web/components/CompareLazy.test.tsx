@@ -12,6 +12,7 @@ beforeEach(() => {
         ioCallback = cb;
       }
       observe() {}
+      unobserve() {}
       disconnect() {}
     }
   );
