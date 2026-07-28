@@ -14,6 +14,7 @@ from fontagit_pipeline.__main__ import (
     main_audit_manifest_build,
 )
 from fontagit_pipeline.audit_manifest import ManifestBundle, ManifestPaths
+from fontagit_pipeline.audit_store import ExcludedFontSource
 from fontagit_pipeline.models import GoogleFontRaw, OutputDocument
 from fontagit_pipeline.licenses import LicenseFetchError
 
@@ -366,6 +367,92 @@ def test_manifest_build_with_approved_findings() -> None:
         mock_store.get_current_fonts_with_snapshots.assert_called_once()
         mock_build.assert_called_once_with(run, [finding], [font_row])
         mock_write.assert_called_once_with(mock_bundle, out_dir)
+
+
+def test_manifest_build_prod_excludes_findings_for_missing_target_fonts() -> None:
+    """target=prod: 대상 DB에 없는 폰트의 finding은 예외 대신 manifest에서 제외된다."""
+    run = _mock_run()
+    kept_finding = _mock_finding(run["id"])
+    excluded_finding = _mock_finding(run["id"])
+
+    kept_font_row = {
+        "id": kept_finding["font_id"],
+        "family": "Kept Font",
+        "tags": ["new-tag"],
+        "evidence_snapshots": [
+            {
+                "id": kept_finding["evidence_id"],
+                "font_id": kept_finding["font_id"],
+                "provider": "noonnu",
+                "provider_record_id": "12345",
+            }
+        ],
+    }
+
+    out_dir = Path("/tmp/test_manifest_build_prod")
+    args = argparse.Namespace(
+        out=out_dir,
+        run_id=run["id"],
+        target="prod",
+    )
+
+    mock_bundle = MagicMock(spec=ManifestBundle)
+    mock_bundle.forward_sha256 = "f" * 64
+    mock_bundle.reverse_sha256 = "r" * 64
+
+    mock_paths = MagicMock(spec=ManifestPaths)
+    mock_paths.forward = out_dir / "forward.json"
+    mock_paths.forward_sha256 = out_dir / "forward.sha256"
+    mock_paths.reverse = out_dir / "reverse.json"
+    mock_paths.reverse_sha256 = out_dir / "reverse.sha256"
+
+    def fake_get_current_fonts_with_snapshots(
+        run_id: object,
+        target_store: object = None,
+        excluded_out: list[ExcludedFontSource] | None = None,
+    ) -> list[dict[str, object]]:
+        if excluded_out is not None:
+            excluded_out.append(
+                ExcludedFontSource(
+                    provider="noonnu",
+                    provider_record_id="99999",
+                    dev_font_id=excluded_finding["font_id"],
+                    evidence_ids=(excluded_finding["evidence_id"],),
+                )
+            )
+        return [kept_font_row]
+
+    with patch(
+        "fontagit_pipeline.config.load_audit_settings"
+    ) as mock_load_settings, patch(
+        "fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials"
+    ) as mock_store_ctor, patch(
+        "fontagit_pipeline.audit_manifest.build_manifest", return_value=mock_bundle
+    ) as mock_build, patch(
+        "fontagit_pipeline.audit_manifest.write_manifest_bundle", return_value=mock_paths
+    ):
+        mock_settings = MagicMock()
+        mock_settings.dev_write_credentials.return_value = ("dev-url", "dev-secret")
+        mock_settings.supabase_prod_url = "prod-url"
+        mock_settings.supabase_prod_secret_key = "prod-secret"
+        mock_load_settings.return_value = mock_settings
+
+        mock_store = MagicMock()
+        mock_store.get_run.return_value = run
+        mock_store.get_approved_findings.return_value = [kept_finding, excluded_finding]
+        mock_store.get_current_fonts_with_snapshots.side_effect = (
+            fake_get_current_fonts_with_snapshots
+        )
+        mock_store_ctor.return_value = mock_store
+
+        result = main_audit_manifest_build(args)
+
+        assert result == 0, f"Expected exit code 0 but got {result}"
+
+        # build_manifest에 넘어간 findings에는 대상 DB에 없는 폰트의 finding이 빠져 있어야 한다
+        called_findings = mock_build.call_args.args[1]
+        assert called_findings == [kept_finding]
+        assert mock_build.call_args.args[2] == [kept_font_row]
 
 
 def test_manifest_build_no_approved_findings_exits_nonzero() -> None:

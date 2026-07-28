@@ -6,12 +6,15 @@
 
 from __future__ import annotations
 
+import logging
 import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol
 from uuid import UUID, uuid4
+
+logger = logging.getLogger(__name__)
 
 # 사람이 직접 검수해 승인할 수 있는 필드. tags/weights는 기존 metadata 승인 경로,
 # 나머지 5개(foundry/foundry_url/download_url/download_source_kind/license_source_url)는
@@ -78,6 +81,20 @@ class ApprovedFontFileCandidate:
     request_url: str
     evidence_id: UUID
     run_id: UUID
+
+
+@dataclass(frozen=True)
+class ExcludedFontSource:
+    """target_store 매칭에서 폰트 자체가 없어(누락) 결과에서 제외된 항목.
+
+    dev/prod 폰트 목록이 다른 것은 정상 상태이므로 예외 대신 이 형태로 보고한다.
+    2건 이상 매칭(중복)은 데이터 정합성 오류이므로 이 타입 대상이 아니고 RuntimeError로 계속 차단된다.
+    """
+
+    provider: str
+    provider_record_id: str
+    dev_font_id: str | None
+    evidence_ids: tuple[str, ...]
 
 
 class AuditStore(Protocol):
@@ -950,7 +967,10 @@ class SupabaseAuditStore:
         return all_findings
 
     def get_current_fonts_with_snapshots(
-        self, run_id: UUID, target_store: "SupabaseAuditStore | None" = None
+        self,
+        run_id: UUID,
+        target_store: "SupabaseAuditStore | None" = None,
+        excluded_out: list[ExcludedFontSource] | None = None,
     ) -> list[dict[str, object]]:
         """현재 run의 approved findings 증거 스냅샷과 폰트를 조회 (evidence_id 기준).
 
@@ -961,15 +981,23 @@ class SupabaseAuditStore:
         현재 상태 단언은 적용 대상 DB를 기준으로 한다. target_store가 지정되면 fonts와 font_sources는
         그곳에서 조회하며, 감사 증거 스냅샷은 항상 self(dev)에서 조회한다.
 
+        target_store가 지정된 경우에 한해, 대상 DB에 폰트 자체가 없는(누락) source_key는 예외 대신
+        결과에서 제외하고 logger.warning으로 남긴다 (dev/prod 폰트 목록 차이는 정상 상태). excluded_out을
+        넘기면 제외된 항목을 프로그램적으로도 확인할 수 있다. target_store가 없는 self 대상 조회에서는
+        누락도 기존처럼 RuntimeError로 취급한다(자기 DB에 없으면 진짜 오류). 2건 이상 매칭(중복)은
+        target_store 지정 여부와 무관하게 항상 RuntimeError로 차단한다.
+
         Args:
             run_id: 조회할 감사 run의 UUID
             target_store: fonts/font_sources를 조회할 대상 스토어 (None이면 self 사용)
+            excluded_out: 지정 시, target_store 매칭에서 누락으로 제외된 항목을 append한다
 
         Returns:
-            font_source_snapshots가 포함된 font 레코드 리스트
+            font_source_snapshots가 포함된 font 레코드 리스트 (제외된 폰트는 미포함)
 
         Raises:
-            RuntimeError: evidence_id 결측, evidence 스냅샷 결측, fonts 결측, source_key 중복
+            RuntimeError: evidence_id 결측, evidence 스냅샷 결측, fonts 결측(self 대상 시 누락 포함),
+                source_key 중복/초과 매칭
         """
         # 1. approved findings 조회 (evidence_id 기준)
         approved_findings = self.get_approved_findings(run_id)
@@ -1095,20 +1123,41 @@ class SupabaseAuditStore:
                                 target_font_ids.add(str(font_id))
                                 source_key_to_target_font_id[key] = str(font_id)
 
-            # 누락된 키 검증
-            missing_keys = [k for k in source_groups.keys() if k not in found_keys]
-            if missing_keys or mismatched_keys:
-                error_parts = []
-                if missing_keys:
-                    missing_str = "; ".join(f"({p}, {r})" for p, r in missing_keys)
-                    error_parts.append(f"누락: {missing_str}")
-                if mismatched_keys:
-                    mismatched_str = "; ".join(
-                        f"({p}, {r}): {count}건" for p, r, count in mismatched_keys
-                    )
-                    error_parts.append(f"중복/초과: {mismatched_str}")
+            # 2건 이상 매칭(중복)은 데이터 정합성 오류이므로 target_store 지정 여부와 무관하게 차단한다
+            if mismatched_keys:
+                mismatched_str = "; ".join(
+                    f"({p}, {r}): {count}건" for p, r, count in mismatched_keys
+                )
                 raise RuntimeError(
-                    f"font_sources 매칭 실패 (정확히 1건 예상): {'; '.join(error_parts)}"
+                    f"font_sources 매칭 실패 (정확히 1건 예상): 중복/초과: {mismatched_str}"
+                )
+
+            # 누락(0건 매칭)은 dev/prod 폰트 목록 차이로 발생하는 정상 상태이므로
+            # 예외 대신 결과에서 제외하고 fail-visible하게 warning + excluded_out으로 남긴다
+            missing_keys = [k for k in source_groups.keys() if k not in found_keys]
+            if missing_keys:
+                for missing_key in missing_keys:
+                    first_snapshot = source_groups[missing_key][0]
+                    dev_font_id = first_snapshot.get("font_id")
+                    evidence_ids_for_key = tuple(
+                        str(snapshot["id"])
+                        for snapshot in source_groups[missing_key]
+                        if snapshot.get("id") is not None
+                    )
+                    if excluded_out is not None:
+                        excluded_out.append(
+                            ExcludedFontSource(
+                                provider=missing_key[0],
+                                provider_record_id=missing_key[1],
+                                dev_font_id=str(dev_font_id) if dev_font_id is not None else None,
+                                evidence_ids=evidence_ids_for_key,
+                            )
+                        )
+
+                logger.warning(
+                    "font_sources 대상 DB 결측으로 %d건 제외: %s",
+                    len(missing_keys),
+                    "; ".join(f"({p}, {r})" for p, r in missing_keys),
                 )
 
             # target_store에서 fonts를 id in-list 청크 조회

@@ -893,7 +893,7 @@ def main_audit_manifest_build(args: argparse.Namespace) -> int:
         write_chunked_manifest_bundles,
         write_manifest_bundle,
     )
-    from fontagit_pipeline.audit_store import SupabaseAuditStore
+    from fontagit_pipeline.audit_store import ExcludedFontSource, SupabaseAuditStore
     from fontagit_pipeline.config import load_audit_settings
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -928,25 +928,54 @@ def main_audit_manifest_build(args: argparse.Namespace) -> int:
             return 1
         logger.info("승인된 findings 조회: count=%d", len(approved_findings))
 
-        # 3. 현재 font 스냅샷 조회
-        current_rows = store.get_current_fonts_with_snapshots(run_id, target_store=target_store)
+        # 3. 현재 font 스냅샷 조회 (대상 DB에 없는 폰트는 excluded_fonts로 별도 보고됨)
+        excluded_fonts: list[ExcludedFontSource] = []
+        current_rows = store.get_current_fonts_with_snapshots(
+            run_id, target_store=target_store, excluded_out=excluded_fonts
+        )
         logger.info("현재 font 스냅샷 조회: count=%d", len(current_rows))
+        if excluded_fonts:
+            logger.warning(
+                "대상 DB에 없어 제외된 폰트: count=%d keys=%s",
+                len(excluded_fonts),
+                "; ".join(
+                    f"({f.provider}, {f.provider_record_id})" for f in excluded_fonts
+                ),
+            )
 
         if target_store is not None:
             # 대상 DB 문맥 재바인딩: finding.font_id를 evidence가 붙은 대상 폰트로 치환
+            excluded_evidence_ids = {
+                evidence_id for f in excluded_fonts for evidence_id in f.evidence_ids
+            }
             evidence_to_font: dict[str, str] = {}
             for row in current_rows:
                 row_snapshots = row.get("evidence_snapshots")
                 if isinstance(row_snapshots, list):
                     for snap in row_snapshots:
                         evidence_to_font[str(snap.get("id"))] = str(row.get("id"))
+
+            findings_for_manifest: list[dict[str, object]] = []
+            skipped_finding_count = 0
             for finding in approved_findings:
-                target_font_id = evidence_to_font.get(str(finding.get("evidence_id")))
+                evidence_id = str(finding.get("evidence_id"))
+                if evidence_id in excluded_evidence_ids:
+                    skipped_finding_count += 1
+                    continue
+                target_font_id = evidence_to_font.get(evidence_id)
                 if target_font_id is None:
                     raise ManifestError(
                         f"finding evidence가 대상 현재행에 없습니다: {finding.get('id')}"
                     )
                 finding["font_id"] = target_font_id
+                findings_for_manifest.append(finding)
+
+            if skipped_finding_count:
+                logger.warning(
+                    "대상 DB에 없는 폰트의 finding %d건을 manifest에서 제외합니다",
+                    skipped_finding_count,
+                )
+            approved_findings = findings_for_manifest
 
         # 4. manifest 번들 생성
         bundle = build_manifest(run, approved_findings, current_rows)
