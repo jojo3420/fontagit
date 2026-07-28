@@ -102,3 +102,30 @@ def test_official_url_is_none_when_detail_has_no_external_link() -> None:
 
     assert snapshot.official_url is None
     assert snapshot.official_url_anchor_text is None
+
+
+@pytest.mark.parametrize(
+    "account_url",
+    [
+        "https://www.instagram.com/noonnu_official/",
+        "https://instagram.com/noonnu",
+    ],
+)
+def test_official_url_excludes_noonnu_account_link_inside_detail(account_url: str) -> None:
+    """상세 영역 안에 눈누 자체 계정 링크가 있어도 official_url로 추출되지 않는다.
+
+    172종 오염 사고의 원인 링크(눈누 홍보 계정)가 상세 영역 안에도 실려 있는
+    페이지가 있어, 상세 영역 밖 필터(global_social_links)만으로는 못 막는다.
+    """
+    html = f"""
+    <html><body>
+      <div data-font-detail>
+        <h1>어떤 폰트</h1>
+        <a href="{account_url}">눈누 인스타그램</a>
+        <a href="https://example-foundry.com" class="noon-yellow-button">제작사 홈페이지</a>
+      </div>
+    </body></html>
+    """
+    snapshot = extract_noonnu_font(html, "https://noonnu.cc/font_page/600")
+
+    assert snapshot.official_url == "https://example-foundry.com"

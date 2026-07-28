@@ -314,6 +314,29 @@ def _is_social_host(url: str) -> bool:
     return any(host == name or host.endswith(f".{name}") for name in _SOCIAL_HOSTS)
 
 
+_NOONNU_ACCOUNT_LINKS = (
+    ("instagram.com", "noonnu_official"),
+    ("instagram.com", "noonnu"),
+)
+
+
+def is_noonnu_account_url(url: str) -> bool:
+    """URL이 눈누가 직접 운영하는 SNS 계정인지 판정한다.
+
+    호스트만으로 판정하면 제작사가 같은 SNS 플랫폼을 정당하게 쓰는 경우까지
+    막게 되므로, 호스트와 경로 첫 세그먼트를 함께 본다. noonnu_url_audit의
+    오염 판정도 이 함수를 재사용해 두 모듈의 계정 목록이 어긋나지 않게 한다.
+    """
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    first_segment = parsed.path.strip("/").split("/", 1)[0].lower()
+    return any(
+        (host == account_host or host.endswith(f".{account_host}"))
+        and first_segment == account_path
+        for account_host, account_path in _NOONNU_ACCOUNT_LINKS
+    )
+
+
 def _collect_global_social_links(soup: BeautifulSoup, detail: Tag, source_url: str) -> list[str]:
     """상세 영역 바깥에 있는 SNS 링크를 모은다.
 
@@ -336,6 +359,9 @@ def _collect_global_social_links(soup: BeautifulSoup, detail: Tag, source_url: s
 def _extract_official_url(detail: Tag, source_url: str) -> tuple[str | None, str | None, str | None]:
     """상세 영역 안에서 제작사 공식 URL 후보를 뽑는다.
 
+    눈누 자체 도메인과 눈누 홍보 계정(예: 인스타그램)은 제작사 출처가 아니므로
+    후보에서 제외한다. 제작사가 운영하는 일반 SNS는 걸러내지 않는다.
+
     Returns:
         (공식 URL, 앵커 텍스트, 셀렉터 경로). 후보가 없으면 모두 None.
     """
@@ -344,7 +370,7 @@ def _extract_official_url(detail: Tag, source_url: str) -> tuple[str | None, str
         if not isinstance(href, str):
             continue
         url = _http_url(href, source_url)
-        if url is None or _is_noonnu_host(url):
+        if url is None or _is_noonnu_host(url) or is_noonnu_account_url(url):
             continue
         anchor_text = _text(anchor)
         return url, anchor_text, _selector_path(anchor)
