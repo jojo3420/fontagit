@@ -7,6 +7,7 @@ import json
 import logging
 import re
 import time
+from urllib.parse import urlsplit
 from urllib.robotparser import RobotFileParser
 from xml.etree import ElementTree
 from datetime import datetime, timezone
@@ -14,7 +15,7 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 from fontagit_pipeline.models import NoonnuSeedRecord, NoonnuSeedOutput
 from fontagit_pipeline.transform import build_slug
@@ -29,6 +30,42 @@ _REQUEST_DELAY = 1.5
 _USER_AGENT = "FontAgitSeedBot/0.1 (+https://fontag.it)"
 _NOONNU_SUFFIX_PATTERN = re.compile(r"\s*\|\s*눈누\s*$")
 _ROBOT_USER_AGENT = "FontAgitSeedBot"
+
+# 본문 콘텐츠 컨테이너 후보(우선순위 순). 실측(2026-07-28) 마크업은 1번 클래스를 쓰지만,
+# 사이트 리뉴얼로 클래스명이 일부 바뀌거나 시맨틱 태그로 교체될 수 있어 순서대로 시도한다.
+# 마지막 후보까지 실패하면 반드시 None을 반환한다(whole-page 폴백 금지, #148 재발 방지).
+_CONTENT_CONTAINER_SELECTORS: list[str] = [
+    "div.noon-page-content",  # 실측 확정 마크업
+    '[class*="noon-page-content"]',  # 클래스명 부분 변경(접두/접미 추가 등) 대비
+    "main",  # 마크업 전면 교체 시 시맨틱 랜드마크 대비
+    "article",  # 본문을 article 태그로 감싸는 변형 대비
+]
+
+# 눈누 자체 도메인/SNS/폼 링크 차단 목록. 본문 컨테이너 안에 섞여 들어와도
+# 제작사 링크로 오인하지 않도록 2차 방어선으로 둔다(#148).
+_NOONNU_OWN_LINK_BLOCKLIST: tuple[str, ...] = (
+    "noonnu.cc",
+    "instagram.com/noonnu_official",
+    "facebook.com/projectnoonnu",
+    "maily.so/noonnu",
+    "forms.gle",
+)
+
+# 에셋/리소스 링크는 제작사 사이트가 아니므로 제외한다(최소 위생 검사).
+_ASSET_LINK_EXTENSIONS: tuple[str, ...] = (
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".svg",
+    ".webp",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".otf",
+    ".css",
+    ".js",
+)
 
 
 class NoonnuSeedError(Exception):
@@ -135,6 +172,67 @@ def _clean_font_name(value: str) -> str:
     return re.split(r"\s*(?:\|\s*눈누|\s+-\s+)", value, maxsplit=1)[0].strip()
 
 
+def _find_content_container(soup: BeautifulSoup) -> Optional[Tag]:
+    """본문 콘텐츠 컨테이너를 우선순위 선택자로 탐색한다.
+
+    Args:
+        soup: 폰트 페이지 전체 파싱 결과.
+
+    Returns:
+        본문 컨테이너 Tag, 후보를 모두 찾지 못하면 None(whole-page 폴백 없음).
+    """
+    for selector in _CONTENT_CONTAINER_SELECTORS:
+        found = soup.select(selector)
+        if found:
+            return found[0]
+    return None
+
+
+def _extract_official_url(content_container: Tag, source_url: str) -> Optional[str]:
+    """본문 컨테이너 안에서 제작사 공식 URL을 추출한다.
+
+    정책: 본문에 유효한 외부 링크가 여럿이면 문서 순서상 첫 번째 링크를 채택한다.
+    실측(font_page/600) 기준 제작사 링크가 관련 폰트 추천/구매 링크보다 먼저
+    배치되어 있어 "첫 매칭"이 여전히 유효한 정책이다. 단, 이 전제는 표본 1건
+    기준이라 추가 사례로 재검증이 필요할 수 있다.
+
+    Args:
+        content_container: `_find_content_container`로 찾은 본문 Tag.
+        source_url: 원본 페이지 URL(경고 로그용).
+
+    Returns:
+        제작사 공식 URL 또는 None.
+    """
+    for link in content_container.find_all("a", href=True):
+        href_value = link.get("href")
+        if not isinstance(href_value, str):
+            continue
+        href = href_value.strip()
+
+        # 상대경로/앵커(#)/mailto:/tel:/javascript: 등은 외부 제작사 링크가 아니다.
+        if not href.startswith(("http://", "https://")):
+            continue
+
+        # 대소문자 표기 차이(INSTAGRAM.COM 등)에도 차단/에셋 검사가 동일하게
+        # 동작하도록 소문자 정규화 후 재사용한다.
+        href_lower = href.lower()
+
+        # 눈누 자체 도메인/SNS/폼(2차 방어).
+        if any(blocked in href_lower for blocked in _NOONNU_OWN_LINK_BLOCKLIST):
+            continue
+
+        # 이미지/폰트/스타일 등 에셋 링크는 제작사 사이트가 아니다.
+        # 쿼리스트링/프래그먼트(.png?v=1 등)에 속지 않도록 path만 떼어 검사한다.
+        asset_path = urlsplit(href_lower).path
+        if asset_path.endswith(_ASSET_LINK_EXTENSIONS):
+            continue
+
+        return href
+
+    logger.debug("본문에서 유효한 외부 링크를 찾지 못함: %s", source_url)
+    return None
+
+
 def _extract_font_data(
     html: str, source_url: str
 ) -> Optional[tuple[str, Optional[str], str, Optional[str]]]:
@@ -216,41 +314,14 @@ def _extract_font_data(
                         maker = maker_candidate
                         break
 
-    # 공식 URL 추출 (제작사 외부 링크)
+    # 공식 URL 추출 (제작사 외부 링크). 본문 컨테이너 안에서만 탐색한다(#148).
+    content_container = _find_content_container(soup)
     official_url: Optional[str] = None
 
-    # 모든 링크를 검사
-    for link in soup.find_all("a", href=True):
-        href_value = link.get("href")
-        if not isinstance(href_value, str):
-            continue
-        href = href_value.strip()
-        if not href or href.startswith("#"):
-            continue
-
-        # noonnu 내부 링크 제외
-        if "noonnu.cc" in href or href.startswith("/"):
-            continue
-
-        # 절대 URL인지 확인
-        if href.startswith("http"):
-            # 제작사 공식 사이트/SNS 등
-            if (
-                any(
-                    domain in href
-                    for domain in [
-                        ".kr",
-                        ".com",
-                        "behance",
-                        "instagram",
-                        "github",
-                        "dribbble",
-                    ]
-                )
-                and official_url is None
-            ):
-                official_url = href
-                break
+    if content_container is None:
+        logger.warning("본문 컨테이너를 찾지 못해 공식 URL 추출을 건너뜀: %s", source_url)
+    else:
+        official_url = _extract_official_url(content_container, source_url)
 
     if not name_ko or not maker:
         return None

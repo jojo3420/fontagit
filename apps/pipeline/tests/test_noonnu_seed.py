@@ -63,7 +63,9 @@ class TestExtractFontData:
         </script>
     </head>
     <body>
-        <a href="https://www.noto-fonts.com">Official Website</a>
+        <div class="noon-page-content">
+            <a href="https://www.noto-fonts.com">Official Website</a>
+        </div>
     </body>
 </html>
 """
@@ -110,9 +112,11 @@ class TestExtractFontData:
     <body>
         <h1>테스트폰트</h1>
         <div>Foundry: Test Maker</div>
-        <a href="https://noonnu.cc/other-font">Internal Link</a>
-        <a href="/font_page/999">Relative Link</a>
-        <a href="https://example.com">External Link</a>
+        <div class="noon-page-content">
+            <a href="https://noonnu.cc/other-font">Internal Link</a>
+            <a href="/font_page/999">Relative Link</a>
+            <a href="https://example.com">External Link</a>
+        </div>
     </body>
 </html>
 """
@@ -122,6 +126,128 @@ class TestExtractFontData:
         # 외부 링크만 선택되어야 함
         if official_url and official_url != "https://noonnu.cc/font_page/111":
             assert "example.com" in official_url
+
+    def test_extract_official_url_ignores_footer_sns_links(self) -> None:
+        """본문과 푸터가 분리된 실제 구조에서 본문 링크만 채택한다(#148 핵심 회귀)."""
+        html = """
+<html>
+    <body>
+        <h1>또박또박</h1>
+        <div>Foundry: 네이버</div>
+        <div class="noon-page-content max-w-9xl">
+            <a href="/index?search=test">관련 폰트</a>
+            <a href="https://clova.ai/handwriting/list.html">공식 홈페이지</a>
+        </div>
+        <div class="bg-gray-noon">
+            <a href="https://forms.gle/abc123">문의하기</a>
+            <a href="https://maily.so/noonnu">뉴스레터</a>
+            <a href="https://www.instagram.com/noonnu_official/">인스타그램</a>
+            <a href="https://www.facebook.com/projectnoonnu">페이스북</a>
+        </div>
+    </body>
+</html>
+"""
+        result = _extract_font_data(html, "https://noonnu.cc/font_page/600")
+        assert result is not None
+        _, _, _, official_url = result
+        assert official_url == "https://clova.ai/handwriting/list.html"
+        assert official_url != "https://www.instagram.com/noonnu_official/"
+
+    def test_extract_official_url_none_without_content_container(self) -> None:
+        """본문 컨테이너가 없으면 페이지 전체로 폴백하지 않고 None을 반환한다."""
+        html = """
+<html>
+    <body>
+        <h1>테스트폰트</h1>
+        <div>Foundry: Test Maker</div>
+        <a href="https://clova.ai/handwriting/list.html">본문 밖 링크</a>
+    </body>
+</html>
+"""
+        result = _extract_font_data(html, "https://noonnu.cc/font_page/601")
+        assert result is not None
+        _, _, _, official_url = result
+        assert official_url is None
+
+    def test_extract_official_url_none_when_only_noonnu_links_in_content(
+        self,
+    ) -> None:
+        """본문에 눈누 자체 링크만 있으면 None을 반환한다."""
+        html = """
+<html>
+    <body>
+        <h1>테스트폰트</h1>
+        <div>Foundry: Test Maker</div>
+        <div class="noon-page-content">
+            <a href="https://www.instagram.com/noonnu_official/">인스타그램</a>
+            <a href="https://noonnu.cc/other-font">관련 폰트</a>
+        </div>
+    </body>
+</html>
+"""
+        result = _extract_font_data(html, "https://noonnu.cc/font_page/602")
+        assert result is not None
+        _, _, _, official_url = result
+        assert official_url is None
+
+    def test_extract_official_url_accepts_non_whitelisted_tld(self) -> None:
+        """제거된 TLD 화이트리스트에 없던 도메인(.ai 등)도 정상 선택된다."""
+        html = """
+<html>
+    <body>
+        <h1>테스트폰트</h1>
+        <div>Foundry: Test Maker</div>
+        <div class="noon-page-content">
+            <a href="https://clova.ai/handwriting/list.html">공식 홈페이지</a>
+        </div>
+    </body>
+</html>
+"""
+        result = _extract_font_data(html, "https://noonnu.cc/font_page/603")
+        assert result is not None
+        _, _, _, official_url = result
+        assert official_url == "https://clova.ai/handwriting/list.html"
+
+    def test_extract_official_url_blocks_uppercase_noonnu_domain(self) -> None:
+        """대소문자 표기가 섞인 눈누 자체 링크도 차단 목록에 걸려야 한다(HIGH 회귀)."""
+        html = """
+<html>
+    <body>
+        <h1>테스트폰트</h1>
+        <div>Foundry: Test Maker</div>
+        <div class="noon-page-content">
+            <a href="https://INSTAGRAM.COM/noonnu_official">인스타그램(대문자)</a>
+            <a href="https://Instagram.Com/Noonnu_Official">인스타그램(혼합)</a>
+        </div>
+    </body>
+</html>
+"""
+        result = _extract_font_data(html, "https://noonnu.cc/font_page/604")
+        assert result is not None
+        _, _, _, official_url = result
+        assert official_url is None
+
+    def test_extract_official_url_ignores_asset_link_with_query_string(
+        self,
+    ) -> None:
+        """쿼리스트링이 붙은 에셋 URL(.png?v=1 등)도 제외되어야 한다(LOW 회귀)."""
+        html = """
+<html>
+    <body>
+        <h1>테스트폰트</h1>
+        <div>Foundry: Test Maker</div>
+        <div class="noon-page-content">
+            <a href="https://cdn.example.com/logo.png?v=1">로고 이미지</a>
+            <a href="https://cdn.example.com/style.css?hash=abc">스타일시트</a>
+            <a href="https://clova.ai/handwriting/list.html">공식 홈페이지</a>
+        </div>
+    </body>
+</html>
+"""
+        result = _extract_font_data(html, "https://noonnu.cc/font_page/605")
+        assert result is not None
+        _, _, _, official_url = result
+        assert official_url == "https://clova.ai/handwriting/list.html"
 
 
 class TestCleanFontName:
