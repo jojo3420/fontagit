@@ -28,6 +28,7 @@ NEW_COLLECTIONS: list[dict] = [
         "status": "published",
         "sort_order": 10,
         "tags": ["귀여운", "동글동글", "둥근 고딕", "굴린 고딕"],
+        "categories": ["고딕", "손글씨"],
     },
     {
         "slug": "retro-classic",
@@ -36,6 +37,7 @@ NEW_COLLECTIONS: list[dict] = [
         "status": "published",
         "sort_order": 11,
         "tags": ["레트로", "고전체"],
+        "categories": ["고딕", "장식", "명조"],
     },
     {
         "slug": "calligraphy-brush",
@@ -44,6 +46,7 @@ NEW_COLLECTIONS: list[dict] = [
         "status": "published",
         "sort_order": 12,
         "tags": ["캘리그라피", "붓글씨"],
+        "categories": ["손글씨"],
     },
     {
         "slug": "title-impact",
@@ -52,14 +55,24 @@ NEW_COLLECTIONS: list[dict] = [
         "status": "published",
         "sort_order": 13,
         "tags": ["제목용", "두꺼운"],
+        "categories": ["고딕", "장식"],
     },
 ]
 
 
 def pick_candidates(fonts: list[dict], spec: dict, limit: int = ITEM_LIMIT) -> list[dict]:
-    """컬렉션 spec의 태그와 겹치는 폰트를 입력 순서(최신순) 그대로 최대 limit개 고른다."""
+    """컬렉션 spec의 태그와 겹치고 분류(categories) 조건도 만족하는 폰트를 입력
+    순서(최신순) 그대로 최대 limit개 고른다. spec에 categories가 없으면 태그
+    조건만으로 고르는 하위호환을 유지한다.
+    """
     wanted = set(spec["tags"])
-    picked = [f for f in fonts if wanted & set(f.get("tags") or [])]
+    allowed_categories = spec.get("categories")
+    picked = [
+        f
+        for f in fonts
+        if wanted & set(f.get("tags") or [])
+        and (allowed_categories is None or f.get("category_ko") in allowed_categories)
+    ]
     return picked[:limit]
 
 
@@ -77,7 +90,7 @@ def fetch_published_fonts(
     while True:
         url = (
             f"{base}/fonts?status=eq.published"
-            f"&select=id,slug,name_ko,tags&order=created_at.desc,slug"
+            f"&select=id,slug,name_ko,tags,category_ko&order=created_at.desc,slug"
             f"&limit={PAGE_SIZE}&offset={offset}"
         )
         response = client.get(url, headers=headers)
