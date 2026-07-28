@@ -28,12 +28,6 @@ const NEW_BADGE_DAYS = 14;
 const HOT_BADGE_COUNT = 10;
 
 export interface HomePreview {
-  // 칩마다 겹치는 폰트가 있어도 pick()이 ranked의 Font 객체 참조를 그대로 담기 때문에
-  // (spread/clone 없음) Next.js RSC flight 직렬화가 참조 기반으로 자동 dedupe한다.
-  // 실측(pnpm build 후 out/index.html)으로 확인함: slug 배열 + 별도 맵으로 바꿔봤더니
-  // 참조당 백레퍼런스보다 slug 문자열 반복 + 맵 키 오버헤드가 더 커서 오히려 페이로드가
-  // 커졌다(raw +966B, gzip +252B). 그래서 Font[] 참조 공유 구조를 유지한다.
-  // ⚠️ pick()에서 스프레드로 새 객체를 만들면 이 dedupe가 깨지고 실제로 페이로드가 불어난다.
   chips: Record<ChipKey, Font[]>;
   /** 주간 클릭 상위 slug — 인기 뱃지 기준 */
   hotSlugs: string[];
@@ -62,6 +56,7 @@ export function buildHomePreview(
     const rb = clickRank.get(b.slug) ?? Number.MAX_SAFE_INTEGER;
     return ra - rb;
   });
+  // 스프레드/clone 없이 Font 참조를 그대로 담아야 RSC flight가 중복 폰트를 자동 dedupe한다(실측: slug+map 구조는 오히려 raw +966B/gzip +252B).
   const pick = (pred: (f: Font) => boolean): Font[] =>
     ranked.filter(pred).slice(0, perChip);
   return {
