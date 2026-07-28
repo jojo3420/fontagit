@@ -6,6 +6,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import httpx
 from pydantic import ValidationError
@@ -21,6 +22,9 @@ from fontagit_pipeline.noonnu_seed import collect_noonnu_seeds, NoonnuSeedError
 from fontagit_pipeline.transform import build_records
 from fontagit_pipeline.uploader import upload_tier_a_snapshot
 from fontagit_pipeline.writer import write_output
+
+if TYPE_CHECKING:
+    from fontagit_pipeline.audit_manifest_preflight import PreflightReport
 
 logger = logging.getLogger(__name__)
 _OUTPUT_PATH = Path("output") / "tier-a.json"
@@ -763,6 +767,17 @@ def main_audit_manifest_apply(args: argparse.Namespace) -> int:
         else:
             url, secret = settings.dev_write_credentials()
 
+        if not getattr(args, "skip_preflight", False):
+            from fontagit_pipeline.audit_manifest_preflight import run_preflight
+
+            preflight_report = run_preflight(manifest, url=url, secret_key=secret)
+            _log_preflight_report(preflight_report)
+            if not preflight_report.is_clean:
+                logger.error(
+                    "preflight에서 어긋남을 발견해 적용을 중단합니다 (--skip-preflight로 건너뛸 수 있음)"
+                )
+                return 2
+
         from supabase import create_client
 
         rpc_payload = {
@@ -787,6 +802,64 @@ def main_audit_manifest_apply(args: argparse.Namespace) -> int:
     except Exception as exc:  # 외부 DB 경계
         logger.error("감사 manifest RPC 실패: %s", exc.__class__.__name__)
         return 3
+
+
+def main_audit_manifest_preflight(args: argparse.Namespace) -> int:
+    """apply 전 manifest와 DB를 필드 단위로 대조하는 읽기 전용 게이트.
+
+    - manifest/sha256을 검증 로드한다
+    - 대상 env(dev/prod)의 findings/snapshots를 조회해 RPC(0025 수정 이후 기준)와
+      동일한 의미론으로 대조한다
+    - 어긋남이 있으면 (id, 필드, manifest값, DB값) 목록과 필드별 집계를 로깅하고
+      exit code 1을 반환한다. DB에 없는 id는 오류가 아니라 신규 insert 예정이다.
+    """
+    from fontagit_pipeline.audit_manifest import ManifestError, verify_manifest_file
+    from fontagit_pipeline.audit_manifest_preflight import run_preflight
+    from fontagit_pipeline.config import load_audit_settings
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    try:
+        manifest = verify_manifest_file(args.manifest, args.sha256)
+        settings = load_audit_settings()
+        if args.target == "prod":
+            if not settings.supabase_prod_url or not settings.supabase_prod_secret_key:
+                logger.error("prod credentials 미설정")
+                return 2
+            url, secret = settings.supabase_prod_url, settings.supabase_prod_secret_key
+        else:
+            url, secret = settings.dev_write_credentials()
+
+        report = run_preflight(manifest, url=url, secret_key=secret)
+    except (ManifestError, OSError, ValueError) as exc:
+        logger.error("preflight 준비 중단: %s", exc)
+        return 2
+    except Exception as exc:  # 외부 DB 경계
+        logger.error("preflight 조회 실패: %s", exc.__class__.__name__)
+        return 3
+
+    _log_preflight_report(report)
+    return 0 if report.is_clean else 1
+
+
+def _log_preflight_report(report: "PreflightReport") -> None:
+    """preflight 결과의 어긋남 목록과 필드별 집계를 로깅한다."""
+    logger.info(
+        "preflight 결과: 어긋남=%d 신규 finding=%d 신규 snapshot=%d",
+        len(report.mismatches),
+        len(report.new_finding_ids),
+        len(report.new_snapshot_ids),
+    )
+    for mismatch in report.mismatches:
+        logger.error(
+            "불일치: entity=%s id=%s field=%s manifest=%r db=%r",
+            mismatch.entity,
+            mismatch.entity_id,
+            mismatch.field_name,
+            mismatch.manifest_value,
+            mismatch.db_value,
+        )
+    if report.mismatches:
+        logger.error("필드별 집계: %s", report.field_summary())
 
 
 def main_audit_manifest_build(args: argparse.Namespace) -> int:
@@ -1844,7 +1917,21 @@ if __name__ == "__main__":
     manifest_apply_parser.add_argument("--confirm-hash", required=True)
     manifest_apply_parser.add_argument("--approved-hash")
     manifest_apply_parser.add_argument("--approval-id")
+    manifest_apply_parser.add_argument(
+        "--skip-preflight",
+        action="store_true",
+        help="적용 전 자동 실행되는 preflight 대조를 건너뛴다 (기본은 실행)",
+    )
     manifest_apply_parser.set_defaults(func=main_audit_manifest_apply)
+
+    manifest_preflight_parser = manifest_subparsers.add_parser(
+        "preflight",
+        help="manifest와 DB를 필드 단위로 대조하는 읽기 전용 사전 점검",
+    )
+    manifest_preflight_parser.add_argument("--manifest", type=Path, required=True)
+    manifest_preflight_parser.add_argument("--sha256", type=Path, required=True)
+    manifest_preflight_parser.add_argument("--target", choices=["dev", "prod"], required=True)
+    manifest_preflight_parser.set_defaults(func=main_audit_manifest_preflight)
 
     manifest_build_parser = manifest_subparsers.add_parser("build")
     manifest_build_parser.add_argument("--run-id", required=True, help="조회할 감사 run의 UUID")
