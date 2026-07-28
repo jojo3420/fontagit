@@ -38,6 +38,8 @@ def test_extracts_only_font_detail_and_uses_structured_only_storage() -> None:
     assert snapshot.raw_text is None
     assert len(snapshot.raw_sha256) == 64
     assert snapshot.global_social_links == ["https://www.instagram.com/noonnu"]
+    assert snapshot.official_url == "https://clova.ai/handwriting/list.html"
+    assert snapshot.official_url_anchor_text == "다운로드 페이지로 이동"
 
 
 def test_preserves_reported_404_candidate_for_later_observation() -> None:
