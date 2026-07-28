@@ -4,6 +4,7 @@ import Link from "next/link";
 import { fonts } from "@/data/fonts";
 import { familyOf } from "@/lib/fonts";
 import { TierChip } from "./TierChip";
+import type { ComparePreset } from "@/data/pairings";
 import styles from "./CompareCanvas.module.css";
 
 const DEFAULT_TEXT = "다람쥐 헌 쳇바퀴에 타고파 1234 !@#$";
@@ -12,11 +13,20 @@ const OPTIONS = fonts.filter((f) => f.tier === "free");
 const DEFAULT_HERO = "pretendard";
 const DEFAULT_GRID = OPTIONS.filter((f) => f.slug !== DEFAULT_HERO).map((f) => f.slug);
 
-export function CompareCanvas() {
+export function CompareCanvas({ preset }: { preset?: ComparePreset } = {}) {
   const [text, setText] = useState(DEFAULT_TEXT);
-  const [heroSlug, setHeroSlug] = useState(DEFAULT_HERO);
-  const [gridSlugs, setGridSlugs] = useState<string[]>(DEFAULT_GRID);
+  const [heroSlug, setHeroSlug] = useState(preset?.heroSlug ?? DEFAULT_HERO);
+  const [gridSlugs, setGridSlugs] = useState<string[]>(preset?.gridSlugs ?? DEFAULT_GRID);
+  const [appliedPreset, setAppliedPreset] = useState(preset);
   const shown = text || " ";
+
+  // preset prop이 바뀌면 렌더 중 상태를 조정한다(React 권장 패턴: https://react.dev/learn/you-might-not-need-an-effect)
+  if (preset && preset !== appliedPreset) {
+    setAppliedPreset(preset);
+    setHeroSlug(preset.heroSlug);
+    setGridSlugs(preset.gridSlugs);
+  }
+
   const hero = OPTIONS.find((f) => f.slug === heroSlug);
 
   const changeGrid = (index: number, slug: string) =>

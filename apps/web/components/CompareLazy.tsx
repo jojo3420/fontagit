@@ -1,12 +1,19 @@
 "use client";
 
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
+import type { ComparePreset } from "@/data/pairings";
 
 const CompareCanvas = lazy(() =>
   import("./CompareCanvas").then((m) => ({ default: m.CompareCanvas }))
 );
 
-export function CompareLazy({ placeholder }: { placeholder: ReactNode }) {
+export function CompareLazy({
+  placeholder,
+  preset,
+}: {
+  placeholder: ReactNode;
+  preset?: ComparePreset;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(false);
 
@@ -33,7 +40,7 @@ export function CompareLazy({ placeholder }: { placeholder: ReactNode }) {
     <div ref={ref}>
       {shown ? (
         <Suspense fallback={placeholder}>
-          <CompareCanvas />
+          <CompareCanvas preset={preset} />
         </Suspense>
       ) : (
         placeholder

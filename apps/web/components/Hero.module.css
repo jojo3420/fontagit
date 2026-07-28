@@ -19,12 +19,6 @@
   margin: 0;
 }
 
-.chips {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 @media (max-width: 900px) {
   .h1 {
     font-size: 26px;

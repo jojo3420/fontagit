@@ -1,0 +1,113 @@
+<h2>새 홈화면 레이아웃, 어느 배치가 좋을까요?</h2>
+<p class="subtitle">확정 요소: 즉시 필터 칩+미리보기 그리드, TOP 10 패널(그대로), 컬렉션 14개, 페어링 프리셋, 비교 보드. 카드를 클릭해 선택해 주세요.</p>
+
+<style>
+  .wf { font-size: 11px; line-height: 1.5; }
+  .wf .row { display: flex; gap: 6px; margin-bottom: 6px; }
+  .wf .box { border: 1.5px solid #8b8b9e; border-radius: 6px; padding: 6px 8px; background: rgba(139,139,158,0.08); }
+  .wf .hero { flex: 2; }
+  .wf .top10 { flex: 1; background: rgba(94,129,244,0.12); border-color: #5e81f4; }
+  .wf .chips { display: flex; gap: 3px; flex-wrap: wrap; margin: 4px 0; }
+  .wf .chip { border: 1px solid #aaa; border-radius: 10px; padding: 0 6px; font-size: 9px; }
+  .wf .chip.on { background: #5e81f4; color: #fff; border-color: #5e81f4; }
+  .wf .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin-top: 4px; }
+  .wf .cell { border: 1px dashed #999; border-radius: 4px; padding: 3px 4px; font-size: 9px; text-align: center; }
+  .wf .strip { display: flex; gap: 4px; overflow: hidden; margin-top: 4px; }
+  .wf .col-card { min-width: 72px; border: 1px solid #999; border-radius: 4px; padding: 4px; font-size: 9px; text-align: center; }
+  .wf .full { width: 100%; }
+  .wf .muted { color: #888; font-size: 9px; }
+  .wf .tag { font-size: 9px; font-weight: 700; color: #5e81f4; letter-spacing: .04em; }
+</style>
+
+<div class="cards">
+
+  <div class="card" data-choice="A" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="wf">
+        <div class="row">
+          <div class="box hero">
+            <div class="tag">HERO + 즉시 필터</div>
+            당신의 폰트 아지트
+            <div class="chips">
+              <span class="chip on">전체</span><span class="chip">고딕</span><span class="chip">명조</span><span class="chip">손글씨</span><span class="chip">장식</span><span class="chip">무료</span><span class="chip">유료</span>
+            </div>
+            <div class="grid">
+              <div class="cell">폰트 카드<br><span class="muted">인기</span></div>
+              <div class="cell">폰트 카드<br><span class="muted">NEW</span></div>
+              <div class="cell">폰트 카드</div>
+              <div class="cell">폰트 카드</div>
+              <div class="cell">폰트 카드</div>
+              <div class="cell">폰트 카드</div>
+              <div class="cell">폰트 카드</div>
+              <div class="cell">전체 보기 →</div>
+            </div>
+          </div>
+          <div class="box top10">TOP 10 패널<br><span class="muted">그대로 유지<br>1위 ~ 10위<br>세로 리스트</span></div>
+        </div>
+        <div class="row"><div class="box full"><div class="tag">추천 컬렉션 14</div><div class="strip"><span class="col-card">새벽 명조</span><span class="col-card">브랜드 고딕</span><span class="col-card">귀여운·둥근</span><span class="col-card">레트로</span><span class="col-card">→ 스크롤</span></div></div></div>
+        <div class="row"><div class="box full"><div class="tag">페어링 프리셋</div><span class="muted">제목+본문 추천 조합 3세트 → 클릭 시 비교 보드에 로드</span></div></div>
+        <div class="row"><div class="box full"><div class="tag">비교 보드</div><span class="muted">기존 그대로</span></div></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. 탐색 우선 (추천)</h3>
+      <p>첫 화면에서 바로 칩을 눌러 폰트를 만져보는 구조. 기존 2컬럼(Hero+TOP10) 뼈대를 유지해 변경 리스크가 가장 작고, 미리보기 그리드가 빈 중앙을 채웁니다. 컬렉션은 가로 스크롤 스트립.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="B" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="wf">
+        <div class="row">
+          <div class="box hero">
+            <div class="tag">HERO + 컬렉션 하이라이트</div>
+            당신의 폰트 아지트
+            <div class="grid" style="grid-template-columns: repeat(3, 1fr);">
+              <div class="cell">새벽 명조</div>
+              <div class="cell">브랜드 고딕</div>
+              <div class="cell">귀여운·둥근</div>
+              <div class="cell">레트로·고전</div>
+              <div class="cell">캘리그라피</div>
+              <div class="cell">14개 전체 ↓</div>
+            </div>
+          </div>
+          <div class="box top10">TOP 10 패널<br><span class="muted">그대로 유지<br>1위 ~ 10위<br>세로 리스트</span></div>
+        </div>
+        <div class="row"><div class="box full">
+          <div class="tag">즉시 필터 + 미리보기 그리드 (풀폭)</div>
+          <div class="chips"><span class="chip on">전체</span><span class="chip">고딕</span><span class="chip">명조</span><span class="chip">손글씨</span><span class="chip">장식</span><span class="chip">무료</span><span class="chip">유료</span></div>
+          <div class="grid" style="grid-template-columns: repeat(6, 1fr);"><div class="cell">카드</div><div class="cell">카드</div><div class="cell">카드</div><div class="cell">카드</div><div class="cell">카드</div><div class="cell">전체 →</div></div>
+        </div></div>
+        <div class="row"><div class="box full"><div class="tag">페어링 + 비교 보드</div><span class="muted">프리셋 3세트 + 기존 비교 보드</span></div></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. 컬렉션 우선</h3>
+      <p>큐레이션(컬렉션)을 첫인상으로 내세우고, 필터 그리드는 아래 풀폭으로. /collections 통합의 존재감이 가장 크지만, 칩 필터가 스크롤 아래로 내려가 "안 눌리던 칩" 개선 체감이 늦습니다.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="C" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="wf">
+        <div class="row"><div class="box full"><div class="tag">HERO (컴팩트, 풀폭)</div>당신의 폰트 아지트 <span class="muted">— 한 줄 소개</span></div></div>
+        <div class="row">
+          <div class="box hero">
+            <div class="tag">즉시 필터 + 그리드</div>
+            <div class="chips"><span class="chip on">전체</span><span class="chip">고딕</span><span class="chip">명조</span><span class="chip">손글씨</span><span class="chip">장식</span><span class="chip">무료</span><span class="chip">유료</span></div>
+            <div class="grid"><div class="cell">카드</div><div class="cell">카드</div><div class="cell">카드</div><div class="cell">카드</div><div class="cell">카드</div><div class="cell">카드</div><div class="cell">카드</div><div class="cell">전체 →</div></div>
+            <div class="tag" style="margin-top:6px">추천 컬렉션 14</div>
+            <div class="strip"><span class="col-card">새벽 명조</span><span class="col-card">귀여운·둥근</span><span class="col-card">레트로</span><span class="col-card">→</span></div>
+          </div>
+          <div class="box top10">TOP 10 패널<br><span class="muted">그대로 유지<br>스크롤 시 따라오는<br>고정(스티키)</span></div>
+        </div>
+        <div class="row"><div class="box full"><div class="tag">페어링 + 비교 보드</div><span class="muted">프리셋 + 기존 비교 보드</span></div></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. 대시보드형 (밀도 최대)</h3>
+      <p>Hero를 한 줄로 줄이고 좌측에 필터+컬렉션을 쌓아 정보 밀도를 최대로. TOP 10은 스크롤을 따라오는 고정 패널. 밀도 문제(문제점 3)에 가장 공격적이지만 첫 화면이 복잡해 보일 수 있고 변경 폭이 가장 큽니다.</p>
+    </div>
+  </div>
+
+</div>

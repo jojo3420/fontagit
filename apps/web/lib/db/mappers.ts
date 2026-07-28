@@ -99,6 +99,7 @@ export function rowToFont(row: FontRow, aliases: string[]): Font {
     freeAlternatives: undefined,
     status: row.status,
     subsets: row.subsets ?? [],
+    createdAt: row.created_at,
   };
 }
 
