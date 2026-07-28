@@ -172,6 +172,13 @@ def run_preflight(
             finding_id = UUID(str(finding["id"]))
             db_row = db_findings.get(finding_id)
             if db_row is None:
+                # 신규 insert 예정이어도 source_key→font_sources 해석(정확히 1행)은 항상 검증한다.
+                # 여기서 생략하면 apply RPC가 entries 단계에서 실패할 오류를 preflight가 놓친다.
+                _, resolution_mismatch = _check_source_key_resolution(
+                    "finding", finding_id, finding.get("source_key"), by_source_key
+                )
+                if resolution_mismatch is not None:
+                    mismatches.append(resolution_mismatch)
                 new_finding_ids.add(finding_id)
                 continue
             mismatches.extend(
@@ -182,6 +189,11 @@ def run_preflight(
             snapshot_id = UUID(str(snapshot["id"]))
             db_row = db_snapshots.get(snapshot_id)
             if db_row is None:
+                _, resolution_mismatch = _check_source_key_resolution(
+                    "snapshot", snapshot_id, snapshot.get("source_key"), by_source_key
+                )
+                if resolution_mismatch is not None:
+                    mismatches.append(resolution_mismatch)
                 new_snapshot_ids.add(snapshot_id)
                 continue
             mismatches.extend(
@@ -341,6 +353,32 @@ def _timestamptz_equal(manifest_value: object, db_value: object) -> bool:
     return manifest_dt == db_dt
 
 
+def _check_source_key_resolution(
+    entity: EntityKind,
+    entity_id: UUID,
+    source_key: object,
+    by_source_key: Mapping[tuple[str, str], list[str]],
+) -> tuple[str | None, FieldMismatch | None]:
+    """source_key→font_sources 해석 결과를 반환한다 (DB 존재 여부와 무관하게 항상 필요한 검증).
+
+    apply RPC는 entries 단계에서 이 해석이 정확히 1행이어야 성공한다
+    ('stable source key must resolve exactly one font'). DB에 아직 없는
+    신규 finding/snapshot이라도 생략하면 안 되는 이유가 여기에 있다.
+    """
+    if not isinstance(source_key, Mapping):
+        raise ValueError(f"{entity} {entity_id}: source_key가 없습니다")
+    resolved_font_id, row_count = _resolve_font_id(source_key, by_source_key)
+    if row_count != 1:
+        return None, FieldMismatch(
+            entity=entity,
+            entity_id=entity_id,
+            field_name="font_id",
+            manifest_value=dict(source_key),
+            db_value=f"font_sources 매칭 {row_count}행 (정확히 1행이어야 함)",
+        )
+    return resolved_font_id, None
+
+
 def _compare_font_id(
     entity: EntityKind,
     entity_id: UUID,
@@ -348,17 +386,11 @@ def _compare_font_id(
     db_font_id: object,
     by_source_key: Mapping[tuple[str, str], list[str]],
 ) -> FieldMismatch | None:
-    if not isinstance(source_key, Mapping):
-        raise ValueError(f"{entity} {entity_id}: source_key가 없습니다")
-    resolved_font_id, row_count = _resolve_font_id(source_key, by_source_key)
-    if row_count != 1:
-        return FieldMismatch(
-            entity=entity,
-            entity_id=entity_id,
-            field_name="font_id",
-            manifest_value=dict(source_key),
-            db_value=f"font_sources 매칭 {row_count}행 (정확히 1행이어야 함)",
-        )
+    resolved_font_id, resolution_mismatch = _check_source_key_resolution(
+        entity, entity_id, source_key, by_source_key
+    )
+    if resolution_mismatch is not None:
+        return resolution_mismatch
     if resolved_font_id != db_font_id:
         return FieldMismatch(
             entity=entity,

@@ -265,6 +265,65 @@ def test_preflight_reports_font_sources_row_count_errors() -> None:
     assert "2행" in str(multi_row_mismatches[0].db_value)
 
 
+def test_preflight_new_finding_with_unresolvable_source_key_reports_zero_row_mismatch() -> None:
+    """DB에 없는(신규 예정) finding/snapshot도 source_key 해석 0행이면 mismatch로 잡는다."""
+    manifest = _build_manifest()
+    client = _make_client(font_sources=[], findings_by_id={}, snapshots_by_id={})
+
+    report = run_preflight(manifest, url="https://x", secret_key="k", client=client)
+
+    assert not report.is_clean
+    finding_mismatches = [
+        m for m in report.mismatches if m.field_name == "font_id" and m.entity == "finding"
+    ]
+    snapshot_mismatches = [
+        m for m in report.mismatches if m.field_name == "font_id" and m.entity == "snapshot"
+    ]
+    assert len(finding_mismatches) == 2
+    assert len(snapshot_mismatches) == 2
+    assert all("0행" in str(m.db_value) for m in finding_mismatches + snapshot_mismatches)
+    # 오류가 있어도 신규 분류 자체는 그대로 유지된다
+    assert report.new_finding_ids == frozenset({FINDING_DOWNLOAD_ID, FINDING_LICENSE_ID})
+    assert report.new_snapshot_ids == frozenset({SNAPSHOT_ID, LICENSE_SNAPSHOT_ID})
+
+
+def test_preflight_new_finding_with_duplicate_source_key_reports_multi_row_mismatch() -> None:
+    """신규 finding/snapshot의 source_key가 font_sources에 2행 이상 매칭되면 mismatch로 잡는다."""
+    manifest = _build_manifest()
+    duplicated_sources = [
+        *FONT_SOURCES,
+        {"font_id": str(UUID(int=FONT_ID.int + 1)), "provider": PROVIDER, "provider_record_id": PROVIDER_RECORD_ID},
+    ]
+    client = _make_client(font_sources=duplicated_sources, findings_by_id={}, snapshots_by_id={})
+
+    report = run_preflight(manifest, url="https://x", secret_key="k", client=client)
+
+    assert not report.is_clean
+    finding_mismatches = [
+        m for m in report.mismatches if m.field_name == "font_id" and m.entity == "finding"
+    ]
+    snapshot_mismatches = [
+        m for m in report.mismatches if m.field_name == "font_id" and m.entity == "snapshot"
+    ]
+    assert len(finding_mismatches) == 2
+    assert len(snapshot_mismatches) == 2
+    assert all("2행" in str(m.db_value) for m in finding_mismatches + snapshot_mismatches)
+    assert report.new_finding_ids == frozenset({FINDING_DOWNLOAD_ID, FINDING_LICENSE_ID})
+    assert report.new_snapshot_ids == frozenset({SNAPSHOT_ID, LICENSE_SNAPSHOT_ID})
+
+
+def test_preflight_new_finding_with_resolvable_source_key_stays_clean() -> None:
+    """source_key가 정확히 1행으로 해석되는 신규 finding/snapshot은 어긋남 없이 신규로만 분류된다."""
+    manifest = _build_manifest()
+    client = _make_client(font_sources=FONT_SOURCES, findings_by_id={}, snapshots_by_id={})
+
+    report = run_preflight(manifest, url="https://x", secret_key="k", client=client)
+
+    assert report.is_clean
+    assert report.new_finding_ids == frozenset({FINDING_DOWNLOAD_ID, FINDING_LICENSE_ID})
+    assert report.new_snapshot_ids == frozenset({SNAPSHOT_ID, LICENSE_SNAPSHOT_ID})
+
+
 def test_preflight_timestamptz_representation_differences_are_equal() -> None:
     """Z/+00:00 표기, 마이크로초 자릿수 차이는 같은 시각이면 동일하게 본다."""
     manifest = _build_manifest()

@@ -841,6 +841,17 @@ def main_audit_manifest_preflight(args: argparse.Namespace) -> int:
     return 0 if report.is_clean else 1
 
 
+_PREFLIGHT_LOG_VALUE_LIMIT = 200
+
+
+def _truncated_repr(value: object, limit: int = _PREFLIGHT_LOG_VALUE_LIMIT) -> str:
+    """raw_text 등 큰 값이 로그를 비대화시키지 않도록 repr 출력을 제한 길이로 자른다."""
+    text = repr(value)
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}...(총 {len(text)}자)"
+
+
 def _log_preflight_report(report: "PreflightReport") -> None:
     """preflight 결과의 어긋남 목록과 필드별 집계를 로깅한다."""
     logger.info(
@@ -851,12 +862,12 @@ def _log_preflight_report(report: "PreflightReport") -> None:
     )
     for mismatch in report.mismatches:
         logger.error(
-            "불일치: entity=%s id=%s field=%s manifest=%r db=%r",
+            "불일치: entity=%s id=%s field=%s manifest=%s db=%s",
             mismatch.entity,
             mismatch.entity_id,
             mismatch.field_name,
-            mismatch.manifest_value,
-            mismatch.db_value,
+            _truncated_repr(mismatch.manifest_value),
+            _truncated_repr(mismatch.db_value),
         )
     if report.mismatches:
         logger.error("필드별 집계: %s", report.field_summary())
