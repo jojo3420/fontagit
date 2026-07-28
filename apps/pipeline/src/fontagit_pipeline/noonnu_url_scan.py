@@ -21,12 +21,14 @@ from pathlib import Path
 import httpx
 
 from fontagit_pipeline.audit_noonnu import extract_noonnu_font
+from fontagit_pipeline.noonnu_seed import _USER_AGENT
 from fontagit_pipeline.noonnu_url_audit import judge_official_url
 
 logger = logging.getLogger(__name__)
 
 _BASE_DELAY = 1.5
 _JITTER = 0.7
+_REQUEST_TIMEOUT = 10.0
 _BACKOFF_DELAY = 30.0
 _RATE_LIMIT_BACKOFF_BASE = 120.0
 _RATE_LIMIT_BACKOFF_MAX = 960.0
@@ -120,6 +122,27 @@ def _append_record(state_path: Path, record: ScanRecord) -> None:
     state_path.parent.mkdir(parents=True, exist_ok=True)
     with state_path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(asdict(record), ensure_ascii=False) + "\n")
+
+
+def fetch_scan_html(client: httpx.Client, url: str) -> str:
+    """눈누 상세 HTML을 받는다.
+
+    `noonnu_seed._fetch_url`과 달리 httpx 예외를 `NoonnuSeedError`로 감싸지 않고
+    그대로 올린다. 감싸면 상태 코드가 메시지 문자열에 뭉개져
+    `_resolve_backoff_seconds`가 429/403을 알아볼 수 없기 때문이다.
+
+    요청 예의 설정은 호출자가 넘긴 client에 맡기지 않고 여기서 직접 건다.
+    UA 없는 client가 실수로 들어와도 눈누에 정체를 밝히지 않은 요청이 나가지
+    않게 하기 위해서다.
+    """
+    response = client.get(
+        url,
+        timeout=_REQUEST_TIMEOUT,
+        headers={"User-Agent": _USER_AGENT},
+        follow_redirects=True,
+    )
+    response.raise_for_status()
+    return response.text
 
 
 def _resolve_backoff_seconds(exc: Exception, consecutive_failures: int) -> float:

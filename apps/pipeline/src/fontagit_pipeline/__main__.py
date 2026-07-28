@@ -18,9 +18,10 @@ from fontagit_pipeline.licenses import fetch_license_map, LicenseFetchError
 from fontagit_pipeline.models import GoogleFontRaw, KoreanNameEntry, OutputDocument
 from fontagit_pipeline.noonnu_enrich import enrich_fonts, NoonnuEnrichError
 from fontagit_pipeline.noonnu_import import import_noonnu_seeds, NoonnuImportError
-from fontagit_pipeline.noonnu_seed import _USER_AGENT, _fetch_url, collect_noonnu_seeds, NoonnuSeedError
+from fontagit_pipeline.noonnu_seed import _USER_AGENT, collect_noonnu_seeds, NoonnuSeedError
 from fontagit_pipeline.noonnu_url_scan import (
     ScanAbortedError,
+    fetch_scan_html,
     load_scan_targets,
     scan_targets,
     summarize,
@@ -194,7 +195,7 @@ def main_noonnu_url_scan(args: argparse.Namespace) -> int:
         with httpx.Client(headers={"User-Agent": _USER_AGENT}, follow_redirects=True) as http:
             records = scan_targets(
                 targets,
-                fetcher=lambda url: _fetch_url(http, url),
+                fetcher=lambda url: fetch_scan_html(http, url),
                 state_path=args.state,
             )
 

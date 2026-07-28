@@ -5,7 +5,13 @@ from pathlib import Path
 
 import httpx
 
-from fontagit_pipeline.noonnu_url_scan import ScanRecord, ScanTarget, scan_targets, summarize
+from fontagit_pipeline.noonnu_url_scan import (
+    ScanRecord,
+    ScanTarget,
+    fetch_scan_html,
+    scan_targets,
+    summarize,
+)
 
 _DETAIL_HTML = """
 <html><body>
@@ -222,6 +228,31 @@ def test_rate_limit_status_gets_longer_backoff(tmp_path: Path) -> None:
     scan_targets(
         [_target()], fetcher=_fetcher, state_path=state_path, sleeper=sleeps.append
     )
+
+    assert len(sleeps) == 1
+    assert sleeps[0] > 30.0
+
+
+def test_fetch_scan_html_preserves_status_code_for_backoff(tmp_path: Path) -> None:
+    """스캔 전용 fetcher를 거쳐도 429 상태 코드가 보존되어 긴 백오프가 걸린다.
+
+    noonnu_seed._fetch_url은 HTTP 오류를 NoonnuSeedError로 감싸 상태 코드를
+    지워버린다. fetch_scan_html은 httpx 예외를 그대로 올려보내야 한다.
+    """
+    state_path = tmp_path / "state.jsonl"
+    sleeps: list[float] = []
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, request=request)
+
+    transport = httpx.MockTransport(_handler)
+    with httpx.Client(transport=transport) as client:
+        scan_targets(
+            [_target()],
+            fetcher=lambda url: fetch_scan_html(client, url),
+            state_path=state_path,
+            sleeper=sleeps.append,
+        )
 
     assert len(sleeps) == 1
     assert sleeps[0] > 30.0
