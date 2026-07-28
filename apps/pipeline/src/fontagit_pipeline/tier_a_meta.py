@@ -249,19 +249,27 @@ def collect_tier_a_meta(
         fetcher: fetch 함수(기본값: fetch_public_url)
 
     Returns:
-        수집 결과 요약 dict (target_count, success_count, error_count, findings_created,
-        findings: 검수용 finding 상세 배열, errors: 실패 대상 상세 배열)
+        수집 결과 요약 dict. target_count/success_count/error_count/findings_created는
+        기존 리포트 호환을 위해 유지한다. verified_count(대상 중 모든 finding이
+        auto_applicable=True인 수, 사람 검수 없이 자동 적용 가능)/needs_review_count(대상 중
+        하나라도 auto_applicable=False인 finding이 있어 사람 검수가 필요한 수)/
+        broken_count(error_count와 동일 - fetch/파싱 실패 대상 수)는
+        AuditStore.complete_run 계약(4개 정수 키)을 만족시키기 위해 추가했다.
+        findings: 검수용 finding 상세 배열, errors: 실패 대상 상세 배열
     """
     if fetcher is None:
         fetcher = fetch_public_url
 
     success_count = 0
     error_count = 0
+    verified_count = 0
+    needs_review_count = 0
     findings_created = 0
     findings_detail: list[dict[str, object]] = []
     errors_detail: list[dict[str, object]] = []
 
     for target in targets:
+        target_findings: list[FindingDraft] = []
         try:
             # METADATA.pb URL 구성
             metadata_url = build_metadata_url(target.license_type, target.name_en)
@@ -360,6 +368,7 @@ def collect_tier_a_meta(
                 review_reason=foundry_res.reason,
                 auto_applicable=(foundry_res.status == "auto"),
             )
+            target_findings.append(finding_foundry)
             if not dry_run:
                 store.save_finding(run_id, finding_foundry)
             findings_created += 1
@@ -377,6 +386,7 @@ def collect_tier_a_meta(
                     review_reason="normalization_evidence",
                     auto_applicable=(foundry_entry.status == "approved"),
                 )
+                target_findings.append(finding_foundry_url)
                 if not dry_run:
                     store.save_finding(run_id, finding_foundry_url)
                 findings_created += 1
@@ -394,6 +404,7 @@ def collect_tier_a_meta(
                     review_reason="specimen_page_fallback",
                     auto_applicable=(specimen_source_kind in AUTO_APPLICABLE_SOURCE_KINDS),
                 )
+                target_findings.append(finding_download_url)
                 if not dry_run:
                     store.save_finding(run_id, finding_download_url)
                 findings_created += 1
@@ -409,6 +420,7 @@ def collect_tier_a_meta(
                     review_reason="specimen_page_fallback",
                     auto_applicable=(specimen_source_kind in AUTO_APPLICABLE_SOURCE_KINDS),
                 )
+                target_findings.append(finding_download_kind)
                 if not dry_run:
                     store.save_finding(run_id, finding_download_kind)
                 findings_created += 1
@@ -427,12 +439,19 @@ def collect_tier_a_meta(
                     review_reason="github_license_file",
                     auto_applicable=(license_source_kind in AUTO_APPLICABLE_SOURCE_KINDS),
                 )
+                target_findings.append(finding_license_url)
                 if not dry_run:
                     store.save_finding(run_id, finding_license_url)
                 findings_created += 1
                 findings_detail.append(_finding_detail(target, finding_license_url))
 
             success_count += 1
+            # 대상 내 finding 전부가 auto_applicable=True일 때만 사람 검수 없이 확정된
+            # 것으로 본다 - 하나라도 검수 대상이면 그 대상 전체를 needs_review로 집계한다.
+            if target_findings and all(f.auto_applicable for f in target_findings):
+                verified_count += 1
+            else:
+                needs_review_count += 1
 
         except Exception as exc:  # noqa: BLE001
             logger.warning(
@@ -454,6 +473,12 @@ def collect_tier_a_meta(
         "target_count": len(targets),
         "success_count": success_count,
         "error_count": error_count,
+        # AuditStore.complete_run(_report_count)이 요구하는 4개 정수 키:
+        # verified_count/needs_review_count/broken_count는 여기서 새로 채운다.
+        # broken_count는 error_count와 동일한 의미(fetch/파싱 실패 대상 수)라 그대로 매핑한다.
+        "verified_count": verified_count,
+        "needs_review_count": needs_review_count,
+        "broken_count": error_count,
         "findings_created": findings_created,
         "findings": findings_detail,
         "errors": errors_detail,

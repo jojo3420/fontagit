@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 from fontagit_pipeline.audit_http import FetchResult
 from fontagit_pipeline.audit_metadata import derive_proposed_value
 from fontagit_pipeline.audit_policy import SourceRegistry, RegistryEntry
-from fontagit_pipeline.audit_store import InMemoryAuditStore
+from fontagit_pipeline.audit_store import InMemoryAuditStore, _report_count
 from fontagit_pipeline.tier_a_meta import (
     BrandEntry,
     BrandNormalization,
@@ -396,3 +396,110 @@ fonts {
 
     created_fields = {draft.field_name for draft in store._finding_drafts.values()}
     assert created_fields == {"foundry"}
+
+
+def test_collect_tier_a_meta_report_satisfies_complete_run_contract() -> None:
+    """collect_tier_a_meta의 non-dry-run 반환 dict는 AuditStore.complete_run이
+    요구하는 4개 정수 키(success_count/verified_count/needs_review_count/broken_count)를
+    전부 담아야 한다.
+
+    이 계약이 깨지면 _report_count가 ValueError("invalid audit report count: ...")를
+    던져 non-dry-run Tier A 수집이 항상 실패한다(회귀 재현: 이슈 없음, 실측 버그).
+    InMemoryAuditStore.complete_run은 이 검증을 하지 않으므로 여기서 실제 _report_count를
+    직접 호출해 계약을 잠근다.
+    """
+    run_id = uuid4()
+    store = InMemoryAuditStore()
+
+    # 두 도메인 모두 official 등급으로 등록해 verified_target의 5개 finding이
+    # 전부 auto_applicable=True가 되도록 한다(대조군: 아래 broken_target은 fetch 실패).
+    registry = SourceRegistry(
+        version=1,
+        entries=[
+            RegistryEntry(
+                maker="Google Fonts (official)",
+                domain="fonts.google.com",
+                roles=["download", "homepage"],
+                source_kind="official",
+                approved_by="reviewer",
+                approved_at="2026-07-18T00:00:00Z",
+                evidence_snapshot_id="evidence-1",
+            ),
+            RegistryEntry(
+                maker="google/fonts GitHub (official)",
+                domain="raw.githubusercontent.com",
+                roles=["license", "metadata"],
+                source_kind="official",
+                approved_by="reviewer",
+                approved_at="2026-07-18T00:00:00Z",
+                evidence_snapshot_id="evidence-2",
+            ),
+        ],
+    )
+    norm = BrandNormalization(entries=[BrandEntry(
+        source_name="NHN Corporation", display_name="네이버",
+        evidence_url="https://hangeul.naver.com/fonts", status="approved")])
+
+    verified_target = TierATarget(
+        font_id=uuid4(),
+        name_en="Verified Font",
+        license_type="OFL",
+        slug="verified-font",
+        noonnu_foundry="네이버",
+    )
+    broken_target = TierATarget(
+        font_id=uuid4(),
+        name_en="Broken Font",
+        license_type="OFL",
+        slug="broken-font",
+        noonnu_foundry=None,
+    )
+
+    def fake_fetcher(url: str, **kwargs: object) -> FetchResult:
+        if "verifiedfont" in url.lower() and "METADATA.pb" in url:
+            content = '''name: "Verified Font"
+designer: "Google"
+license: "OFL"
+fonts {
+  copyright: "Copyright © 2012 NHN Corporation."
+}
+'''
+            return FetchResult(
+                status=200,
+                final_url=url,
+                content=content.encode(),
+                content_sha256="verified123",
+                redirect_count=0,
+            )
+        return FetchResult(
+            status=404,
+            final_url=url,
+            content=b"",
+            content_sha256="notfound",
+            redirect_count=0,
+        )
+
+    result = collect_tier_a_meta(
+        run_id,
+        [verified_target, broken_target],
+        store,
+        registry,
+        norm,
+        dry_run=False,
+        fetcher=fake_fetcher,
+    )
+
+    assert result["target_count"] == 2
+    assert result["success_count"] == 1
+    assert result["error_count"] == 1
+    assert result["verified_count"] == 1
+    assert result["needs_review_count"] == 0
+    assert result["broken_count"] == 1
+    # 성공 대상은 verified/needs_review 어느 한쪽으로만 집계되고, broken은 error와 같다
+    assert result["verified_count"] + result["needs_review_count"] == result["success_count"]
+    assert result["broken_count"] == result["error_count"]
+
+    # complete_run이 실제로 호출하는 _report_count를 직접 통과시켜 계약을 잠근다
+    for key in ("success_count", "verified_count", "needs_review_count", "broken_count"):
+        assert isinstance(result[key], int)
+        assert _report_count(result, key) == result[key]
