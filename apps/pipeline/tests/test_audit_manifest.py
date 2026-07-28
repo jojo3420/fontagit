@@ -319,7 +319,7 @@ _NOONNU_SCRIPT_EVIDENCE = {
     "extracted": {"evidence_role": "font-file-script"},
 }
 _TIER_A_EVIDENCE = {
-    "source_kind": "public",
+    "source_kind": "archive",  # 이슈 #133: Tier A 스냅샷 저장 등급
     "provider": "google-fonts",
     "document_kind": "metadata",
     "extracted": {"evidence_role": "tier-a-metadata-pb"},
@@ -347,13 +347,41 @@ def test_evidence_role_is_valid_reference_fields_allow_noonnu_and_tier_a(
 
 @pytest.mark.parametrize("snapshot", [_NOONNU_SCRIPT_EVIDENCE, _TIER_A_EVIDENCE], ids=["noonnu", "tier_a"])
 @pytest.mark.parametrize(
-    "field_name", ["license_source_kind", "allow_commercial", "license_verified"]
+    "field_name",
+    [
+        "license_source_kind",
+        "allow_commercial",
+        "license_verified",
+        "allow_modify",
+        "allow_redistribute",
+        "allow_embedding",
+        "allow_font_sale",
+        "attribution_requirement",
+        "is_commercial_free",
+    ],
 )
 def test_evidence_role_is_valid_protected_fields_reject_reference_evidence(
     field_name: str, snapshot: dict[str, object]
 ) -> None:
     """legal 필드(allow_*)와 license_source_kind는 눈누/Tier A reference 우회 대상이 아니다."""
     assert _evidence_role_is_valid(field_name, snapshot, "reference") is False
+
+
+def test_evidence_role_is_valid_tier_a_rejects_non_google_fonts_provider() -> None:
+    """이슈 #133: provider가 google-fonts가 아니면 Tier A 우회가 성립하지 않는다."""
+    snapshot = {**_TIER_A_EVIDENCE, "source_kind": "public", "provider": "some-other-provider"}
+    assert _evidence_role_is_valid("foundry_url", snapshot, "reference") is False
+
+
+def test_evidence_role_is_valid_public_metadata_without_tier_a_marker_rejects_reference() -> None:
+    """이슈 #133: public metadata라도 tier-a-metadata-pb 마커가 없으면 reference 우회가 되지 않는다."""
+    snapshot = {
+        "source_kind": "public",
+        "provider": "google-fonts",
+        "document_kind": "metadata",
+        "extracted": {},  # evidence_role 없음
+    }
+    assert _evidence_role_is_valid("foundry_url", snapshot, "reference") is False
 
 
 def test_build_manifest_accepts_reference_evidence_for_link_role_fields() -> None:

@@ -658,8 +658,12 @@ def derive_proposed_value(
             return [weight]
     if field_name == "foundry":
         return extracted.get("foundry")
+    if field_name == "foundry_url":
+        return extracted.get("foundry_url")
     if field_name == "download_url":
         return extracted.get("download_url")
     if field_name == "download_source_kind":
         return extracted.get("download_source_kind")
+    if field_name == "license_source_url":
+        return extracted.get("license_source_url")
     return None

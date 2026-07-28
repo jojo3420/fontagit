@@ -175,9 +175,20 @@ fonts {
     assert run_id_stored == run_id
     assert snapshot.provider == "google-fonts"
     assert snapshot.provider_record_id == "Noto Sans"
-    assert snapshot.source_kind == "public"
+    # 이슈 #133: google/fonts raw.githubusercontent.com 근거는 archive 등급으로 저장한다
+    # (public으로 저장하면 일반 metadata 승인 분기의 official/public 허용과 겹친다).
+    assert snapshot.source_kind == "archive"
     assert snapshot.document_kind == "metadata"
     assert snapshot.extracted["evidence_role"] == "tier-a-metadata-pb"
+
+    # 이슈 #133: extracted에 각 필드의 최종 제안값을 담아 auto-approve CLI의 evidence 대조
+    # (derive_proposed_value)가 실제 파싱 결과와 맞물리게 한다.
+    proposed_by_field = {f["field_name"]: f["proposed_value"] for f in findings}
+    assert snapshot.extracted["foundry"] == proposed_by_field["foundry"]
+    assert snapshot.extracted["foundry_url"] == proposed_by_field["foundry_url"]
+    assert snapshot.extracted["download_url"] == proposed_by_field["download_url"]
+    assert snapshot.extracted["download_source_kind"] == proposed_by_field["download_source_kind"]
+    assert snapshot.extracted["license_source_url"] == proposed_by_field["license_source_url"]
 
 
 def test_collect_tier_a_meta_dry_run_skips_snapshot() -> None:

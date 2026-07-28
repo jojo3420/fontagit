@@ -156,7 +156,10 @@ def _is_reference_metadata_evidence(snapshot: Mapping[str, object]) -> bool:
     if source_kind == "noonnu" and evidence_role == "font-file-script":
         return True
     if (
-        source_kind == "public"
+        # Tier A(google-fonts) 스냅샷은 archive 등급으로 저장한다(이슈 #133).
+        # provider+evidence_role 마커로 판정하므로 archive여도 그대로 동작해야 하고,
+        # 과거 데이터 호환을 위해 public도 함께 허용한다.
+        source_kind in {"public", "archive"}
         and snapshot.get("provider") == "google-fonts"
         and evidence_role == "tier-a-metadata-pb"
     ):
@@ -167,8 +170,14 @@ def _is_reference_metadata_evidence(snapshot: Mapping[str, object]) -> bool:
 def _evidence_role_is_valid(
     field_name: str, snapshot: Mapping[str, object], confidence: object
 ) -> bool:
-    if field_name in _REFERENCE_EVIDENCE_FIELDS and _is_reference_metadata_evidence(snapshot):
-        return confidence == "reference"
+    # SQL(0023)의 5필드 우회는 additive(continue 후 아래 일반 분기로 진행)다.
+    # Python도 동일하게 조건 불충족 시 아래 일반 분기로 내려가야 1:1이 유지된다.
+    if (
+        field_name in _REFERENCE_EVIDENCE_FIELDS
+        and confidence == "reference"
+        and _is_reference_metadata_evidence(snapshot)
+    ):
+        return True
     if field_name.startswith("download_"):
         required_document = "download"
         # font_source_snapshots.source_kind CHECK는 official/public/noonnu만 허용해

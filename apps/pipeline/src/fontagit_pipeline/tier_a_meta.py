@@ -226,22 +226,32 @@ def collect_tier_a_meta(
             # 권리사 추출 및 판정
             rights_holder = extract_rights_holder(meta.copyright or "")
             foundry_res = resolve_foundry(target.noonnu_foundry, rights_holder, normalization)
+            foundry_entry = normalization.resolve(rights_holder or "")
 
-            # specimen URL 생성
+            # specimen URL 생성 및 등급 분류(findings/extracted 양쪽에서 재사용)
             specimen_url = build_specimen_url(target.name_en)
+            specimen_source_kind = registry.classify(specimen_url)
             license_source_url = build_license_source_url(target.license_type, target.name_en)
 
             # Tier A 근거 스냅샷: dry_run이면 저장을 건너뛰고 evidence_id는 None으로 남긴다
-            # (리포트에 evidence 없음이 그대로 드러남). font_source_snapshots.source_kind
-            # CHECK는 official/public/noonnu만 허용해 archive를 저장할 수 없으므로,
-            # google/fonts 공개 저장소 원문이라는 의미에서 'public'을 근거 등급으로 쓴다
-            # (링크 자체의 archive 등급과는 별개 축, 스펙 0장).
+            # (리포트에 evidence 없음이 그대로 드러남). google/fonts raw.githubusercontent.com
+            # 근거는 source_registry.json 기준 archive 등급이므로 그대로 archive로 저장한다
+            # (이슈 #133: public으로 저장하면 일반 metadata 승인 분기의 official/public
+            # 허용과 겹쳐 5필드 우회 밖에서도 승인될 수 있었다. font_source_snapshots.source_kind
+            # CHECK는 0024에서 archive를 추가로 허용한다). extracted에는 각 필드의 최종
+            # 제안값을 그대로 담아 auto-approve CLI의 evidence 대조(derive_proposed_value)가
+            # 실제 파싱 결과와 맞물리게 한다.
             evidence_id: UUID | None = None
             if not dry_run:
                 extracted = {
                     "evidence_role": "tier-a-metadata-pb",
                     "designer": meta.designer,
                     "copyright": meta.copyright,
+                    "foundry": foundry_res.value,
+                    "foundry_url": foundry_entry.evidence_url if foundry_entry is not None else None,
+                    "download_url": specimen_url,
+                    "download_source_kind": specimen_source_kind,
+                    "license_source_url": license_source_url,
                 }
                 normalized_sha256 = hashlib.sha256(
                     json.dumps(
@@ -252,7 +262,7 @@ def collect_tier_a_meta(
                     font_id=target.font_id,
                     provider="google-fonts",
                     provider_record_id=target.name_en,
-                    source_kind="public",
+                    source_kind="archive",
                     document_kind="metadata",
                     request_url=metadata_url,
                     final_url=result.final_url,
@@ -285,26 +295,23 @@ def collect_tier_a_meta(
             findings_detail.append(_finding_detail(target, finding_foundry))
 
             # 2. foundry_url 필드 (정규화 사전의 evidence_url)
-            if foundry_res.value is not None:
-                entry = normalization.resolve(rights_holder or "")
-                if entry is not None:
-                    finding_foundry_url = FindingDraft(
-                        font_id=target.font_id,
-                        field_name="foundry_url",
-                        before_value=None,
-                        proposed_value=entry.evidence_url,
-                        evidence_id=evidence_id,
-                        confidence="reference",
-                        review_reason="normalization_evidence",
-                        auto_applicable=(entry.status == "approved"),
-                    )
-                    if not dry_run:
-                        store.save_finding(run_id, finding_foundry_url)
-                    findings_created += 1
-                    findings_detail.append(_finding_detail(target, finding_foundry_url))
+            if foundry_res.value is not None and foundry_entry is not None:
+                finding_foundry_url = FindingDraft(
+                    font_id=target.font_id,
+                    field_name="foundry_url",
+                    before_value=None,
+                    proposed_value=foundry_entry.evidence_url,
+                    evidence_id=evidence_id,
+                    confidence="reference",
+                    review_reason="normalization_evidence",
+                    auto_applicable=(foundry_entry.status == "approved"),
+                )
+                if not dry_run:
+                    store.save_finding(run_id, finding_foundry_url)
+                findings_created += 1
+                findings_detail.append(_finding_detail(target, finding_foundry_url))
 
             # 3. download_url + download_source_kind (쌍으로 생성)
-            specimen_source_kind = registry.classify(specimen_url)
             if may_update_source_kind(target.download_source_kind, specimen_source_kind):
                 finding_download_url = FindingDraft(
                     font_id=target.font_id,

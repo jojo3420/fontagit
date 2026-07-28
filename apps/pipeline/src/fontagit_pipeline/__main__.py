@@ -1033,8 +1033,17 @@ def main_audit_review(args: argparse.Namespace) -> int:
                 if not isinstance(finding_id, str):
                     raise ValueError(f"invalid finding_id: {finding_id}")
 
-                # 자동 승인 필드 필터 (auto_applicable=True만 처리)
-                if field_name not in {"tags", "weights", "foundry", "download_url", "download_source_kind"}:
+                # 자동 승인 필드 필터 (auto_applicable=True만 처리). foundry_url/license_source_url은
+                # legal 필드가 아닌 링크-표기 등급이라 스펙상 자동 게이트 대상이다(이슈 #133).
+                if field_name not in {
+                    "tags",
+                    "weights",
+                    "foundry",
+                    "foundry_url",
+                    "download_url",
+                    "download_source_kind",
+                    "license_source_url",
+                }:
                     continue
                 if not auto_applicable:
                     # auto_applicable=False는 needs_review 유지 (자동 승인 불가)
