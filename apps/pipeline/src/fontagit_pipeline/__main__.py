@@ -21,8 +21,13 @@ from fontagit_pipeline.noonnu_import import import_noonnu_seeds, NoonnuImportErr
 from fontagit_pipeline.noonnu_seed import _USER_AGENT, collect_noonnu_seeds, NoonnuSeedError
 from fontagit_pipeline.noonnu_url_scan import (
     ScanAbortedError,
+    ScanLockError,
+    ScanRecord,
+    acquire_scan_lock,
+    build_robots_checker,
     fetch_scan_html,
     load_scan_targets,
+    load_state_records,
     scan_targets,
     summarize,
 )
@@ -170,59 +175,109 @@ def main_noonnu_seed(args: argparse.Namespace) -> int:
 
 
 def main_noonnu_url_scan(args: argparse.Namespace) -> int:
-    """눈누 공식 URL 전수 대조 진입점."""
+    """눈누 공식 URL 전수 대조 진입점.
+
+    종료 코드:
+        0: 성공, 재시도 대상 없이 전부 처리됨.
+        1: CLI 인자 검증 실패(음수 --limit, --state와 --out 경로 동일).
+        2: supabase_url/secret_key 설정 없음.
+        3: 예상치 못한 오류.
+        4: no_container 비율이 임계치를 넘어 구조 가정이 깨진 것으로 판단.
+        5: robots.txt 거부 또는 회로차단기 발동으로 스캔 중단(부분 리포트 기록됨).
+        6: 스캔은 끝까지 돌았지만 재시도 대상(retryable_error)이 남음.
+        7: 다른 스캔이 실행 중이라 잠금을 얻지 못함.
+    """
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
+    if args.limit < 0:
+        logger.error("--limit은 음수일 수 없습니다: %d", args.limit)
+        return 1
+    if args.state == args.out:
+        logger.error("--state와 --out은 같은 경로일 수 없습니다: %s", args.state)
+        return 1
+
+    try:
+        with acquire_scan_lock(args.state):
+            return _run_url_scan(args)
+    except ScanLockError as exc:
+        logger.error("잠금 획득 실패: %s", exc)
+        return 7
+    except Exception as exc:
+        logger.error("예상치 못한 오류: %s", exc)
+        return 3
+
+
+def _run_url_scan(args: argparse.Namespace) -> int:
+    """잠금을 쥔 상태에서 실제 스캔을 수행하고 리포트를 남긴다."""
     import json
-    from dataclasses import asdict
     from typing import cast
 
     from supabase import create_client
 
-    try:
-        settings = load_settings()
-        if not settings.supabase_url or not settings.supabase_secret_key:
-            logger.error("supabase_url 또는 supabase_secret_key가 없습니다")
-            return 2
-        client = create_client(settings.supabase_url, settings.supabase_secret_key)
-        targets = load_scan_targets(client)
-        if args.limit:
-            targets = targets[: args.limit]
-        logger.info("스캔 대상 %d종", len(targets))
+    settings = load_settings()
+    if not settings.supabase_url or not settings.supabase_secret_key:
+        logger.error("supabase_url 또는 supabase_secret_key가 없습니다")
+        return 2
+    client = create_client(settings.supabase_url, settings.supabase_secret_key)
+    targets = load_scan_targets(client)
+    if args.limit:
+        targets = targets[: args.limit]
+    logger.info("스캔 대상 %d종", len(targets))
 
-        with httpx.Client(headers={"User-Agent": _USER_AGENT}, follow_redirects=True) as http:
+    try:
+        with httpx.Client(headers={"User-Agent": _USER_AGENT}) as http:
+            robots_checker = build_robots_checker(http)
             records = scan_targets(
                 targets,
                 fetcher=lambda url: fetch_scan_html(http, url),
                 state_path=args.state,
+                robots_checker=robots_checker,
             )
-
-        summary = summarize(records)
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(
-            json.dumps(
-                {"summary": summary, "records": [asdict(record) for record in records]},
-                ensure_ascii=False,
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
-        logger.info("요약: %s", json.dumps(summary, ensure_ascii=False))
-        if not summary["structure_assumption_ok"]:
-            logger.error(
-                "no_container 비율 %.1f%%가 임계치를 넘었습니다. 정정을 진행하지 마세요.",
-                cast(float, summary["no_container_ratio"]) * 100,
-            )
-            return 4
-        return 0
     except ScanAbortedError as exc:
         logger.error("스캔 중단: %s", exc)
+        partial_records = load_state_records(args.state)
+        partial_summary = summarize(partial_records)
+        _write_scan_report(args.out, partial_summary, partial_records)
+        logger.info("중단 시점까지 요약: %s", json.dumps(partial_summary, ensure_ascii=False))
         return 5
-    except Exception as exc:
-        logger.error("예상치 못한 오류: %s", exc)
-        return 3
+
+    summary = summarize(records)
+    _write_scan_report(args.out, summary, records)
+    logger.info("요약: %s", json.dumps(summary, ensure_ascii=False))
+    if not summary["structure_assumption_ok"]:
+        logger.error(
+            "no_container 비율 %.1f%%가 임계치를 넘었습니다. 정정을 진행하지 마세요.",
+            cast(float, summary["no_container_ratio"]) * 100,
+        )
+        return 4
+    if cast(int, summary["retryable_count"]) > 0:
+        logger.warning(
+            "재시도 대상 %d건이 남았습니다. 상태 파일에서 재실행하세요: %s",
+            summary["retryable_count"],
+            args.state,
+        )
+        return 6
+    return 0
+
+
+def _write_scan_report(
+    out_path: Path, summary: dict[str, object], records: list[ScanRecord]
+) -> None:
+    """판정 리포트를 JSON으로 저장한다. 정상 종료-중단 두 경로에서 공유한다."""
+    import json
+    from dataclasses import asdict
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(
+        json.dumps(
+            {"summary": summary, "records": [asdict(record) for record in records]},
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
 
 def main_noonnu_import(args: argparse.Namespace) -> int:
