@@ -4,7 +4,7 @@ import { HomeExplorer } from "@/components/HomeExplorer";
 import { WeeklyRankPanel } from "@/components/WeeklyRankPanel";
 import { HomeCollectionsStrip } from "@/components/HomeCollectionsStrip";
 import { AdFitUnit } from "@/components/AdFitUnit";
-import { CompareLazy } from "@/components/CompareLazy";
+import { HomeCompareSection } from "@/components/HomeCompareSection";
 import { ADFIT_UNIT_HOME } from "@/lib/analytics/constants";
 import { getTrends, getAllFonts, getAllCollections } from "@/lib/data";
 import { buildHomePreview } from "@/lib/homeCuration";
@@ -35,13 +35,7 @@ export default async function Home() {
           <HomeCollectionsStrip collections={collections} />
         </div>
       </section>
-      <section id="compare" className={styles.compareSection} aria-labelledby="compare-heading">
-        <div className={styles.container}>
-          <CompareLazy
-            placeholder={<div className={styles.comparePlaceholder} />}
-          />
-        </div>
-      </section>
+      <HomeCompareSection />
       <section className={styles.adSection}>
         <div className={styles.container}>
           <AdFitUnit unit={ADFIT_UNIT_HOME ?? ""} width={320} height={100} label />

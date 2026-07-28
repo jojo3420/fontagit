@@ -25,3 +25,16 @@ describe("CompareCanvas", () => {
     ).toContain("gowun-batang");
   });
 });
+
+describe("CompareCanvas preset", () => {
+  it("preset이 주어지면 대표-그리드 선택에 반영된다", () => {
+    render(<CompareCanvas preset={{ heroSlug: "jua", gridSlugs: ["gowun-batang"] }} />);
+    expect(screen.getByLabelText("대표 폰트 선택")).toHaveValue("jua");
+    expect(screen.getByLabelText("1번 폰트 선택")).toHaveValue("gowun-batang");
+  });
+
+  it("preset이 없으면 기존 기본값을 유지한다", () => {
+    render(<CompareCanvas />);
+    expect(screen.getByLabelText("대표 폰트 선택")).toHaveValue("pretendard");
+  });
+});

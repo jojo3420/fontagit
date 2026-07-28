@@ -1,9 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { fonts } from "@/data/fonts";
 import { familyOf } from "@/lib/fonts";
 import { TierChip } from "./TierChip";
+import type { ComparePreset } from "@/data/pairings";
 import styles from "./CompareCanvas.module.css";
 
 const DEFAULT_TEXT = "다람쥐 헌 쳇바퀴에 타고파 1234 !@#$";
@@ -12,11 +13,18 @@ const OPTIONS = fonts.filter((f) => f.tier === "free");
 const DEFAULT_HERO = "pretendard";
 const DEFAULT_GRID = OPTIONS.filter((f) => f.slug !== DEFAULT_HERO).map((f) => f.slug);
 
-export function CompareCanvas() {
+export function CompareCanvas({ preset }: { preset?: ComparePreset } = {}) {
   const [text, setText] = useState(DEFAULT_TEXT);
   const [heroSlug, setHeroSlug] = useState(DEFAULT_HERO);
   const [gridSlugs, setGridSlugs] = useState<string[]>(DEFAULT_GRID);
   const shown = text || " ";
+
+  useEffect(() => {
+    if (!preset) return;
+    setHeroSlug(preset.heroSlug);
+    setGridSlugs(preset.gridSlugs);
+  }, [preset]);
+
   const hero = OPTIONS.find((f) => f.slug === heroSlug);
 
   const changeGrid = (index: number, slug: string) =>
