@@ -272,6 +272,45 @@ describe("rowToFont", () => {
     expect(result.license.redistribution).toBe("yes");
     expect(result.license.verifiedAt).toBe("2026-07-12T00:00:00Z");
   });
+
+  it("should map created_at to createdAt", () => {
+    const row: FontRow = {
+      id: "8",
+      slug: "pretendard",
+      name_en: "Pretendard",
+      name_ko: "프리텐다드",
+      foundry: "Orioncactus",
+      category_ko: "고딕",
+      weights: [400, 500, 700],
+      is_commercial_free: true,
+      license_type: "SIL OFL",
+      official_url: "https://github.com/orioncactus/pretendard",
+      last_modified: "2026-07-12T00:00:00Z",
+      created_at: "2026-07-20T00:00:00Z",
+    };
+
+    const result = rowToFont(row, []);
+    expect(result.createdAt).toBe("2026-07-20T00:00:00Z");
+  });
+
+  it("should leave createdAt undefined when created_at is absent", () => {
+    const row: FontRow = {
+      id: "9",
+      slug: "pretendard",
+      name_en: "Pretendard",
+      name_ko: "프리텐다드",
+      foundry: "Orioncactus",
+      category_ko: "고딕",
+      weights: [400, 500, 700],
+      is_commercial_free: true,
+      license_type: "SIL OFL",
+      official_url: "https://github.com/orioncactus/pretendard",
+      last_modified: "2026-07-12T00:00:00Z",
+    };
+
+    const result = rowToFont(row, []);
+    expect(result.createdAt).toBeUndefined();
+  });
 });
 
 describe("rowToCollection", () => {
