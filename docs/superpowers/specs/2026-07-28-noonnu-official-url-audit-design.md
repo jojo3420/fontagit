@@ -85,7 +85,15 @@ contamination_type(nullable), recommended_action, evidence(앵커 텍스트-매�
 
 **요청 예의.** 기존 `_REQUEST_DELAY`를 유지하되 고정 간격이 패턴으로 읽히지 않도록 지터를 섞는다. 429나 403을 받으면 대기를 늘리고, 연속으로 받으면 안전하게 중단해 상태 파일을 남긴다.
 
-배치 위치는 기존 패턴을 따라 `__main__.py`의 서브커맨드로 붙인다(`seed`, `enrich`, `manifest build` 등과 같은 층). 추출 로직은 PR #149가 고친 `noonnu_seed.py`의 함수를 그대로 재사용하고 복제하지 않는다. 대조와 판정만 새로 만든다.
+배치 위치는 기존 패턴을 따라 `__main__.py`의 서브커맨드로 붙인다(`seed`, `enrich`, `manifest build` 등과 같은 층).
+
+**추출은 `audit_noonnu.py`에 붙인다.** 눈누 페이지 파서가 두 벌 있는데, `noonnu_seed.py`는 시드 수집용이고 `audit_noonnu.py`가 감사용이다. 후자를 택하는 이유는 세 가지다.
+
+- 정정을 manifest로 하려면 증거(snapshot)와 검수 후보(finding)가 필요한데, 감사 파서만 `evidence_locations`와 `_selector_path`로 근거 위치를 남긴다
+- `NoonnuFontSnapshot`에 `global_social_links` 필드가 이미 선언돼 있다. 다만 채우는 코드가 없어 항상 빈 리스트다. 눈누 전역 SNS를 분리하려던 자리가 비어 있었고, 그것이 이번 오염을 걸러내지 못한 이유이기도 하다
+- 감사 파서에는 `official_url` 개념 자체가 없어, 추가하면 두 파서의 역할이 겹치지 않고 나뉜다
+
+PR #149가 검증한 접근(본문 컨테이너 한정 + 눈누 도메인 차단)을 감사 파서의 `_detail_root`를 써서 구현한다. 로직을 베끼는 것이 아니라 같은 원칙을 감사 파서 구조에 맞춰 적용하는 것이다. 대조와 판정은 별도 모듈로 새로 만든다.
 
 ### 컴포넌트 2: manifest 허용 필드 확장
 
