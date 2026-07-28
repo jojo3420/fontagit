@@ -1,12 +1,17 @@
 """승인 legal 근거를 metadata 입력으로 여는 저장소 계약."""
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import UUID, uuid4
 
 import pytest
 
-from fontagit_pipeline.audit_store import MANUAL_APPROVABLE_FIELDS, SupabaseAuditStore
+from fontagit_pipeline.audit_store import (
+    MANUAL_APPROVABLE_FIELDS,
+    ExcludedFontSource,
+    SupabaseAuditStore,
+)
 
 # 별도 사람 게이트 절차가 필요한 legal 필드 - MANUAL_APPROVABLE_FIELDS에 절대 포함되면 안 된다
 # (이슈 #128, 감사 findings 사람 승인 경로).
@@ -572,7 +577,7 @@ def test_get_current_fonts_with_snapshots_returns_fonts_with_evidence() -> None:
     client.schema.return_value = schema
 
     store = SupabaseAuditStore(client)
-    results = store.get_current_fonts_with_snapshots(run_id)
+    results = store.get_current_fonts_with_snapshots(run_id, excluded_out=None)
 
     assert len(results) == 1
     font = results[0]
@@ -628,7 +633,7 @@ def test_get_current_fonts_with_snapshots_includes_other_run_snapshots() -> None
     client.schema.return_value = schema
 
     store = SupabaseAuditStore(client)
-    results = store.get_current_fonts_with_snapshots(run_id)
+    results = store.get_current_fonts_with_snapshots(run_id, excluded_out=None)
 
     # 다른 run 귀속이어도 포함되어야 함
     assert len(results) == 1
@@ -664,7 +669,7 @@ def test_get_current_fonts_with_snapshots_raises_on_missing_evidence_id() -> Non
 
     store = SupabaseAuditStore(client)
     with pytest.raises(RuntimeError, match="has no evidence_id"):
-        store.get_current_fonts_with_snapshots(run_id)
+        store.get_current_fonts_with_snapshots(run_id, excluded_out=None)
 
 
 def test_get_current_fonts_with_snapshots_with_target_store() -> None:
@@ -752,7 +757,9 @@ def test_get_current_fonts_with_snapshots_with_target_store() -> None:
     target_store = SupabaseAuditStore(prod_client)
 
     # 호출: target_store 지정
-    results = dev_store.get_current_fonts_with_snapshots(run_id, target_store=target_store)
+    results = dev_store.get_current_fonts_with_snapshots(
+        run_id, target_store=target_store, excluded_out=None
+    )
 
     assert len(results) == 1
     font = results[0]
@@ -763,8 +770,10 @@ def test_get_current_fonts_with_snapshots_with_target_store() -> None:
     assert len(font["evidence_snapshots"]) == 1
 
 
-def test_get_current_fonts_with_snapshots_font_sources_no_match() -> None:
-    """font_sources 매칭 0건 → RuntimeError."""
+def test_get_current_fonts_with_snapshots_target_missing_font_excluded(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """font_sources 매칭 0건(대상 DB에 폰트 자체가 없음)은 정상 상태 → 예외 없이 제외되고 기록된다."""
     run_id = UUID("00000000-0000-0000-0000-000000000909")
     font_id = UUID("00000000-0000-0000-0000-000000000810")
     snapshot_id = UUID("00000000-0000-0000-0000-000000000813")
@@ -821,9 +830,119 @@ def test_get_current_fonts_with_snapshots_font_sources_no_match() -> None:
 
     target_store = SupabaseAuditStore(prod_client)
 
-    # 호출: RuntimeError 발생
-    with pytest.raises(RuntimeError, match="font_sources 매칭 실패"):
-        dev_store.get_current_fonts_with_snapshots(run_id, target_store=target_store)
+    excluded: list[ExcludedFontSource] = []
+    with caplog.at_level(logging.WARNING):
+        results = dev_store.get_current_fonts_with_snapshots(
+            run_id, target_store=target_store, excluded_out=excluded
+        )
+
+    # 예외 없이 제외됨
+    assert results == []
+    assert len(excluded) == 1
+    assert excluded[0].provider == "noonnu"
+    assert excluded[0].provider_record_id == "999"
+    assert excluded[0].dev_font_id == str(font_id)
+    assert excluded[0].evidence_ids == (str(snapshot_id),)
+    assert any("제외" in record.message for record in caplog.records)
+
+
+def test_get_current_fonts_with_snapshots_font_sources_duplicate_match_raises() -> None:
+    """font_sources 매칭 2건 이상(중복)은 데이터 정합성 오류이므로 여전히 RuntimeError."""
+    run_id = UUID("00000000-0000-0000-0000-000000000909")
+    font_id = UUID("00000000-0000-0000-0000-000000000810")
+    snapshot_id = UUID("00000000-0000-0000-0000-000000000813")
+
+    finding_data = {
+        "id": str(uuid4()),
+        "run_id": str(run_id),
+        "font_id": str(font_id),
+        "field_name": "tags",
+        "status": "approved",
+        "evidence_id": str(snapshot_id),
+    }
+
+    snapshot_data = {
+        "id": str(snapshot_id),
+        "run_id": str(run_id),
+        "font_id": str(font_id),
+        "provider": "noonnu",
+        "provider_record_id": "613",
+    }
+
+    dev_findings_response = _query([finding_data])
+    dev_snapshots_response = _query([snapshot_data])
+
+    dev_schema = MagicMock()
+    dev_schema.table.side_effect = [dev_findings_response, dev_snapshots_response]
+    dev_client = MagicMock()
+    dev_client.schema.return_value = dev_schema
+
+    dev_store = SupabaseAuditStore(dev_client)
+
+    # prod: 동일 (provider, provider_record_id)에 font_sources 2건이 매칭 (데이터 오류)
+    duplicate_source_1 = {
+        "id": str(uuid4()),
+        "provider": "noonnu",
+        "provider_record_id": "613",
+        "font_id": str(uuid4()),
+    }
+    duplicate_source_2 = {
+        "id": str(uuid4()),
+        "provider": "noonnu",
+        "provider_record_id": "613",
+        "font_id": str(uuid4()),
+    }
+    prod_font_sources_response = _query([duplicate_source_1, duplicate_source_2])
+
+    prod_schema = MagicMock()
+    prod_schema.table.return_value = prod_font_sources_response
+    prod_client = MagicMock()
+    prod_client.schema.return_value = prod_schema
+
+    target_store = SupabaseAuditStore(prod_client)
+
+    with pytest.raises(RuntimeError, match="중복/초과"):
+        dev_store.get_current_fonts_with_snapshots(
+            run_id, target_store=target_store, excluded_out=None
+        )
+
+
+def test_get_current_fonts_with_snapshots_self_target_missing_font_raises() -> None:
+    """target_store 없음(self=dev 대상)에서 fonts가 결측이면 기존처럼 RuntimeError (진짜 오류)."""
+    run_id = UUID("00000000-0000-0000-0000-000000000909")
+    font_id = UUID("00000000-0000-0000-0000-000000000810")
+    snapshot_id = UUID("00000000-0000-0000-0000-000000000813")
+
+    finding_data = {
+        "id": str(uuid4()),
+        "run_id": str(run_id),
+        "font_id": str(font_id),
+        "field_name": "tags",
+        "status": "approved",
+        "evidence_id": str(snapshot_id),
+    }
+
+    snapshot_data = {
+        "id": str(snapshot_id),
+        "run_id": str(run_id),
+        "font_id": str(font_id),
+        "provider": "noonnu",
+        "provider_record_id": "613",
+    }
+
+    findings_response = _query([finding_data])
+    snapshots_response = _query([snapshot_data])
+    fonts_response = _query([])  # self(dev) DB에 폰트 자체가 없음 → 진짜 오류
+
+    schema = MagicMock()
+    schema.table.side_effect = [findings_response, snapshots_response, fonts_response]
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+
+    with pytest.raises(RuntimeError, match="fonts 결측"):
+        store.get_current_fonts_with_snapshots(run_id, excluded_out=None)
 
 
 def test_get_current_fonts_with_snapshots_chunked_query() -> None:
@@ -911,7 +1030,9 @@ def test_get_current_fonts_with_snapshots_chunked_query() -> None:
 
     target_store = SupabaseAuditStore(prod_client)
 
-    result = dev_store.get_current_fonts_with_snapshots(run_id, target_store=target_store)
+    result = dev_store.get_current_fonts_with_snapshots(
+        run_id, target_store=target_store, excluded_out=None
+    )
 
     font_sources_calls = [
         call for call in prod_schema.table.call_args_list if call[0][0] == "font_sources"

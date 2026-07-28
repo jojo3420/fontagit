@@ -219,7 +219,9 @@ def test_task3_helpers_manifest_integration() -> None:
     # 3. 헬퍼 메서드 호출 (진정한 통합테스트)
     run_from_store = store.get_run(RUN_ID)
     approved_findings_from_store = store.get_approved_findings(RUN_ID)
-    current_rows_from_store = store.get_current_fonts_with_snapshots(RUN_ID)
+    current_rows_from_store = store.get_current_fonts_with_snapshots(
+        RUN_ID, excluded_out=None
+    )
 
     # 4. 실제 build_manifest 호출 (핵심 검증)
     bundle = build_manifest(run_from_store, approved_findings_from_store, current_rows_from_store)
