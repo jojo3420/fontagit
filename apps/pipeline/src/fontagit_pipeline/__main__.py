@@ -1189,9 +1189,9 @@ def main_audit_tier_a_meta(args: argparse.Namespace) -> int:
     from fontagit_pipeline.config import load_audit_settings
     from fontagit_pipeline.audit_policy import load_source_registry
     from fontagit_pipeline.tier_a_meta import (
-        BrandNormalization,
         TierATarget,
         collect_tier_a_meta,
+        load_brand_normalization,
     )
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -1204,9 +1204,7 @@ def main_audit_tier_a_meta(args: argparse.Namespace) -> int:
 
     try:
         # 정규화 테이블 로드
-        norm_path = Path(__file__).with_name("data") / "brand_normalization.json"
-        norm_data = json.loads(norm_path.read_text(encoding="utf-8"))
-        normalization = BrandNormalization.model_validate(norm_data)
+        normalization = load_brand_normalization()
 
         # 출처 레지스트리 로드
         registry = load_source_registry()

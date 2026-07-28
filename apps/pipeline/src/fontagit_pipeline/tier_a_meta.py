@@ -11,7 +11,9 @@ import hashlib
 import json
 import logging
 import re
+from collections.abc import Mapping
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Callable, Sequence
 from urllib.parse import quote
 from uuid import UUID
@@ -22,12 +24,16 @@ from fontagit_pipeline.audit_http import FetchResult, fetch_public_url
 from fontagit_pipeline.audit_policy import (
     AUTO_APPLICABLE_SOURCE_KINDS,
     SourceRegistry,
+    load_source_registry,
     may_update_source_kind,
 )
 from fontagit_pipeline.audit_store import AuditStore, FindingDraft, SnapshotDraft
 from fontagit_pipeline.licenses import _LICENSE_DIRS
 
 logger = logging.getLogger(__name__)
+
+_DATA_DIR = Path(__file__).with_name("data")
+_DEFAULT_BRAND_NORMALIZATION_PATH = _DATA_DIR / "brand_normalization.json"
 
 _METADATA_URL = "https://raw.githubusercontent.com/google/fonts/main/{license_dir}/{family_dir}/METADATA.pb"
 _DESIGNER_RE = re.compile(r'^designer:\s*"(?P<v>[^"]+)"', re.MULTILINE)
@@ -65,6 +71,22 @@ class BrandNormalization(BaseModel):
             if entry.source_name.casefold() == needle:
                 return entry
         return None
+
+
+def load_brand_normalization(
+    path: str | Path = _DEFAULT_BRAND_NORMALIZATION_PATH,
+) -> BrandNormalization:
+    """권리사 정규화 테이블 JSON을 읽는다.
+
+    수집 시점(main_audit_tier_a_meta)과 승인 게이트 재계산 시점
+    (derive_tier_a_proposed_value) 양쪽에서 같은 로딩 로직을 재사용한다.
+    """
+    norm_path = Path(path)
+    try:
+        payload = json.loads(norm_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"brand normalization 테이블을 읽을 수 없습니다: {norm_path}") from exc
+    return BrandNormalization.model_validate(payload)
 
 
 class FoundryResolution(BaseModel):
@@ -131,6 +153,51 @@ def build_license_source_url(license_type: str, name_en: str) -> str:
     license_dir = dirs.get(license_type, "ofl")
     family_dir = name_en.replace(" ", "").lower()
     return f"https://raw.githubusercontent.com/google/fonts/main/{license_dir}/{family_dir}/LICENSE.txt"
+
+
+def derive_tier_a_proposed_value(field_name: str, extracted: Mapping[str, object]) -> object:
+    """Tier A(google-fonts) METADATA.pb 원문 근거로 제안값을 독립 재계산한다.
+
+    이슈 #133 재리뷰: extracted에 수집기가 만든 제안값을 그대로 담으면 auto-approve CLI의
+    evidence 대조(derive_proposed_value)가 같은 출처끼리 비교하는 꼴이 되어 자기 인증이
+    된다(수집기 버그를 못 잡음). extracted에는 designer/copyright 원문과 재계산에 필요한
+    최소 식별자(name_en/license_type/noonnu_foundry)만 남기고, 여기서 tier_a_meta의 기존
+    함수(build_specimen_url/build_license_source_url/extract_rights_holder/resolve_foundry)로
+    각 필드를 처음부터 다시 계산한다. 수집기가 만든 제안값과 이 재계산 결과가 일치할 때만
+    승인 게이트를 통과한다.
+    """
+    name_en = extracted.get("name_en")
+    license_type = extracted.get("license_type")
+    copyright_text = extracted.get("copyright")
+    rights_holder = extract_rights_holder(copyright_text) if isinstance(copyright_text, str) else None
+
+    if field_name == "foundry":
+        noonnu_foundry = extracted.get("noonnu_foundry")
+        normalization = load_brand_normalization()
+        resolution = resolve_foundry(
+            noonnu_foundry if isinstance(noonnu_foundry, str) else None,
+            rights_holder,
+            normalization,
+        )
+        return resolution.value
+    if field_name == "foundry_url":
+        if not rights_holder:
+            return None
+        entry = load_brand_normalization().resolve(rights_holder)
+        return entry.evidence_url if entry is not None else None
+    if field_name == "download_url":
+        if not isinstance(name_en, str):
+            return None
+        return build_specimen_url(name_en)
+    if field_name == "download_source_kind":
+        if not isinstance(name_en, str):
+            return None
+        return load_source_registry().classify(build_specimen_url(name_en))
+    if field_name == "license_source_url":
+        if not isinstance(name_en, str) or not isinstance(license_type, str):
+            return None
+        return build_license_source_url(license_type, name_en)
+    return None
 
 
 class TierATarget(BaseModel):
@@ -238,20 +305,24 @@ def collect_tier_a_meta(
             # 근거는 source_registry.json 기준 archive 등급이므로 그대로 archive로 저장한다
             # (이슈 #133: public으로 저장하면 일반 metadata 승인 분기의 official/public
             # 허용과 겹쳐 5필드 우회 밖에서도 승인될 수 있었다. font_source_snapshots.source_kind
-            # CHECK는 0024에서 archive를 추가로 허용한다). extracted에는 각 필드의 최종
-            # 제안값을 그대로 담아 auto-approve CLI의 evidence 대조(derive_proposed_value)가
-            # 실제 파싱 결과와 맞물리게 한다.
+            # CHECK는 0024에서 archive를 추가로 허용한다).
+            #
+            # extracted에는 METADATA.pb에서 실제 파싱한 원문 근거(designer/copyright)와
+            # 재계산에 필요한 최소 식별자(name_en/license_type/noonnu_foundry)만 남긴다.
+            # foundry/foundry_url/download_url/download_source_kind/license_source_url 같은
+            # "구성된 제안값"은 담지 않는다 - 그걸 담으면 auto-approve CLI의 evidence 대조
+            # (derive_proposed_value)가 수집기 자신이 만든 값과 자기 자신을 비교하는 꼴이 되어
+            # 수집기 버그를 못 잡는다(이슈 #133 재리뷰). derive_tier_a_proposed_value가 이
+            # 원문 식별자로부터 각 필드를 독립적으로 재계산해 대조 기준으로 삼는다.
             evidence_id: UUID | None = None
             if not dry_run:
                 extracted = {
                     "evidence_role": "tier-a-metadata-pb",
                     "designer": meta.designer,
                     "copyright": meta.copyright,
-                    "foundry": foundry_res.value,
-                    "foundry_url": foundry_entry.evidence_url if foundry_entry is not None else None,
-                    "download_url": specimen_url,
-                    "download_source_kind": specimen_source_kind,
-                    "license_source_url": license_source_url,
+                    "name_en": target.name_en,
+                    "license_type": target.license_type,
+                    "noonnu_foundry": target.noonnu_foundry,
                 }
                 normalized_sha256 = hashlib.sha256(
                     json.dumps(

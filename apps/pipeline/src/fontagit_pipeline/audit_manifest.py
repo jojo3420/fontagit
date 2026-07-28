@@ -180,9 +180,11 @@ def _evidence_role_is_valid(
         return True
     if field_name.startswith("download_"):
         required_document = "download"
-        # font_source_snapshots.source_kind CHECK는 official/public/noonnu만 허용해
-        # archive는 스냅샷 근거로 절대 도달하지 않는다(archive 등급은 근거 없는
-        # reference finding으로만 생성됨). 여기 포함하면 죽은 코드가 된다.
+        # font_source_snapshots.source_kind CHECK는 0024부터 archive도 허용하지만,
+        # archive 등급 근거(Tier A google/fonts METADATA.pb)는 항상 confidence="reference"로만
+        # finding을 만든다(tier_a_meta.py) - 그 경로는 위 첫 if에서 이미 처리되어 여기까지
+        # 내려오지 않는다. 따라서 archive를 여기 포함해도 confidence!="official"/"public"인
+        # 경로로는 도달할 수 없어 죽은 코드가 된다.
         allowed_source_kinds = {"official", "public"}
     elif field_name.startswith("license_") or field_name in {
         "allow_commercial",

@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, HttpUrl
 
 AuditStage = Literal["bootstrap", "legal", "metadata", "scheduled"]
-SourceKind = Literal["official", "public", "noonnu"]
+SourceKind = Literal["official", "public", "noonnu", "archive"]
 RegistryKind = Literal["official", "public", "archive", "discovery"]
 DocumentKind = Literal["download", "license", "metadata"]
 DownloadStatus = Literal["pending", "verified", "needs_review", "broken"]

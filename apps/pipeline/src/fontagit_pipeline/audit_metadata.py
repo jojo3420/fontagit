@@ -19,6 +19,7 @@ from typing import Any, Literal, Protocol, cast
 from uuid import UUID
 
 from fontagit_pipeline.audit_store import FindingDraft
+from fontagit_pipeline.tier_a_meta import derive_tier_a_proposed_value
 
 MAX_FONT_FILE_BYTES = 32 * 1024 * 1024
 MAX_SFNT_BYTES = 128 * 1024 * 1024
@@ -649,7 +650,20 @@ def derive_proposed_value(
     field_name: str,
     extracted: Mapping[str, object],
 ) -> object:
-    """증거에서 기대되는 proposed_value를 파생한다 (자동 승인 대상 필드)."""
+    """증거에서 기대되는 proposed_value를 파생한다 (자동 승인 대상 필드).
+
+    Tier A(google-fonts) METADATA.pb 근거(evidence_role == "tier-a-metadata-pb")는
+    수집기가 만든 제안값을 신뢰하지 않고 원문 근거로부터 독립 재계산한다(이슈 #133 재리뷰).
+    그 외(눈누 font-file-script 등)는 extracted가 이미 스크레이핑된 원문 값이므로 그대로 읽는다.
+    """
+    if extracted.get("evidence_role") == "tier-a-metadata-pb" and field_name in (
+        "foundry",
+        "foundry_url",
+        "download_url",
+        "download_source_kind",
+        "license_source_url",
+    ):
+        return derive_tier_a_proposed_value(field_name, extracted)
     if field_name == "tags":
         return extracted.get("tags")
     if field_name == "weights":
