@@ -969,8 +969,9 @@ class SupabaseAuditStore:
     def get_current_fonts_with_snapshots(
         self,
         run_id: UUID,
+        *,
         target_store: "SupabaseAuditStore | None" = None,
-        excluded_out: list[ExcludedFontSource] | None = None,
+        excluded_out: list[ExcludedFontSource] | None,
     ) -> list[dict[str, object]]:
         """현재 run의 approved findings 증거 스냅샷과 폰트를 조회 (evidence_id 기준).
 
@@ -987,10 +988,15 @@ class SupabaseAuditStore:
         누락도 기존처럼 RuntimeError로 취급한다(자기 DB에 없으면 진짜 오류). 2건 이상 매칭(중복)은
         target_store 지정 여부와 무관하게 항상 RuntimeError로 차단한다.
 
+        excluded_out은 기본값이 없는 필수 인자다 — target_store를 넘기면서 제외 목록 수집을
+        빠뜨리는 조용한 누락을 막기 위함이다(관찰하지 않기로 한다면 명시적으로 None을 넘겨야 한다).
+        target_store/excluded_out은 위치 인자 혼동을 막기 위해 키워드 전용으로 강제한다.
+
         Args:
             run_id: 조회할 감사 run의 UUID
             target_store: fonts/font_sources를 조회할 대상 스토어 (None이면 self 사용)
-            excluded_out: 지정 시, target_store 매칭에서 누락으로 제외된 항목을 append한다
+            excluded_out: target_store 매칭에서 누락으로 제외된 항목을 append할 리스트.
+                제외를 추적하지 않으려면 명시적으로 None을 넘긴다
 
         Returns:
             font_source_snapshots가 포함된 font 레코드 리스트 (제외된 폰트는 미포함)

@@ -577,7 +577,7 @@ def test_get_current_fonts_with_snapshots_returns_fonts_with_evidence() -> None:
     client.schema.return_value = schema
 
     store = SupabaseAuditStore(client)
-    results = store.get_current_fonts_with_snapshots(run_id)
+    results = store.get_current_fonts_with_snapshots(run_id, excluded_out=None)
 
     assert len(results) == 1
     font = results[0]
@@ -633,7 +633,7 @@ def test_get_current_fonts_with_snapshots_includes_other_run_snapshots() -> None
     client.schema.return_value = schema
 
     store = SupabaseAuditStore(client)
-    results = store.get_current_fonts_with_snapshots(run_id)
+    results = store.get_current_fonts_with_snapshots(run_id, excluded_out=None)
 
     # 다른 run 귀속이어도 포함되어야 함
     assert len(results) == 1
@@ -669,7 +669,7 @@ def test_get_current_fonts_with_snapshots_raises_on_missing_evidence_id() -> Non
 
     store = SupabaseAuditStore(client)
     with pytest.raises(RuntimeError, match="has no evidence_id"):
-        store.get_current_fonts_with_snapshots(run_id)
+        store.get_current_fonts_with_snapshots(run_id, excluded_out=None)
 
 
 def test_get_current_fonts_with_snapshots_with_target_store() -> None:
@@ -757,7 +757,9 @@ def test_get_current_fonts_with_snapshots_with_target_store() -> None:
     target_store = SupabaseAuditStore(prod_client)
 
     # 호출: target_store 지정
-    results = dev_store.get_current_fonts_with_snapshots(run_id, target_store=target_store)
+    results = dev_store.get_current_fonts_with_snapshots(
+        run_id, target_store=target_store, excluded_out=None
+    )
 
     assert len(results) == 1
     font = results[0]
@@ -900,7 +902,9 @@ def test_get_current_fonts_with_snapshots_font_sources_duplicate_match_raises() 
     target_store = SupabaseAuditStore(prod_client)
 
     with pytest.raises(RuntimeError, match="중복/초과"):
-        dev_store.get_current_fonts_with_snapshots(run_id, target_store=target_store)
+        dev_store.get_current_fonts_with_snapshots(
+            run_id, target_store=target_store, excluded_out=None
+        )
 
 
 def test_get_current_fonts_with_snapshots_self_target_missing_font_raises() -> None:
@@ -938,7 +942,7 @@ def test_get_current_fonts_with_snapshots_self_target_missing_font_raises() -> N
     store = SupabaseAuditStore(client)
 
     with pytest.raises(RuntimeError, match="fonts 결측"):
-        store.get_current_fonts_with_snapshots(run_id)
+        store.get_current_fonts_with_snapshots(run_id, excluded_out=None)
 
 
 def test_get_current_fonts_with_snapshots_chunked_query() -> None:
@@ -1026,7 +1030,9 @@ def test_get_current_fonts_with_snapshots_chunked_query() -> None:
 
     target_store = SupabaseAuditStore(prod_client)
 
-    result = dev_store.get_current_fonts_with_snapshots(run_id, target_store=target_store)
+    result = dev_store.get_current_fonts_with_snapshots(
+        run_id, target_store=target_store, excluded_out=None
+    )
 
     font_sources_calls = [
         call for call in prod_schema.table.call_args_list if call[0][0] == "font_sources"
