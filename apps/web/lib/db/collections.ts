@@ -110,20 +110,7 @@ export async function getAllCollections(): Promise<Collection[]> {
     ...new Set((itemRows as CollectionItemRow[]).map((item) => item.font_id)),
   ];
 
-  const { data: fontRows, error: fontError } = await supabaseClient
-    .from("fonts")
-    .select("*")
-    .in("id", allFontIds)
-    .eq("status", "published");
-
-  if (fontError) {
-    throw fontError;
-  }
-
-  const fontMap = new Map<string, FontRow>();
-  (fontRows || []).forEach((font) => {
-    fontMap.set(font.id, font as FontRow);
-  });
+  const fontMap = await fetchPublishedFontMap(allFontIds);
 
   const itemsByCollectionId = new Map<string, CollectionItemRow[]>();
   (itemRows as CollectionItemRow[]).forEach((item) => {
@@ -166,21 +153,31 @@ async function buildItems(
   }
 
   const fontIds = itemRows.map((item) => item.font_id);
-
-  const { data: fontRows, error: fontError } = await supabaseClient
-    .from("fonts")
-    .select("*")
-    .in("id", fontIds)
-    .eq("status", "published");
-
-  if (fontError) {
-    throw fontError;
-  }
-
-  const fontMap = new Map<string, FontRow>();
-  (fontRows || []).forEach((font) => {
-    fontMap.set(font.id, font as FontRow);
-  });
+  const fontMap = await fetchPublishedFontMap(fontIds);
 
   return buildItemsSync(itemRows, fontMap);
+}
+
+/** id 청크(50)로 나눠 published 폰트를 조회한다.
+ * 한 번에 넣으면 컬렉션이 늘수록 in-list URL이 수천자가 되어 게이트웨이가 502로 끊는다.
+ */
+async function fetchPublishedFontMap(
+  fontIds: string[],
+): Promise<Map<string, FontRow>> {
+  const CHUNK = 50;
+  const fontMap = new Map<string, FontRow>();
+  for (let i = 0; i < fontIds.length; i += CHUNK) {
+    const { data, error } = await supabaseClient
+      .from("fonts")
+      .select("*")
+      .in("id", fontIds.slice(i, i + CHUNK))
+      .eq("status", "published");
+    if (error) {
+      throw error;
+    }
+    (data || []).forEach((font) => {
+      fontMap.set(font.id, font as FontRow);
+    });
+  }
+  return fontMap;
 }
