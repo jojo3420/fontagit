@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+import httpx
+
 from fontagit_pipeline.noonnu_url_scan import ScanRecord, ScanTarget, scan_targets, summarize
 
 _DETAIL_HTML = """
@@ -14,6 +16,8 @@ _DETAIL_HTML = """
   </div>
 </body></html>
 """
+
+_NO_DETAIL_HTML = "<html><body><p>상세 영역이 없는 페이지</p></body></html>"
 
 
 def _target(font_id: str = "11111111-1111-1111-1111-111111111111") -> ScanTarget:
@@ -150,3 +154,74 @@ def test_summarize_counts_by_classification_and_action() -> None:
     assert summary["recommended_action"]["auto_fix_safe"] == 1
     assert summary["no_container_ratio"] == 1 / 3
     assert summary["structure_assumption_ok"] is False
+
+
+def test_scan_resumes_retryable_failures_and_updates_verdict(tmp_path: Path) -> None:
+    """네트워크 실패로 기록된 폰트는 재개 시 다시 요청되고, 성공하면 판정이 갱신된다."""
+    state_path = tmp_path / "state.jsonl"
+    attempts = {"count": 0}
+
+    def _fetcher(url: str) -> str:
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise RuntimeError("일시적 네트워크 오류")
+        return _DETAIL_HTML
+
+    first_pass = scan_targets(
+        [_target()], fetcher=_fetcher, state_path=state_path, sleeper=lambda seconds: None
+    )
+    assert first_pass[0].classification == "no_container"
+    assert first_pass[0].error is not None
+
+    second_pass = scan_targets(
+        [_target()], fetcher=_fetcher, state_path=state_path, sleeper=lambda seconds: None
+    )
+
+    assert attempts["count"] == 2
+    assert len(second_pass) == 1
+    assert second_pass[0].classification == "mismatch"
+    assert second_pass[0].error is None
+
+
+def test_parsing_failures_do_not_trigger_circuit_breaker(tmp_path: Path) -> None:
+    """결정론적 파싱 실패는 회로차단기 카운터에 영향을 주지 않고 no_container로 끝까지 처리된다."""
+    state_path = tmp_path / "state.jsonl"
+    targets = [
+        ScanTarget(
+            font_id=f"33333333-3333-3333-3333-33333333333{i}",
+            slug=f"폰트-{i}",
+            source_url=f"https://noonnu.cc/font_page/{700 + i}",
+            db_official_url=None,
+            db_license_source_url=None,
+            db_license_verified=False,
+        )
+        for i in range(6)
+    ]
+
+    records = scan_targets(
+        targets,
+        fetcher=lambda url: _NO_DETAIL_HTML,
+        state_path=state_path,
+        sleeper=lambda seconds: None,
+    )
+
+    assert len(records) == 6
+    assert all(record.classification == "no_container" for record in records)
+
+
+def test_rate_limit_status_gets_longer_backoff(tmp_path: Path) -> None:
+    """429 응답은 일반 실패(고정 30초)보다 더 긴 대기 시간을 sleeper에 전달한다."""
+    state_path = tmp_path / "state.jsonl"
+    sleeps: list[float] = []
+
+    def _fetcher(url: str) -> str:
+        request = httpx.Request("GET", url)
+        response = httpx.Response(429, request=request)
+        raise httpx.HTTPStatusError("Too Many Requests", request=request, response=response)
+
+    scan_targets(
+        [_target()], fetcher=_fetcher, state_path=state_path, sleeper=sleeps.append
+    )
+
+    assert len(sleeps) == 1
+    assert sleeps[0] > 30.0

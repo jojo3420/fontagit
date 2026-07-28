@@ -1,7 +1,11 @@
 """눈누 상세를 다시 받아 공식 URL을 전수 대조한다.
 
-중단에 대비해 판정 1건마다 상태 파일에 append 한다. 재시작 시 이미 기록된
-폰트를 건너뛰므로, 배치 단위 기록이 실패 건을 통째로 삼키는 문제(#142)를 피한다.
+중단에 대비해 판정 1건마다 상태 파일에 append 한다. 재개 시 완료로 취급하는 것은
+성공, 또는 재시도해도 결과가 같은 결정론적 파싱 실패(retryable_error=False)뿐이다.
+네트워크-HTTP 오류처럼 다시 시도할 가치가 있는 실패는 completed에서 제외해 다음
+실행에서 다시 요청하고, 같은 font_id가 여러 줄로 남으면 마지막 줄을 최신 판정으로
+채택한다. 이렇게 실패와 완료를 구분해야 배치 단위 기록이 실패 건을 완료로 삼켜버린
+문제(#142)를 실제로 피할 수 있다.
 """
 
 from __future__ import annotations
@@ -14,6 +18,8 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+import httpx
+
 from fontagit_pipeline.audit_noonnu import extract_noonnu_font
 from fontagit_pipeline.noonnu_url_audit import judge_official_url
 
@@ -22,6 +28,9 @@ logger = logging.getLogger(__name__)
 _BASE_DELAY = 1.5
 _JITTER = 0.7
 _BACKOFF_DELAY = 30.0
+_RATE_LIMIT_BACKOFF_BASE = 120.0
+_RATE_LIMIT_BACKOFF_MAX = 960.0
+_RATE_LIMIT_STATUS_CODES = frozenset({403, 429})
 _MAX_CONSECUTIVE_FAILURES = 5
 
 
@@ -54,32 +63,21 @@ class ScanRecord:
     recommended_action: str
     evidence: str
     error: str | None = None
+    retryable_error: bool = False
 
 
 class ScanAbortedError(RuntimeError):
     """연속 실패가 한계를 넘어 안전하게 중단했다."""
 
 
-def _load_completed_ids(state_path: Path) -> set[str]:
-    """상태 파일에서 이미 처리한 font_id를 읽는다."""
-    if not state_path.exists():
-        return set()
-    completed: set[str] = set()
-    for line in state_path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            completed.add(str(json.loads(line)["font_id"]))
-        except (json.JSONDecodeError, KeyError):
-            logger.warning("상태 파일에서 읽을 수 없는 줄을 건너뜁니다")
-    return completed
+def _load_records(state_path: Path) -> dict[str, ScanRecord]:
+    """상태 파일에 기록된 판정을 font_id별로 복원한다.
 
-
-def _load_records(state_path: Path) -> list[ScanRecord]:
-    """상태 파일에 기록된 판정을 복원한다."""
+    같은 font_id가 여러 줄로 남아 있으면(재시도 후 재기록) 마지막 줄을 채택한다.
+    """
     if not state_path.exists():
-        return []
-    records: list[ScanRecord] = []
+        return {}
+    records: dict[str, ScanRecord] = {}
     for line in state_path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
@@ -87,24 +85,34 @@ def _load_records(state_path: Path) -> list[ScanRecord]:
             payload = json.loads(line)
         except json.JSONDecodeError:
             continue
-        records.append(
-            ScanRecord(
-                font_id=str(payload.get("font_id", "")),
-                slug=str(payload.get("slug", "")),
-                source_url=str(payload.get("source_url", "")),
-                db_official_url=payload.get("db_official_url"),
-                db_license_source_url=payload.get("db_license_source_url"),
-                db_license_verified=bool(payload.get("db_license_verified", False)),
-                new_official_url=payload.get("new_official_url"),
-                new_foundry=payload.get("new_foundry"),
-                classification=str(payload.get("classification", "no_container")),
-                contamination_type=str(payload.get("contamination_type", "none")),
-                recommended_action=str(payload.get("recommended_action", "keep")),
-                evidence=str(payload.get("evidence", "")),
-                error=payload.get("error"),
-            )
+        record = ScanRecord(
+            font_id=str(payload.get("font_id", "")),
+            slug=str(payload.get("slug", "")),
+            source_url=str(payload.get("source_url", "")),
+            db_official_url=payload.get("db_official_url"),
+            db_license_source_url=payload.get("db_license_source_url"),
+            db_license_verified=bool(payload.get("db_license_verified", False)),
+            new_official_url=payload.get("new_official_url"),
+            new_foundry=payload.get("new_foundry"),
+            classification=str(payload.get("classification", "no_container")),
+            contamination_type=str(payload.get("contamination_type", "none")),
+            recommended_action=str(payload.get("recommended_action", "keep")),
+            evidence=str(payload.get("evidence", "")),
+            error=payload.get("error"),
+            retryable_error=bool(payload.get("retryable_error", False)),
         )
+        records[record.font_id] = record
     return records
+
+
+def _load_completed_ids(records: dict[str, ScanRecord]) -> set[str]:
+    """재시도가 필요 없는(완료된) font_id 집합을 만든다.
+
+    성공과 결정론적 파싱 실패(retryable_error=False)는 완료로 취급해 재개 시
+    건너뛴다. 네트워크-HTTP 오류처럼 재시도 가치가 있는 실패(retryable_error=True)만
+    미완료로 남겨 다음 실행에서 다시 요청한다.
+    """
+    return {font_id for font_id, record in records.items() if not record.retryable_error}
 
 
 def _append_record(state_path: Path, record: ScanRecord) -> None:
@@ -112,6 +120,20 @@ def _append_record(state_path: Path, record: ScanRecord) -> None:
     state_path.parent.mkdir(parents=True, exist_ok=True)
     with state_path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(asdict(record), ensure_ascii=False) + "\n")
+
+
+def _resolve_backoff_seconds(exc: Exception, consecutive_failures: int) -> float:
+    """실패 원인에 따라 다음 요청 전 대기 시간을 정한다.
+
+    429/403은 서버가 요청 예의를 지키라고 보내는 신호이므로, 연속으로 받을수록
+    지수적으로 늘려 안전 중단(_MAX_CONSECUTIVE_FAILURES)에 가까워지게 한다.
+    """
+    if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in _RATE_LIMIT_STATUS_CODES:
+        return min(
+            _RATE_LIMIT_BACKOFF_BASE * (2.0 ** (consecutive_failures - 1)),
+            _RATE_LIMIT_BACKOFF_MAX,
+        )
+    return _BACKOFF_DELAY
 
 
 def scan_targets(
@@ -129,14 +151,15 @@ def scan_targets(
         sleeper: 대기 함수. 테스트에서 즉시 반환하도록 주입한다.
 
     Returns:
-        상태 파일에 이미 있던 판정과 이번에 처리한 판정을 합친 목록.
+        상태 파일에 이미 있던 판정과 이번에 처리한 판정을 font_id당 1건으로 합친 목록.
 
     Raises:
-        ScanAbortedError: 연속 실패가 한계를 넘어 중단한 경우.
+        ScanAbortedError: 네트워크-HTTP 등 재시도 가치가 있는 실패가 연속으로
+            한계를 넘어 중단한 경우. 결정론적 파싱 실패는 이 카운터에 반영하지 않는다.
     """
     target_list: Sequence[ScanTarget] = list(targets)
-    completed = _load_completed_ids(state_path)
     records = _load_records(state_path)
+    completed = _load_completed_ids(records)
     consecutive_failures = 0
 
     for index, target in enumerate(target_list, start=1):
@@ -149,19 +172,30 @@ def scan_targets(
         try:
             html = fetcher(target.source_url)
             snapshot = extract_noonnu_font(html, target.source_url)
-            error: str | None = None
-            consecutive_failures = 0
-        except Exception as exc:  # 개별 실패가 전체를 멈추지 않게 한다
+        except ValueError as exc:
+            # 상세 영역이 없거나 모호한 결정론적 실패. 재시도해도 같은 결과이므로
+            # 회로차단기 카운터-백오프에 반영하지 않고 곧바로 완료로 기록한다.
+            snapshot = None
+            error: str | None = f"{type(exc).__name__}: {exc}"
+            retryable_error = False
+            logger.warning("파싱 실패(재시도 안 함) %s: %s", target.slug, error)
+        except Exception as exc:  # 네트워크-HTTP 등 일시적 실패 → 재개 시 재시도
             snapshot = None
             error = f"{type(exc).__name__}: {exc}"
+            retryable_error = True
             consecutive_failures += 1
-            logger.warning("수집 실패 %s: %s", target.slug, error)
-            sleeper(_BACKOFF_DELAY)
+            backoff = _resolve_backoff_seconds(exc, consecutive_failures)
+            logger.warning("수집 실패 %s: %s (대기 %.0f초)", target.slug, error, backoff)
+            sleeper(backoff)
             if consecutive_failures >= _MAX_CONSECUTIVE_FAILURES:
                 raise ScanAbortedError(
                     f"연속 {consecutive_failures}건 실패로 중단합니다. "
                     f"상태 파일에서 재개하세요: {state_path}"
                 ) from exc
+        else:
+            error = None
+            retryable_error = False
+            consecutive_failures = 0
 
         verdict = judge_official_url(
             snapshot,
@@ -182,9 +216,10 @@ def scan_targets(
             recommended_action=verdict.recommended_action,
             evidence=verdict.evidence,
             error=error,
+            retryable_error=retryable_error,
         )
         _append_record(state_path, record)
-        records.append(record)
+        records[record.font_id] = record
         logger.info(
             "[%d/%d] %s -> %s / %s",
             index,
@@ -194,7 +229,7 @@ def scan_targets(
             record.recommended_action,
         )
 
-    return records
+    return list(records.values())
 
 
 _NO_CONTAINER_THRESHOLD = 0.05
