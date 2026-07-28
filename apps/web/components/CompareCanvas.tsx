@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { fonts } from "@/data/fonts";
 import { familyOf } from "@/lib/fonts";
@@ -15,15 +15,17 @@ const DEFAULT_GRID = OPTIONS.filter((f) => f.slug !== DEFAULT_HERO).map((f) => f
 
 export function CompareCanvas({ preset }: { preset?: ComparePreset } = {}) {
   const [text, setText] = useState(DEFAULT_TEXT);
-  const [heroSlug, setHeroSlug] = useState(DEFAULT_HERO);
-  const [gridSlugs, setGridSlugs] = useState<string[]>(DEFAULT_GRID);
+  const [heroSlug, setHeroSlug] = useState(preset?.heroSlug ?? DEFAULT_HERO);
+  const [gridSlugs, setGridSlugs] = useState<string[]>(preset?.gridSlugs ?? DEFAULT_GRID);
+  const [appliedPreset, setAppliedPreset] = useState(preset);
   const shown = text || " ";
 
-  useEffect(() => {
-    if (!preset) return;
+  // preset prop이 바뀌면 렌더 중 상태를 조정한다(React 권장 패턴: https://react.dev/learn/you-might-not-need-an-effect)
+  if (preset && preset !== appliedPreset) {
+    setAppliedPreset(preset);
     setHeroSlug(preset.heroSlug);
     setGridSlugs(preset.gridSlugs);
-  }, [preset]);
+  }
 
   const hero = OPTIONS.find((f) => f.slug === heroSlug);
 
