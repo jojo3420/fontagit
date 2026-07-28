@@ -247,5 +247,134 @@ begin
 end;
 $$;
 
+-- 0025 회귀: 파이프라인 writer(audit_store.py)는 before_value가 없으면 SQL NULL로 저장한다.
+-- run/snapshot/finding을 apply 전에 미리 insert해 실제 데이터 순서를 재현하고,
+-- manifest가 같은 필드를 JSON null로 주장해도 apply가 정상 성공해야 한다.
+insert into fontagit.fonts(id,slug,name_en,name_ko,category_ko,source_tier,official_url,status,license_verified,license_status)
+values ('00000000-0000-0000-0000-000000001007','audit-null-one','Audit Null One','감사 널 하나','고딕','B','https://example.test/null-one','published',true,'pending');
+insert into fontagit.font_sources(font_id,provider,provider_record_id,source_role,source_url) values
+ ('00000000-0000-0000-0000-000000001007','noonnu','1007','reference','https://noonnu.cc/font_page/1007');
+insert into fontagit.font_audit_runs(id,stage,target_environment,target_count,success_count,verified_count,review_count,broken_count,parser_version,baseline_sha256,manifest_sha256,dry_run,status,started_at,finished_at)
+values('00000000-0000-0000-0000-000000001450','metadata','dev',1,1,0,1,0,'test-v1',repeat('a',64),null,true,'completed','2026-07-18T00:00:00+00:00','2026-07-18T00:01:00+00:00');
+insert into fontagit.font_source_snapshots(id,run_id,font_id,provider,provider_record_id,source_kind,document_kind,request_url,final_url,http_status,raw_text,raw_sha256,normalized_sha256,extracted,evidence_locations,extraction_rule_id,parser_version,collected_at)
+values('00000000-0000-0000-0000-000000001451','00000000-0000-0000-0000-000000001450','00000000-0000-0000-0000-000000001007','noonnu','1007','official','metadata','https://example.test/null-one','https://example.test/null-one',200,null,repeat('b',64),repeat('c',64),'{}'::jsonb,'{}'::jsonb,null,'test-v1','2026-07-18T00:00:00+00:00');
+insert into fontagit.font_audit_findings(id,run_id,font_id,field_name,before_value,proposed_value,evidence_id,confidence,auto_applicable,review_reason,status,reviewed_by,reviewed_at)
+values('00000000-0000-0000-0000-000000001452','00000000-0000-0000-0000-000000001450','00000000-0000-0000-0000-000000001007','foundry',null,'"Some Foundry"'::jsonb,'00000000-0000-0000-0000-000000001451','official',false,'human approved','approved','reviewer','2026-07-18T00:02:00+00:00');
+do $$
+declare v jsonb; v_text text; v_hash text; f record;
+begin
+  select * into f from fontagit.fonts where slug='audit-null-one';
+  v := jsonb_build_object(
+    'schema_version',1,'run_id','00000000-0000-0000-0000-000000001450','baseline_sha256',repeat('a',64),
+    'generated_at','2026-07-18T00:01:00+00:00','rollback_mode',false,
+    'evidence_bundle',jsonb_build_object(
+      'run',jsonb_build_object(
+        'id','00000000-0000-0000-0000-000000001450','stage','metadata','target_environment','dev','target_count',1,
+        'success_count',1,'verified_count',0,'review_count',1,'broken_count',0,'parser_version','test-v1',
+        'baseline_sha256',repeat('a',64),'manifest_sha256',null,'dry_run',true,'status','completed',
+        'started_at','2026-07-18T00:00:00+00:00','finished_at','2026-07-18T00:01:00+00:00'),
+      'snapshots',jsonb_build_array(jsonb_build_object(
+        'id','00000000-0000-0000-0000-000000001451','run_id','00000000-0000-0000-0000-000000001450',
+        'provider','noonnu','provider_record_id','1007','source_kind','official','document_kind','metadata',
+        'request_url',f.official_url,'final_url',f.official_url,'http_status',200,'raw_text',null,
+        'raw_sha256',repeat('b',64),'normalized_sha256',repeat('c',64),'extracted','{}'::jsonb,
+        'evidence_locations','{}'::jsonb,'extraction_rule_id',null,'parser_version','test-v1',
+        'collected_at','2026-07-18T00:00:00+00:00',
+        'source_key',jsonb_build_object('provider','noonnu','provider_record_id','1007'))),
+      'findings',jsonb_build_array(jsonb_build_object(
+        'id','00000000-0000-0000-0000-000000001452','run_id','00000000-0000-0000-0000-000000001450',
+        'field_name','foundry','before_value',null,'proposed_value','Some Foundry',
+        'evidence_id','00000000-0000-0000-0000-000000001451','confidence','official','auto_applicable',false,
+        'review_reason','human approved','status','approved','reviewed_by','reviewer',
+        'reviewed_at','2026-07-18T00:02:00+00:00',
+        'source_key',jsonb_build_object('provider','noonnu','provider_record_id','1007')))),
+    'entries',jsonb_build_array(jsonb_build_object(
+      'source_key',jsonb_build_object('provider','noonnu','provider_record_id','1007'),
+      'current',jsonb_build_object('slug',f.slug,'name_en',f.name_en,'name_ko',f.name_ko,'foundry',f.foundry,
+        'source_tier',f.source_tier,'official_url',f.official_url,'status',f.status),
+      'before',jsonb_build_object('foundry',null),
+      'after',jsonb_build_object('foundry','Some Foundry'),
+      'evidence_ids',jsonb_build_array('00000000-0000-0000-0000-000000001451'),
+      'finding_ids',jsonb_build_array('00000000-0000-0000-0000-000000001452'),
+      'expected_updated_at',f.updated_at))
+  );
+  v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex');
+  if fontagit.apply_font_audit_manifest(v_text,v_hash,1)<>1 then raise exception 'null before_value regression apply failed'; end if;
+  if not exists(select 1 from fontagit.fonts where slug='audit-null-one' and foundry='Some Foundry') then
+    raise exception 'null before_value regression did not update foundry';
+  end if;
+  if not exists(select 1 from fontagit.font_audit_findings where id='00000000-0000-0000-0000-000000001452' and status='applied') then
+    raise exception 'null before_value regression finding was not marked applied';
+  end if;
+end;
+$$;
+
+-- 0025 거짓 통과 방지: DB에 이미 실제 값이 저장된 finding을 manifest가 null로 잘못 주장하면
+-- 여전히 conflict가 나야 한다(정규화가 진짜 불일치까지 지워버리면 안 된다).
+insert into fontagit.fonts(id,slug,name_en,name_ko,category_ko,source_tier,official_url,status,license_verified,license_status)
+values ('00000000-0000-0000-0000-000000001008','audit-null-two','Audit Null Two','감사 널 둘','고딕','B','https://example.test/null-two','published',true,'pending');
+insert into fontagit.font_sources(font_id,provider,provider_record_id,source_role,source_url) values
+ ('00000000-0000-0000-0000-000000001008','noonnu','1008','reference','https://noonnu.cc/font_page/1008');
+insert into fontagit.font_audit_runs(id,stage,target_environment,target_count,success_count,verified_count,review_count,broken_count,parser_version,baseline_sha256,manifest_sha256,dry_run,status,started_at,finished_at)
+values('00000000-0000-0000-0000-000000001460','metadata','dev',1,1,0,1,0,'test-v1',repeat('a',64),null,true,'completed','2026-07-18T00:00:00+00:00','2026-07-18T00:01:00+00:00');
+insert into fontagit.font_source_snapshots(id,run_id,font_id,provider,provider_record_id,source_kind,document_kind,request_url,final_url,http_status,raw_text,raw_sha256,normalized_sha256,extracted,evidence_locations,extraction_rule_id,parser_version,collected_at)
+values('00000000-0000-0000-0000-000000001461','00000000-0000-0000-0000-000000001460','00000000-0000-0000-0000-000000001008','noonnu','1008','official','metadata','https://example.test/null-two','https://example.test/null-two',200,null,repeat('d',64),repeat('e',64),'{}'::jsonb,'{}'::jsonb,null,'test-v1','2026-07-18T00:00:00+00:00');
+insert into fontagit.font_audit_findings(id,run_id,font_id,field_name,before_value,proposed_value,evidence_id,confidence,auto_applicable,review_reason,status,reviewed_by,reviewed_at)
+values('00000000-0000-0000-0000-000000001462','00000000-0000-0000-0000-000000001460','00000000-0000-0000-0000-000000001008','foundry','"Legacy Foundry"'::jsonb,'"Some Foundry"'::jsonb,'00000000-0000-0000-0000-000000001461','official',false,'human approved','approved','reviewer','2026-07-18T00:02:00+00:00');
+do $$
+declare v jsonb; v_text text; v_hash text; f record; v_failed boolean := false;
+begin
+  select * into f from fontagit.fonts where slug='audit-null-two';
+  v := jsonb_build_object(
+    'schema_version',1,'run_id','00000000-0000-0000-0000-000000001460','baseline_sha256',repeat('a',64),
+    'generated_at','2026-07-18T00:01:00+00:00','rollback_mode',false,
+    'evidence_bundle',jsonb_build_object(
+      'run',jsonb_build_object(
+        'id','00000000-0000-0000-0000-000000001460','stage','metadata','target_environment','dev','target_count',1,
+        'success_count',1,'verified_count',0,'review_count',1,'broken_count',0,'parser_version','test-v1',
+        'baseline_sha256',repeat('a',64),'manifest_sha256',null,'dry_run',true,'status','completed',
+        'started_at','2026-07-18T00:00:00+00:00','finished_at','2026-07-18T00:01:00+00:00'),
+      'snapshots',jsonb_build_array(jsonb_build_object(
+        'id','00000000-0000-0000-0000-000000001461','run_id','00000000-0000-0000-0000-000000001460',
+        'provider','noonnu','provider_record_id','1008','source_kind','official','document_kind','metadata',
+        'request_url',f.official_url,'final_url',f.official_url,'http_status',200,'raw_text',null,
+        'raw_sha256',repeat('d',64),'normalized_sha256',repeat('e',64),'extracted','{}'::jsonb,
+        'evidence_locations','{}'::jsonb,'extraction_rule_id',null,'parser_version','test-v1',
+        'collected_at','2026-07-18T00:00:00+00:00',
+        'source_key',jsonb_build_object('provider','noonnu','provider_record_id','1008'))),
+      'findings',jsonb_build_array(jsonb_build_object(
+        'id','00000000-0000-0000-0000-000000001462','run_id','00000000-0000-0000-0000-000000001460',
+        'field_name','foundry','before_value',null,'proposed_value','Some Foundry',
+        'evidence_id','00000000-0000-0000-0000-000000001461','confidence','official','auto_applicable',false,
+        'review_reason','human approved','status','approved','reviewed_by','reviewer',
+        'reviewed_at','2026-07-18T00:02:00+00:00',
+        'source_key',jsonb_build_object('provider','noonnu','provider_record_id','1008')))),
+    'entries',jsonb_build_array(jsonb_build_object(
+      'source_key',jsonb_build_object('provider','noonnu','provider_record_id','1008'),
+      'current',jsonb_build_object('slug',f.slug,'name_en',f.name_en,'name_ko',f.name_ko,'foundry',f.foundry,
+        'source_tier',f.source_tier,'official_url',f.official_url,'status',f.status),
+      'before',jsonb_build_object('foundry',null),
+      'after',jsonb_build_object('foundry','Some Foundry'),
+      'evidence_ids',jsonb_build_array('00000000-0000-0000-0000-000000001461'),
+      'finding_ids',jsonb_build_array('00000000-0000-0000-0000-000000001462'),
+      'expected_updated_at',f.updated_at))
+  );
+  v_text:=v::text; v_hash:=encode(extensions.digest(convert_to(v_text,'UTF8'),'sha256'),'hex');
+  begin
+    perform fontagit.apply_font_audit_manifest(v_text,v_hash,1);
+  exception when others then
+    if sqlerrm not like '%finding UUID content conflict%' then raise; end if;
+    v_failed := true;
+  end;
+  if not v_failed then raise exception 'mismatched before_value was accepted as null'; end if;
+  if exists(select 1 from fontagit.fonts where slug='audit-null-two' and foundry is not null) then
+    raise exception 'false-pass regression partially applied foundry';
+  end if;
+  if not exists(select 1 from fontagit.font_audit_findings where id='00000000-0000-0000-0000-000000001462' and before_value='"Legacy Foundry"'::jsonb and status='approved') then
+    raise exception 'false-pass regression finding row was mutated';
+  end if;
+end;
+$$;
+
 select 'ALL PASS' as result;
 rollback;
