@@ -7,6 +7,10 @@
   min-width: 0;
 }
 .container { max-width: 1180px; margin: 0 auto; }
+.collectionsSection {
+  padding: 8px var(--pad-page) 24px;
+  scroll-margin-top: 64px;
+}
 .adSection { padding: 24px var(--pad-page); }
 .compareSection { padding: 48px var(--pad-page); scroll-margin-top: 64px; }
 .comparePlaceholder { min-height: 480px; background: var(--surface-2); }

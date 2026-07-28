@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import { Hero } from "@/components/Hero";
 import { HomeExplorer } from "@/components/HomeExplorer";
 import { WeeklyRankPanel } from "@/components/WeeklyRankPanel";
+import { HomeCollectionsStrip } from "@/components/HomeCollectionsStrip";
 import { AdFitUnit } from "@/components/AdFitUnit";
 import { CompareLazy } from "@/components/CompareLazy";
 import { ADFIT_UNIT_HOME } from "@/lib/analytics/constants";
-import { getTrends, getAllFonts } from "@/lib/data";
+import { getTrends, getAllFonts, getAllCollections } from "@/lib/data";
 import { buildHomePreview } from "@/lib/homeCuration";
 import styles from "./page.module.css";
 
@@ -14,7 +15,11 @@ export const metadata: Metadata = {
 };
 
 export default async function Home() {
-  const [{ items, source }, fonts] = await Promise.all([getTrends(), getAllFonts()]);
+  const [{ items, source }, fonts, collections] = await Promise.all([
+    getTrends(),
+    getAllFonts(),
+    getAllCollections(),
+  ]);
   const preview = buildHomePreview(fonts, items);
   return (
     <main className={styles.main}>
@@ -25,6 +30,11 @@ export default async function Home() {
         </div>
         <WeeklyRankPanel items={items} source={source} />
       </div>
+      <section id="collections" className={styles.collectionsSection} aria-labelledby="collections-heading">
+        <div className={styles.container}>
+          <HomeCollectionsStrip collections={collections} />
+        </div>
+      </section>
       <section id="compare" className={styles.compareSection} aria-labelledby="compare-heading">
         <div className={styles.container}>
           <CompareLazy

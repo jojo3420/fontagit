@@ -31,6 +31,16 @@ const mockTrendsLatestResult: TrendsResult = {
 vi.mock("@/lib/data", () => ({
   getTrends: vi.fn(() => Promise.resolve(mockTrendsClicksResult)),
   getAllFonts: vi.fn(() => Promise.resolve(fonts)),
+  getAllCollections: vi.fn(() =>
+    Promise.resolve([
+      {
+        slug: "dawn-serif",
+        title: "새벽 감성 명조 모음",
+        intro: "고요한 새벽에 어울리는 명조",
+        items: [],
+      },
+    ])
+  ),
 }));
 
 async function renderHome() {
@@ -62,5 +72,11 @@ describe("홈 페이지", () => {
     await renderHome();
     expect(screen.getByRole("button", { name: "전체" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "손글씨" })).toBeInTheDocument();
+  });
+
+  it("추천 컬렉션 스트립을 렌더한다", async () => {
+    await renderHome();
+    expect(screen.getByText("추천 컬렉션")).toBeInTheDocument();
+    expect(screen.getByText("새벽 감성 명조 모음")).toBeInTheDocument();
   });
 });
