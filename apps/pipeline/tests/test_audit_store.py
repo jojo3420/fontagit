@@ -249,6 +249,33 @@ def test_approve_finding_raises_on_zero_affected_rows() -> None:
         store.approve_finding(UUID(finding_id), reviewed_by="test_user")
 
 
+def test_approve_finding_strips_reviewed_by_before_storing() -> None:
+    """reviewed_by 앞뒤 공백은 noonnu_review.py 관례와 동일하게 제거 후 저장한다."""
+    finding_id = "00000000-0000-0000-0000-000000000908"
+
+    select_response = _query(
+        [
+            {
+                "id": finding_id,
+                "field_name": "tags",
+                "status": "proposed",
+            }
+        ]
+    )
+    update_response = _query([{"id": finding_id}])
+
+    schema = MagicMock()
+    schema.table.side_effect = [select_response, update_response]
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+    store.approve_finding(UUID(finding_id), reviewed_by="  test_user  ")
+
+    update_kwargs = update_response.update.call_args[0][0]
+    assert update_kwargs["reviewed_by"] == "test_user"
+
+
 def test_manual_approvable_fields_excludes_legal_fields() -> None:
     """MANUAL_APPROVABLE_FIELDS에는 legal 필드 10종이 하나도 없어야 한다.
 
@@ -344,6 +371,43 @@ def test_get_proposed_findings_by_fields_empty_field_names_skips_query() -> None
 
     store = SupabaseAuditStore(client)
     results = store.get_proposed_findings_by_fields(run_id, [])
+
+    assert results == []
+    schema.table.assert_not_called()
+
+
+def test_get_proposed_findings_by_fields_defensively_drops_disallowed_fields() -> None:
+    """호출자가 legal 필드를 섞어 넘겨도 MANUAL_APPROVABLE_FIELDS와 교집합만 조회한다.
+
+    misuse-proof: 이 메서드는 호출자의 검증에만 의존하지 않고 내부에서도
+    MANUAL_APPROVABLE_FIELDS와 교집합을 취한다.
+    """
+    run_id = UUID("00000000-0000-0000-0000-000000000924")
+
+    select_response = _query([])
+    schema = MagicMock()
+    schema.table.return_value = select_response
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+    store.get_proposed_findings_by_fields(run_id, ["foundry", "allow_commercial"])
+
+    select_response.in_.assert_called_with("field_name", ["foundry"])
+
+
+def test_get_proposed_findings_by_fields_all_disallowed_skips_query() -> None:
+    """모든 field_names가 MANUAL_APPROVABLE_FIELDS 밖이면 DB 조회 없이 빈 리스트를 반환한다."""
+    run_id = UUID("00000000-0000-0000-0000-000000000925")
+
+    schema = MagicMock()
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+    results = store.get_proposed_findings_by_fields(
+        run_id, ["allow_commercial", "license_status"]
+    )
 
     assert results == []
     schema.table.assert_not_called()

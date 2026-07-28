@@ -525,9 +525,10 @@ class SupabaseAuditStore:
         Raises:
             ValueError: finding 미존재, field 불허, status 불일치, 동시성 실패, reviewed_by 비어있음
         """
-        # 검증 0: reviewed_by 필수
+        # 검증 0: reviewed_by 필수 (noonnu_review.py 관례와 동일하게 앞뒤 공백은 제거하고 저장)
         if not reviewed_by or not str(reviewed_by).strip():
             raise ValueError("reviewed_by는 필수 입력입니다")
+        reviewer = str(reviewed_by).strip()
 
         # SELECT: finding 검색
         query = self._schema.table("font_audit_findings").select("id", "field_name", "status").eq("id", str(finding_id)).limit(1)
@@ -559,7 +560,7 @@ class SupabaseAuditStore:
             .update(
                 {
                     "status": "approved",
-                    "reviewed_by": reviewed_by,
+                    "reviewed_by": reviewer,
                     "reviewed_at": datetime.now(UTC).isoformat(),
                 }
             )
@@ -901,20 +902,23 @@ class SupabaseAuditStore:
 
         사람 검수 배치 승인 CLI(font-audit-review approve) 전용 조회다. get_proposed_findings와
         달리 조회할 field_name 목록을 호출자가 좁힐 수 있다(기본값은 MANUAL_APPROVABLE_FIELDS
-        전체이지만, 어떤 필드를 넘기든 이 메서드는 그대로 필터에 쓴다 - 대상 필드 자체의
-        승인 가능 여부는 호출자가 이미 MANUAL_APPROVABLE_FIELDS로 검증했다고 가정한다).
+        전체). 호출자 검증에만 기대지 않고(misuse-proof) 이 메서드 내부에서도
+        MANUAL_APPROVABLE_FIELDS와 교집합을 취한다 - legal 필드가 field_names에 섞여 들어와도
+        조회 대상에서 제외된다.
 
         Args:
             run_id: 조회할 감사 run의 UUID
-            field_names: 조회할 field_name 목록. 비어 있으면 DB 조회 없이 빈 리스트 반환.
+            field_names: 조회할 field_name 목록. MANUAL_APPROVABLE_FIELDS와 교집합이
+                비어 있으면 DB 조회 없이 빈 리스트 반환.
 
         Returns:
-            proposed 상태이고 field_names에 속하는 finding 레코드 리스트
+            proposed 상태이고 field_names∩MANUAL_APPROVABLE_FIELDS에 속하는 finding 레코드 리스트
 
         Raises:
             RuntimeError: 부분 조회 실패(1,000행 제한 초과 가능성)
         """
-        if not field_names:
+        allowed_field_names = [name for name in field_names if name in MANUAL_APPROVABLE_FIELDS]
+        if not allowed_field_names:
             return []
 
         all_findings: list[dict[str, object]] = []
@@ -927,7 +931,7 @@ class SupabaseAuditStore:
                 .select("*")
                 .eq("run_id", str(run_id))
                 .eq("status", "proposed")
-                .in_("field_name", list(field_names))
+                .in_("field_name", allowed_field_names)
                 .order("id", desc=False)
                 .range(offset, offset + page_size - 1)
                 .execute()

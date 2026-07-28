@@ -30,6 +30,15 @@ def _approve_args(
     )
 
 
+def _mock_run(status: str = "completed") -> dict:
+    """approve 경로 run 게이트 테스트용 mock run 객체."""
+    return {
+        "id": str(uuid4()),
+        "stage": "metadata",
+        "status": status,
+    }
+
+
 def _mock_finding(run_id: str, field_name: str) -> dict:
     return {
         "id": str(uuid4()),
@@ -57,6 +66,7 @@ def test_approve_default_fields_approves_all_manual_approvable_findings() -> Non
 
     with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_ctor:
         mock_store = MagicMock()
+        mock_store.get_run.return_value = _mock_run()
         mock_store.get_proposed_findings_by_fields.return_value = findings
         mock_store.approve_finding.return_value = None
         mock_ctor.return_value = mock_store
@@ -88,6 +98,7 @@ def test_approve_narrows_to_requested_field() -> None:
 
     with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_ctor:
         mock_store = MagicMock()
+        mock_store.get_run.return_value = _mock_run()
         mock_store.get_proposed_findings_by_fields.return_value = findings
         mock_ctor.return_value = mock_store
 
@@ -111,6 +122,7 @@ def test_approve_rejects_legal_field_via_field_flag() -> None:
         result = main_audit_review(args)
 
         assert result == 1
+        mock_store.get_run.assert_not_called()
         mock_store.get_proposed_findings_by_fields.assert_not_called()
         mock_store.approve_finding.assert_not_called()
 
@@ -155,6 +167,27 @@ def test_approve_invalid_run_id_returns_1() -> None:
         assert result == 1
 
 
+def test_approve_rejects_run_not_completed() -> None:
+    """run.status가 completed가 아니면 exit 1이고 findings 조회 자체가 일어나지 않는다.
+
+    MEDIUM 리뷰 지적 - 아직 running인 run(findings가 계속 insert 중일 수 있음)이나
+    실패한 run의 findings를 사람 승인 경로에서도 승인하지 못하게 막는다.
+    """
+    run_id = str(uuid4())
+    args = _approve_args(run_id=run_id)
+
+    with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_ctor:
+        mock_store = MagicMock()
+        mock_store.get_run.return_value = _mock_run(status="running")
+        mock_ctor.return_value = mock_store
+
+        result = main_audit_review(args)
+
+        assert result == 1
+        mock_store.get_proposed_findings_by_fields.assert_not_called()
+        mock_store.approve_finding.assert_not_called()
+
+
 def test_approve_dry_run_does_not_call_approve_finding() -> None:
     """--dry-run이면 대상 건수만 로깅하고 approve_finding은 호출하지 않는다."""
     run_id = str(uuid4())
@@ -163,6 +196,7 @@ def test_approve_dry_run_does_not_call_approve_finding() -> None:
 
     with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_ctor:
         mock_store = MagicMock()
+        mock_store.get_run.return_value = _mock_run()
         mock_store.get_proposed_findings_by_fields.return_value = findings
         mock_ctor.return_value = mock_store
 
@@ -172,6 +206,37 @@ def test_approve_dry_run_does_not_call_approve_finding() -> None:
         mock_store.approve_finding.assert_not_called()
 
 
+def test_approve_dry_run_logs_field_distribution(caplog) -> None:  # type: ignore[no-untyped-def]
+    """--dry-run 로그는 총건수뿐 아니라 필드별 분포도 남긴다(MEDIUM 리뷰 지적).
+
+    291건을 승인하려는 사람이 총건수만 보고는 무엇을 승인하는지 알 수 없으므로
+    기존 헬퍼 _summarize_findings_by_field로 필드별 분포를 함께 로깅해야 한다.
+    """
+    run_id = str(uuid4())
+    findings = [
+        _mock_finding(run_id, "foundry"),
+        _mock_finding(run_id, "foundry"),
+        _mock_finding(run_id, "download_url"),
+    ]
+    args = _approve_args(run_id=run_id, dry_run=True)
+
+    with caplog.at_level(logging.INFO):
+        with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_ctor:
+            mock_store = MagicMock()
+            mock_store.get_run.return_value = _mock_run()
+            mock_store.get_proposed_findings_by_fields.return_value = findings
+            mock_ctor.return_value = mock_store
+
+            result = main_audit_review(args)
+
+            assert result == 0
+            dry_run_logs = [rec for rec in caplog.records if "dry-run" in rec.message]
+            assert len(dry_run_logs) > 0
+            assert "field_distribution=" in dry_run_logs[0].message
+            assert "'foundry': 2" in dry_run_logs[0].message
+            assert "'download_url': 1" in dry_run_logs[0].message
+
+
 def test_approve_no_proposed_findings_returns_0() -> None:
     """승인 대상이 0건이면 exit 0이고 approve_finding은 호출되지 않는다."""
     run_id = str(uuid4())
@@ -179,6 +244,7 @@ def test_approve_no_proposed_findings_returns_0() -> None:
 
     with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_ctor:
         mock_store = MagicMock()
+        mock_store.get_run.return_value = _mock_run()
         mock_store.get_proposed_findings_by_fields.return_value = []
         mock_ctor.return_value = mock_store
 
@@ -200,6 +266,7 @@ def test_approve_partial_failure_returns_3_and_continues() -> None:
 
     with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_ctor:
         mock_store = MagicMock()
+        mock_store.get_run.return_value = _mock_run()
         mock_store.get_proposed_findings_by_fields.return_value = findings
         mock_store.approve_finding.side_effect = [None, ValueError("동시성 충돌"), None]
         mock_ctor.return_value = mock_store
@@ -210,21 +277,31 @@ def test_approve_partial_failure_returns_3_and_continues() -> None:
         assert mock_store.approve_finding.call_count == 3
 
 
-def test_approve_skips_finding_not_in_manual_approvable_fields_defensively() -> None:
-    """store가 방어선을 뚫고 legal 필드 finding을 반환해도(레이스/버그 가정) 승인하지 않고 건너뛴다."""
+def test_approve_skips_finding_not_in_manual_approvable_fields_defensively(caplog) -> None:  # type: ignore[no-untyped-def]
+    """store가 방어선을 뚫고 legal 필드 finding을 반환해도(레이스/버그 가정) 승인하지 않고 건너뛴다.
+
+    이 재확인이 걸리는 상황은 쿼리 필터가 뚫렸다는 보안 이벤트이므로(HIGH/MEDIUM 리뷰 지적)
+    건별 WARNING 로그(finding id + field_name)를 남기고 exit code가 0이 아니어야 한다.
+    """
     run_id = str(uuid4())
     tampered_finding = _mock_finding(run_id, "allow_commercial")
     args = _approve_args(run_id=run_id)
 
-    with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_ctor:
-        mock_store = MagicMock()
-        mock_store.get_proposed_findings_by_fields.return_value = [tampered_finding]
-        mock_ctor.return_value = mock_store
+    with caplog.at_level(logging.WARNING):
+        with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_ctor:
+            mock_store = MagicMock()
+            mock_store.get_run.return_value = _mock_run()
+            mock_store.get_proposed_findings_by_fields.return_value = [tampered_finding]
+            mock_ctor.return_value = mock_store
 
-        result = main_audit_review(args)
+            result = main_audit_review(args)
 
-        assert result == 0
-        mock_store.approve_finding.assert_not_called()
+            assert result != 0
+            mock_store.approve_finding.assert_not_called()
+            warning_logs = [rec for rec in caplog.records if rec.levelno == logging.WARNING]
+            assert len(warning_logs) > 0
+            assert any(tampered_finding["id"] in rec.message for rec in warning_logs)
+            assert any("allow_commercial" in rec.message for rec in warning_logs)
 
 
 def test_approve_success_log_reports_counts(caplog) -> None:  # type: ignore[no-untyped-def]
@@ -236,6 +313,7 @@ def test_approve_success_log_reports_counts(caplog) -> None:  # type: ignore[no-
     with caplog.at_level(logging.INFO):
         with patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_ctor:
             mock_store = MagicMock()
+            mock_store.get_run.return_value = _mock_run()
             mock_store.get_proposed_findings_by_fields.return_value = findings
             mock_ctor.return_value = mock_store
 
