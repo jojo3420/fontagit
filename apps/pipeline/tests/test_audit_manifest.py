@@ -384,6 +384,28 @@ def test_evidence_role_is_valid_public_metadata_without_tier_a_marker_rejects_re
     assert _evidence_role_is_valid("foundry_url", snapshot, "reference") is False
 
 
+@pytest.mark.parametrize("field_name", ["name_en", "tags", "weights"])
+def test_evidence_role_is_valid_tier_a_archive_does_not_leak_into_non_reference_fields(
+    field_name: str,
+) -> None:
+    """회귀 잠금(이슈 #131): archive 등급 Tier A 스냅샷은 _REFERENCE_EVIDENCE_FIELDS 5개
+    바깥의 name_en/tags/weights를 confidence="public"으로 승인시키지 못한다.
+    SourceKind에 "archive"를 추가해도 allowed_source_kinds={"official","public"} 분기는
+    그대로 archive를 거부해야 한다."""
+    assert _evidence_role_is_valid(field_name, _TIER_A_EVIDENCE, "public") is False
+
+
+@pytest.mark.parametrize("field_name", _REFERENCE_EVIDENCE_TEST_FIELDS)
+def test_evidence_role_is_valid_legacy_public_tier_a_marker_still_allows_reference(
+    field_name: str,
+) -> None:
+    """회귀 잠금(이슈 #131): archive 등급 도입 이전에 source_kind="public"으로 저장된
+    Tier A(google-fonts) 레거시 스냅샷도 tier-a-metadata-pb 마커만 있으면 여전히
+    reference 신뢰도로 5개 필드를 승인한다(과거 데이터 호환)."""
+    legacy_snapshot = {**_TIER_A_EVIDENCE, "source_kind": "public"}
+    assert _evidence_role_is_valid(field_name, legacy_snapshot, "reference") is True
+
+
 def test_build_manifest_accepts_reference_evidence_for_link_role_fields() -> None:
     """이슈 #131: foundry/foundry_url/download_url/download_source_kind/license_source_url이
     눈누 font-file-script metadata 근거(reference 신뢰도)로 정상 승인된다."""

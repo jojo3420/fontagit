@@ -3,6 +3,7 @@
 from uuid import UUID, uuid4
 
 from fontagit_pipeline.audit_http import FetchResult
+from fontagit_pipeline.audit_metadata import derive_proposed_value
 from fontagit_pipeline.audit_policy import SourceRegistry, RegistryEntry
 from fontagit_pipeline.audit_store import InMemoryAuditStore
 from fontagit_pipeline.tier_a_meta import (
@@ -181,14 +182,29 @@ fonts {
     assert snapshot.document_kind == "metadata"
     assert snapshot.extracted["evidence_role"] == "tier-a-metadata-pb"
 
-    # 이슈 #133: extracted에 각 필드의 최종 제안값을 담아 auto-approve CLI의 evidence 대조
-    # (derive_proposed_value)가 실제 파싱 결과와 맞물리게 한다.
+    # 이슈 #133 재리뷰: extracted에는 designer/copyright 원문과 name_en/license_type/
+    # noonnu_foundry 식별자만 남고, 구성된 제안값(foundry/foundry_url/download_url/
+    # download_source_kind/license_source_url)은 담지 않는다. auto-approve CLI의 evidence
+    # 대조(derive_proposed_value)는 이 원문 근거로부터 각 필드를 독립 재계산해 수집기가
+    # 만든 제안값과 비교한다 - 같은 출처를 그대로 베껴 자기 자신과 비교하지 않는다.
+    assert "foundry" not in snapshot.extracted
+    assert "foundry_url" not in snapshot.extracted
+    assert "download_url" not in snapshot.extracted
+    assert "download_source_kind" not in snapshot.extracted
+    assert "license_source_url" not in snapshot.extracted
+    assert snapshot.extracted["name_en"] == "Noto Sans"
+    assert snapshot.extracted["license_type"] == "OFL"
+    assert snapshot.extracted["noonnu_foundry"] == "네이버"
+
     proposed_by_field = {f["field_name"]: f["proposed_value"] for f in findings}
-    assert snapshot.extracted["foundry"] == proposed_by_field["foundry"]
-    assert snapshot.extracted["foundry_url"] == proposed_by_field["foundry_url"]
-    assert snapshot.extracted["download_url"] == proposed_by_field["download_url"]
-    assert snapshot.extracted["download_source_kind"] == proposed_by_field["download_source_kind"]
-    assert snapshot.extracted["license_source_url"] == proposed_by_field["license_source_url"]
+    for field_name in (
+        "foundry",
+        "foundry_url",
+        "download_url",
+        "download_source_kind",
+        "license_source_url",
+    ):
+        assert derive_proposed_value(field_name, snapshot.extracted) == proposed_by_field[field_name]
 
 
 def test_collect_tier_a_meta_dry_run_skips_snapshot() -> None:
