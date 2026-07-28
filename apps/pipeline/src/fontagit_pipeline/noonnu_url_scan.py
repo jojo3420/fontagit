@@ -195,3 +195,104 @@ def scan_targets(
         )
 
     return records
+
+
+_NO_CONTAINER_THRESHOLD = 0.05
+
+
+def summarize(records: Sequence[ScanRecord]) -> dict[str, object]:
+    """판정 분포를 집계한다.
+
+    no_container 비율이 5%를 넘으면 눈누 페이지 구조 가정이 틀린 것이므로
+    정정을 진행하지 않고 폴백 선택자 설계를 다시 봐야 한다.
+    """
+    total = len(records)
+    classification: dict[str, int] = {}
+    action: dict[str, int] = {}
+    contamination: dict[str, int] = {}
+    for record in records:
+        classification[record.classification] = classification.get(record.classification, 0) + 1
+        action[record.recommended_action] = action.get(record.recommended_action, 0) + 1
+        contamination[record.contamination_type] = (
+            contamination.get(record.contamination_type, 0) + 1
+        )
+
+    no_container_ratio = (classification.get("no_container", 0) / total) if total else 0.0
+    return {
+        "total": total,
+        "classification": classification,
+        "recommended_action": action,
+        "contamination_type": contamination,
+        "error_count": sum(1 for record in records if record.error),
+        "no_container_ratio": no_container_ratio,
+        "structure_assumption_ok": no_container_ratio <= _NO_CONTAINER_THRESHOLD,
+    }
+
+
+_PAGE_SIZE = 1000
+
+
+def _select_all_rows(
+    table: object, columns: str, eq_filters: dict[str, str]
+) -> list[dict[str, object]]:
+    """1,000행 응답 제한을 넘는 전체 행을 range()로 페이지네이션해 읽는다.
+
+    Supabase는 기본적으로 한 번에 1,000행만 반환하므로, 대상 규모(1,110종)에서
+    페이지네이션 없이 읽으면 조용히 잘린다.
+    """
+    rows: list[dict[str, object]] = []
+    offset = 0
+    while True:
+        query = table.select(columns)  # type: ignore[attr-defined]
+        for column, value in eq_filters.items():
+            query = query.eq(column, value)
+        page = query.range(offset, offset + _PAGE_SIZE - 1).execute()
+        page_rows = page.data
+        if not isinstance(page_rows, list):
+            raise RuntimeError(f"{columns} 조회 결과가 올바르지 않습니다")
+        rows.extend(page_rows)
+        if len(page_rows) < _PAGE_SIZE:
+            break
+        offset += _PAGE_SIZE
+    return rows
+
+
+def load_scan_targets(client: object) -> list[ScanTarget]:
+    """눈누에서 온 발행 폰트와 그 상세 URL을 읽는다.
+
+    font_sources(provider='noonnu')에 상세 URL이 있고, fonts에 현재 값이 있다.
+    """
+    schema = client.schema("fontagit")  # type: ignore[attr-defined]
+    source_rows = _select_all_rows(
+        schema.table("font_sources"),
+        "font_id, source_url",
+        {"provider": "noonnu"},
+    )
+    url_by_font: dict[str, str] = {
+        str(row["font_id"]): str(row["source_url"]) for row in source_rows
+    }
+    if not url_by_font:
+        return []
+
+    font_rows = _select_all_rows(
+        schema.table("fonts"),
+        "id, slug, official_url, license_source_url, license_verified",
+        {"status": "published"},
+    )
+    targets: list[ScanTarget] = []
+    for row in font_rows:
+        font_id = str(row["id"])
+        source_url = url_by_font.get(font_id)
+        if source_url is None:
+            continue
+        targets.append(
+            ScanTarget(
+                font_id=font_id,
+                slug=str(row["slug"]),
+                source_url=source_url,
+                db_official_url=row.get("official_url"),  # type: ignore[arg-type]
+                db_license_source_url=row.get("license_source_url"),  # type: ignore[arg-type]
+                db_license_verified=bool(row.get("license_verified", False)),
+            )
+        )
+    return targets

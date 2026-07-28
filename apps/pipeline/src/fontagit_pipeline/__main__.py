@@ -18,7 +18,13 @@ from fontagit_pipeline.licenses import fetch_license_map, LicenseFetchError
 from fontagit_pipeline.models import GoogleFontRaw, KoreanNameEntry, OutputDocument
 from fontagit_pipeline.noonnu_enrich import enrich_fonts, NoonnuEnrichError
 from fontagit_pipeline.noonnu_import import import_noonnu_seeds, NoonnuImportError
-from fontagit_pipeline.noonnu_seed import collect_noonnu_seeds, NoonnuSeedError
+from fontagit_pipeline.noonnu_seed import _USER_AGENT, _fetch_url, collect_noonnu_seeds, NoonnuSeedError
+from fontagit_pipeline.noonnu_url_scan import (
+    ScanAbortedError,
+    load_scan_targets,
+    scan_targets,
+    summarize,
+)
 from fontagit_pipeline.transform import build_records
 from fontagit_pipeline.uploader import upload_tier_a_snapshot
 from fontagit_pipeline.writer import write_output
@@ -157,6 +163,62 @@ def main_noonnu_seed(args: argparse.Namespace) -> int:
     except NoonnuSeedError as exc:
         logger.error("수집 실패: %s", exc)
         return 3
+    except Exception as exc:
+        logger.error("예상치 못한 오류: %s", exc)
+        return 3
+
+
+def main_noonnu_url_scan(args: argparse.Namespace) -> int:
+    """눈누 공식 URL 전수 대조 진입점."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    import json
+    from dataclasses import asdict
+    from typing import cast
+
+    from supabase import create_client
+
+    try:
+        settings = load_settings()
+        if not settings.supabase_url or not settings.supabase_secret_key:
+            logger.error("supabase_url 또는 supabase_secret_key가 없습니다")
+            return 2
+        client = create_client(settings.supabase_url, settings.supabase_secret_key)
+        targets = load_scan_targets(client)
+        if args.limit:
+            targets = targets[: args.limit]
+        logger.info("스캔 대상 %d종", len(targets))
+
+        with httpx.Client(headers={"User-Agent": _USER_AGENT}, follow_redirects=True) as http:
+            records = scan_targets(
+                targets,
+                fetcher=lambda url: _fetch_url(http, url),
+                state_path=args.state,
+            )
+
+        summary = summarize(records)
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(
+            json.dumps(
+                {"summary": summary, "records": [asdict(record) for record in records]},
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        logger.info("요약: %s", json.dumps(summary, ensure_ascii=False))
+        if not summary["structure_assumption_ok"]:
+            logger.error(
+                "no_container 비율 %.1f%%가 임계치를 넘었습니다. 정정을 진행하지 마세요.",
+                cast(float, summary["no_container_ratio"]) * 100,
+            )
+            return 4
+        return 0
+    except ScanAbortedError as exc:
+        logger.error("스캔 중단: %s", exc)
+        return 5
     except Exception as exc:
         logger.error("예상치 못한 오류: %s", exc)
         return 3
@@ -1836,6 +1898,22 @@ if __name__ == "__main__":
         "--limit", type=int, default=30, help="수집할 폰트 페이지 최대 수"
     )
     seed_parser.set_defaults(func=main_noonnu_seed)
+
+    # noonnu-url-scan 명령
+    url_scan_parser = subparsers.add_parser(
+        "noonnu-url-scan",
+        help="눈누 Tier B 공식 URL 전수 대조 (읽기 전용)",
+    )
+    url_scan_parser.add_argument(
+        "--state", type=Path, required=True, help="진행 상태 JSONL 경로 (재개용)"
+    )
+    url_scan_parser.add_argument(
+        "--out", type=Path, required=True, help="판정 리포트 JSON 저장 경로"
+    )
+    url_scan_parser.add_argument(
+        "--limit", type=int, default=0, help="대상 상한 (0=전체)"
+    )
+    url_scan_parser.set_defaults(func=main_noonnu_url_scan)
 
     # noonnu-import 명령
     import_parser = subparsers.add_parser(

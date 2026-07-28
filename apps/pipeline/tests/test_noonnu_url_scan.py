@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from fontagit_pipeline.noonnu_url_scan import ScanTarget, scan_targets
+from fontagit_pipeline.noonnu_url_scan import ScanRecord, ScanTarget, scan_targets, summarize
 
 _DETAIL_HTML = """
 <html><body>
@@ -117,3 +117,36 @@ def test_state_file_is_written_per_target(tmp_path: Path) -> None:
     lines = state_path.read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 1
     assert json.loads(lines[0])["font_id"] == _target().font_id
+
+
+def test_summarize_counts_by_classification_and_action() -> None:
+    """판정과 조치 권고를 각각 집계한다."""
+    records = [
+        ScanRecord(
+            font_id="1", slug="a", source_url="u", db_official_url=None,
+            db_license_source_url=None, db_license_verified=False,
+            new_official_url=None, new_foundry=None, classification="match",
+            contamination_type="none", recommended_action="keep", evidence="",
+        ),
+        ScanRecord(
+            font_id="2", slug="b", source_url="u", db_official_url=None,
+            db_license_source_url=None, db_license_verified=True,
+            new_official_url="https://x.kr", new_foundry=None, classification="mismatch",
+            contamination_type="noonnu_social", recommended_action="auto_fix_safe", evidence="",
+        ),
+        ScanRecord(
+            font_id="3", slug="c", source_url="u", db_official_url=None,
+            db_license_source_url=None, db_license_verified=False,
+            new_official_url=None, new_foundry=None, classification="no_container",
+            contamination_type="none", recommended_action="keep", evidence="",
+        ),
+    ]
+
+    summary = summarize(records)
+
+    assert summary["total"] == 3
+    assert summary["classification"]["match"] == 1
+    assert summary["classification"]["mismatch"] == 1
+    assert summary["recommended_action"]["auto_fix_safe"] == 1
+    assert summary["no_container_ratio"] == 1 / 3
+    assert summary["structure_assumption_ok"] is False
