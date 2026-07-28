@@ -4,10 +4,10 @@ import { pathToFileURL } from "node:url";
 
 const EXPECTED_ORIGIN = "https://fontagit.com";
 const EXPECTED_SITEMAP_LINE = "Sitemap: https://fontagit.com/sitemap.xml";
+// /collections/ 목록 페이지는 홈 스트립으로 통합돼 사라졌다(#128). 상세 URL만 sitemap에 남는다
 const REQUIRED_URLS = [
   `${EXPECTED_ORIGIN}/`,
   `${EXPECTED_ORIGIN}/fonts/`,
-  `${EXPECTED_ORIGIN}/collections/`,
   `${EXPECTED_ORIGIN}/trends/`,
   `${EXPECTED_ORIGIN}/about/`,
 ];
