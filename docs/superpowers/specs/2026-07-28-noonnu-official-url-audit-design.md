@@ -39,7 +39,9 @@ audit_http.py        curl 기반                                                
 audit_runner.py      체크포인트는 여기에만 존재                                  <- #142 대상
 ```
 
-이에 따라 브라우저 User-Agent 적용 결정은 `audit_http.py`(#141)에만 해당한다. 눈누 수집기는 이미 정직한 봇 UA와 robots.txt 준수, 요청 간 지연을 갖추고 있어 변경하지 않는다.
+이에 따라 브라우저 User-Agent 적용 결정은 `audit_http.py`(#141)에만 해당한다. 눈누 수집기(`collect_noonnu_seeds`)는 이미 정직한 봇 UA와 robots.txt 준수, 요청 간 지연을 갖추고 있어 변경하지 않는다.
+
+⚠️ 정정(2026-07-29): 위 문장을 근거로 "새 스캐너도 요청 예의를 이미 갖췄다"고 적었으나 사실이 아니었다. robots.txt 확인은 `collect_noonnu_seeds` 경로에만 있었고, 새로 만든 `noonnu_url_scan.py`에는 없었다. Codex 리뷰에서 드러나 뒤늦게 추가했다(`noonnu_seed`의 `_parse_robots_policy`를 재사용). 기존 경로가 갖춘 것을 새 경로도 갖췄다고 넘겨짚은 오류였다.
 
 ## 설계 (#150)
 
