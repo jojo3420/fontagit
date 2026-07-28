@@ -166,7 +166,7 @@ def main(apply: bool = False, report_path: str | None = None, target: str = "dev
                     return 1
         return 0
     except Exception as exc:
-        logger.error("예상치 못한 오류: %s", str(exc))
+        logger.exception("예상치 못한 오류: %s", str(exc))
         return 1
 
 
