@@ -256,8 +256,7 @@ def main(apply: bool = False, report_path: str | None = None, target: str = "dev
                         )
                         skipped_slugs.append(spec["slug"])
                         continue
-                    if not insert_collection(client, base, headers, spec, plan):
-                        return 1
+                    insert_collection(client, base, headers, spec, plan)
                 if skipped_slugs:
                     logger.error(
                         "후보 부족으로 건너뛴 컬렉션 %d개: %s",
@@ -266,7 +265,7 @@ def main(apply: bool = False, report_path: str | None = None, target: str = "dev
                     return 1
         return 0
     except Exception as exc:
-        logger.error("예상치 못한 오류: %s", str(exc))
+        logger.exception("예상치 못한 오류: %s", str(exc))
         return 1
 
 

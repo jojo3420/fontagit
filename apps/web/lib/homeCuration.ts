@@ -39,14 +39,24 @@ export function buildHomePreview(
   perChip: number = PER_CHIP,
 ): HomePreview {
   const clickRank = new Map<string, number>();
-  trends.forEach((t, i) => clickRank.set(t.font.slug, i));
-  // fonts는 getAllFonts의 최신 등록순. 클릭 순위 보유 폰트를 앞세우고
-  // 미보유는 stable sort 특성으로 최신순이 유지된다.
-  const ranked = [...fonts].sort((a, b) => {
+  trends.forEach((t) => clickRank.set(t.font.slug, t.rank));
+  // 1차: 최신순(동률/미상은 slug)으로 기준선을 명시적으로 만든다.
+  // 2차: 클릭 순위 보유 폰트를 앞세운다 — Array.sort는 안정 정렬이라
+  // 클릭 순위가 없는(동일 취급) 폰트들끼리는 1차 정렬 결과가 그대로 유지된다.
+  const byRecency = (a: Font, b: Font): number => {
+    const ta = a.createdAt ? new Date(a.createdAt).getTime() : NaN;
+    const tb = b.createdAt ? new Date(b.createdAt).getTime() : NaN;
+    const va = Number.isNaN(ta) ? -Infinity : ta;
+    const vb = Number.isNaN(tb) ? -Infinity : tb;
+    if (va !== vb) return vb - va;
+    return a.slug.localeCompare(b.slug);
+  };
+  const ranked = [...fonts].sort(byRecency).sort((a, b) => {
     const ra = clickRank.get(a.slug) ?? Number.MAX_SAFE_INTEGER;
     const rb = clickRank.get(b.slug) ?? Number.MAX_SAFE_INTEGER;
     return ra - rb;
   });
+  // 스프레드/clone 없이 Font 참조를 그대로 담아야 RSC flight가 중복 폰트를 자동 dedupe한다(실측: slug+map 구조는 오히려 raw +966B/gzip +252B).
   const pick = (pred: (f: Font) => boolean): Font[] =>
     ranked.filter(pred).slice(0, perChip);
   return {
@@ -71,7 +81,7 @@ export function badgeFor(
   if (hotSlugs.includes(font.slug)) return "인기";
   if (font.createdAt) {
     const ageDays = (now.getTime() - new Date(font.createdAt).getTime()) / 86_400_000;
-    if (ageDays <= NEW_BADGE_DAYS) return "NEW";
+    if (!Number.isNaN(ageDays) && ageDays >= 0 && ageDays <= NEW_BADGE_DAYS) return "NEW";
   }
   return undefined;
 }

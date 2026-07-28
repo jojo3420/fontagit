@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import Home from "@/app/page";
-import { getTrends } from "@/lib/data";
+import { getTrends, getAllCollections } from "@/lib/data";
 import { fonts } from "@/data/fonts";
 import type { TrendItem } from "@/types/font";
 import type { TrendsResult } from "@/lib/data";
@@ -78,5 +78,12 @@ describe("홈 페이지", () => {
     await renderHome();
     expect(screen.getByText("추천 컬렉션")).toBeInTheDocument();
     expect(screen.getByText("새벽 감성 명조 모음")).toBeInTheDocument();
+  });
+
+  it("컬렉션이 0개여도 collections-heading 제목은 유지된다 (a11y: aria-labelledby 대상 보존)", async () => {
+    vi.mocked(getAllCollections).mockResolvedValueOnce([]);
+    await renderHome();
+    const heading = screen.getByText("추천 컬렉션");
+    expect(heading).toHaveAttribute("id", "collections-heading");
   });
 });

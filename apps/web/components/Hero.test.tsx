@@ -8,4 +8,9 @@ describe("Hero", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("당신의 폰트 아지트");
     expect(screen.queryByPlaceholderText("폰트 이름을 검색하세요")).not.toBeInTheDocument();
   });
+
+  it("더 이상 분류 칩을 렌더하지 않는다", () => {
+    render(<Hero />);
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+  });
 });
