@@ -30,6 +30,7 @@ const mockTrendsLatestResult: TrendsResult = {
 
 vi.mock("@/lib/data", () => ({
   getTrends: vi.fn(() => Promise.resolve(mockTrendsClicksResult)),
+  getAllFonts: vi.fn(() => Promise.resolve(fonts)),
 }));
 
 async function renderHome() {
@@ -55,5 +56,11 @@ describe("홈 페이지", () => {
     expect(screen.getByText(/클릭 데이터 수집 중/)).toBeInTheDocument();
     expect(screen.queryByText("이번 주 인기 TOP 10")).not.toBeInTheDocument();
     expect(screen.queryByText(/매주 갱신/)).not.toBeInTheDocument();
+  });
+
+  it("즉시 필터 칩과 미리보기 그리드를 렌더한다", async () => {
+    await renderHome();
+    expect(screen.getByRole("button", { name: "전체" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "손글씨" })).toBeInTheDocument();
   });
 });

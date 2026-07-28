@@ -9,9 +9,11 @@ import styles from "./FontCard.module.css";
 export function FontCard({
   font,
   previewText,
+  badge,
 }: {
   font: Font;
   previewText?: string;
+  badge?: "인기" | "NEW";
 }) {
   const custom = previewText?.trim();
   const words = (custom || getSpecimenText(font, false)).split(" ");
@@ -25,7 +27,10 @@ export function FontCard({
       </LazyFontPreview>
       <div className={styles.foot}>
         <h3 className={styles.name}>{font.nameKo}</h3>
-        <TierChip tier={font.tier} />
+        <span className={styles.footRight}>
+          {badge && <span className={styles.badge}>{badge}</span>}
+          <TierChip tier={font.tier} />
+        </span>
       </div>
     </Link>
   );
