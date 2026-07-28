@@ -41,6 +41,12 @@ _COPYRIGHT_RE = re.compile(r'copyright:\s*"(?P<v>[^"]+)"')
 _RIGHTS_HOLDER_RE = re.compile(
     r"Copyright\s*(?:\(c\)|©)?\s*[\d,\-\s]*(?:by\s+)?(?P<holder>[^.,()\"]+)", re.IGNORECASE
 )
+# OFL 라이선스 copyright에서 실제 제작사가 아니라 "이 프로젝트의 저작자들"이라는
+# 정형구를 걸러낸다(예: "The Playfair Display Project Authors", "The BM JUA Authors",
+# "Noto Sans Project Authors"). 이 값을 제작사(foundry)로 노출하면 잘못된 정보다(이슈 #120 재현).
+_OFL_BOILERPLATE_RE = re.compile(
+    r"^the\s.+\sauthors$|^.+\sproject\s+authors$", re.IGNORECASE
+)
 
 
 class TierAMeta(BaseModel):
@@ -108,12 +114,20 @@ def parse_metadata_pb(text: str) -> TierAMeta:
 
 
 def extract_rights_holder(copyright_text: str) -> str | None:
-    """copyright 문자열에서 권리사 명칭을 추출한다. 실패 시 None(needs_review 경로)."""
+    """copyright 문자열에서 권리사 명칭을 추출한다.
+
+    실패 또는 OFL 관용구("The X Project Authors" 등, 실제 제작 주체가 아닌 정형구)일
+    때는 None(needs_review 경로)을 반환한다.
+    """
     match = _RIGHTS_HOLDER_RE.search(copyright_text or "")
     if not match:
         return None
     holder = match.group("holder").strip().rstrip(".")
-    return holder or None
+    if not holder:
+        return None
+    if _OFL_BOILERPLATE_RE.match(holder):
+        return None
+    return holder
 
 
 def resolve_foundry(
@@ -357,40 +371,45 @@ def collect_tier_a_meta(
                 )
                 evidence_id = store.save_snapshot(run_id, snapshot)
 
-            # 1. foundry 필드
-            finding_foundry = FindingDraft(
-                font_id=target.font_id,
-                field_name="foundry",
-                before_value=target.noonnu_foundry,
-                proposed_value=foundry_res.value,
-                evidence_id=evidence_id,
-                confidence="reference",
-                review_reason=foundry_res.reason,
-                auto_applicable=(foundry_res.status == "auto"),
-            )
-            target_findings.append(finding_foundry)
-            if not dry_run:
-                store.save_finding(run_id, finding_foundry)
-            findings_created += 1
-            findings_detail.append(_finding_detail(target, finding_foundry))
-
-            # 2. foundry_url 필드 (정규화 사전의 evidence_url)
-            if foundry_res.value is not None and foundry_entry is not None:
-                finding_foundry_url = FindingDraft(
+            # 1. foundry 필드: METADATA.pb copyright에서 권리사를 추출하지 못한 경우
+            # (OFL 관용구 "The X Project Authors" 등 포함, extract_rights_holder가 None을
+            # 반환) 근거 없는 값을 제안하는 셈이라 foundry finding 자체를 만들지 않는다
+            # (빈 값/관용구 제안 금지). foundry_url도 rights_holder 없이는 정규화 사전을
+            # 조회할 수 없으므로 함께 건너뛴다.
+            if rights_holder is not None:
+                finding_foundry = FindingDraft(
                     font_id=target.font_id,
-                    field_name="foundry_url",
-                    before_value=None,
-                    proposed_value=foundry_entry.evidence_url,
+                    field_name="foundry",
+                    before_value=target.noonnu_foundry,
+                    proposed_value=foundry_res.value,
                     evidence_id=evidence_id,
                     confidence="reference",
-                    review_reason="normalization_evidence",
-                    auto_applicable=(foundry_entry.status == "approved"),
+                    review_reason=foundry_res.reason,
+                    auto_applicable=(foundry_res.status == "auto"),
                 )
-                target_findings.append(finding_foundry_url)
+                target_findings.append(finding_foundry)
                 if not dry_run:
-                    store.save_finding(run_id, finding_foundry_url)
+                    store.save_finding(run_id, finding_foundry)
                 findings_created += 1
-                findings_detail.append(_finding_detail(target, finding_foundry_url))
+                findings_detail.append(_finding_detail(target, finding_foundry))
+
+                # 2. foundry_url 필드 (정규화 사전의 evidence_url)
+                if foundry_res.value is not None and foundry_entry is not None:
+                    finding_foundry_url = FindingDraft(
+                        font_id=target.font_id,
+                        field_name="foundry_url",
+                        before_value=None,
+                        proposed_value=foundry_entry.evidence_url,
+                        evidence_id=evidence_id,
+                        confidence="reference",
+                        review_reason="normalization_evidence",
+                        auto_applicable=(foundry_entry.status == "approved"),
+                    )
+                    target_findings.append(finding_foundry_url)
+                    if not dry_run:
+                        store.save_finding(run_id, finding_foundry_url)
+                    findings_created += 1
+                    findings_detail.append(_finding_detail(target, finding_foundry_url))
 
             # 3. download_url + download_source_kind (쌍으로 생성)
             if may_update_source_kind(target.download_source_kind, specimen_source_kind):

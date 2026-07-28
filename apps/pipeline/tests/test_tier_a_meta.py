@@ -40,6 +40,33 @@ def test_extract_rights_holder() -> None:
     assert extract_rights_holder("") is None
 
 
+def test_extract_rights_holder_ignores_ofl_boilerplate() -> None:
+    """OFL copyright 관용구("이 프로젝트의 저작자들")는 실제 제작사가 아니므로 None."""
+    # "The X Project Authors"
+    assert extract_rights_holder(
+        "Copyright 2020 The Playfair Display Project Authors "
+        "(https://github.com/clauseggers/Playfair-Display)"
+    ) is None
+    assert extract_rights_holder(
+        "Copyright 2015 The BM JUA Project Authors (https://github.com/dalgty12/BMJUA)"
+    ) is None
+    # "The X Authors" (Project 없이)
+    assert extract_rights_holder(
+        "Copyright 2019 The Nanum Gothic Authors (https://github.com/naver/nanumfont)"
+    ) is None
+    # "X Project Authors" (The 없이)
+    assert extract_rights_holder(
+        "Copyright 2021 Noto Sans Project Authors (https://github.com/googlefonts/noto-fonts)"
+    ) is None
+
+
+def test_extract_rights_holder_keeps_real_foundry_names() -> None:
+    """실제 제작사명은 관용구 패턴에 걸리지 않고 그대로 추출된다."""
+    assert extract_rights_holder("Copyright 2012 NHN Corporation.") == "NHN Corporation"
+    assert extract_rights_holder("Copyright 2018 YoonDesign Inc") == "YoonDesign Inc"
+    assert extract_rights_holder("Copyright 1999 ParaType Ltd.") == "ParaType Ltd"
+
+
 def test_resolve_foundry_normalized_match() -> None:
     """눈누 표기와 정규화된 권리사가 일치(approved 항목)하면 auto, 아니면 needs_review."""
     norm = BrandNormalization(entries=[BrandEntry(
@@ -312,6 +339,82 @@ def test_collect_tier_a_meta_fetch_failure() -> None:
     assert error["slug"] == "unknown-font"
     assert error["name_en"] == "Unknown Font"
     assert "404" in error["reason"]
+
+
+def test_collect_tier_a_meta_ofl_boilerplate_skips_foundry_finding() -> None:
+    """copyright가 OFL 관용구("The X Project Authors")면 foundry/foundry_url finding은
+    생성되지 않지만, download_url/download_source_kind/license_source_url은 그대로 생성된다.
+    """
+    run_id = uuid4()
+    store = InMemoryAuditStore()
+    font_id = uuid4()
+
+    registry = SourceRegistry(
+        version=1,
+        entries=[
+            RegistryEntry(
+                maker="Google Fonts (archive)",
+                domain="fonts.google.com",
+                roles=["download", "homepage"],
+                source_kind="archive",
+            ),
+            RegistryEntry(
+                maker="google/fonts GitHub (archive)",
+                domain="raw.githubusercontent.com",
+                roles=["license", "metadata"],
+                source_kind="archive",
+            ),
+        ],
+    )
+    norm = BrandNormalization(entries=[])
+
+    targets = [
+        TierATarget(
+            font_id=font_id,
+            name_en="Playfair Display",
+            license_type="OFL",
+            slug="playfair-display",
+            noonnu_foundry=None,
+        )
+    ]
+
+    def fake_fetcher(url: str, **kwargs: object) -> FetchResult:
+        if "METADATA.pb" in url:
+            content = '''name: "Playfair Display"
+designer: "Claus Eggers Sørensen"
+license: "OFL"
+fonts {
+  copyright: "Copyright 2020 The Playfair Display Project Authors (https://github.com/clauseggers/Playfair-Display)"
+}
+'''
+            return FetchResult(
+                status=200,
+                final_url=url,
+                content=content.encode(),
+                content_sha256="pf123",
+                redirect_count=0,
+            )
+        return FetchResult(status=404, final_url=url, content=b"", content_sha256="notfound", redirect_count=0)
+
+    result = collect_tier_a_meta(
+        run_id,
+        targets,
+        store,
+        registry,
+        norm,
+        dry_run=False,
+        fetcher=fake_fetcher,
+    )
+
+    assert result["target_count"] == 1
+    assert result["success_count"] == 1
+
+    created_fields = {draft.field_name for draft in store._finding_drafts.values()}
+    assert "foundry" not in created_fields
+    assert "foundry_url" not in created_fields
+    assert "download_url" in created_fields
+    assert "download_source_kind" in created_fields
+    assert "license_source_url" in created_fields
 
 
 def test_collect_tier_a_meta_downgrade_block() -> None:
