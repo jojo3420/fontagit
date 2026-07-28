@@ -102,6 +102,20 @@ def fetch_published_fonts(
         offset += PAGE_SIZE
 
 
+def find_sort_order_conflicts(existing: list[dict]) -> list[int]:
+    """새 컬렉션이 쓰려는 sort_order를 다른 slug가 이미 점유했는지 판정한다.
+
+    같은 slug가 그 순번을 쓰고 있으면(재실행으로 우리가 만든 컬렉션) 충돌이 아니다.
+    """
+    expected_slug_by_order = {c["sort_order"]: c["slug"] for c in NEW_COLLECTIONS}
+    return sorted({
+        row["sort_order"]
+        for row in existing
+        if row["sort_order"] in expected_slug_by_order
+        and row["slug"] != expected_slug_by_order[row["sort_order"]]
+    })
+
+
 def build_report(fonts: list[dict], existing: list[dict]) -> dict:
     """컬렉션별 후보 리포트를 만든다 (사용자 검수용). 기존 컬렉션과의 충돌 정보 포함."""
     existing_orders = {c["sort_order"] for c in existing}
@@ -122,10 +136,12 @@ def build_report(fonts: list[dict], existing: list[dict]) -> dict:
             "count": len(existing),
             "slugs": sorted(c["slug"] for c in existing),
             "sort_orders": sorted(existing_orders),
+            "rows": sorted(
+                ({"slug": c["slug"], "sort_order": c["sort_order"]} for c in existing),
+                key=lambda row: row["sort_order"],
+            ),
         },
-        "sort_order_conflicts": sorted(
-            existing_orders & {c["sort_order"] for c in NEW_COLLECTIONS}
-        ),
+        "sort_order_conflicts": find_sort_order_conflicts(existing),
         "collections": plans,
     }
 
@@ -231,15 +247,23 @@ def main(apply: bool = False, report_path: str | None = None, target: str = "dev
                         "sort_order 충돌로 중단: %s", report["sort_order_conflicts"]
                     )
                     return 1
+                skipped_slugs: list[str] = []
                 for spec, plan in zip(NEW_COLLECTIONS, report["collections"]):
                     if not should_create(plan):
                         logger.warning(
                             "후보 %d종(<%d) - %s 생성 건너뜀",
                             len(plan["candidates"]), MIN_ITEMS, spec["slug"],
                         )
+                        skipped_slugs.append(spec["slug"])
                         continue
                     if not insert_collection(client, base, headers, spec, plan):
                         return 1
+                if skipped_slugs:
+                    logger.error(
+                        "후보 부족으로 건너뛴 컬렉션 %d개: %s",
+                        len(skipped_slugs), skipped_slugs,
+                    )
+                    return 1
         return 0
     except Exception as exc:
         logger.error("예상치 못한 오류: %s", str(exc))

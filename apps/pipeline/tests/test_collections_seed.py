@@ -9,6 +9,8 @@ import pytest
 from fontagit_pipeline import collections_seed as cs
 from fontagit_pipeline.collections_seed import (
     NEW_COLLECTIONS,
+    build_report,
+    find_sort_order_conflicts,
     insert_collection,
     pick_candidates,
     should_create,
@@ -148,6 +150,93 @@ def test_sort_order_충돌시_apply는_1을_반환하고_쓰지_않는다(
         path = request.url.path
         if path == "/rest/v1/collections" and request.method == "GET":
             return httpx.Response(200, json=[{"slug": "existing", "sort_order": 10}])
+        if path == "/rest/v1/fonts" and request.method == "GET":
+            return httpx.Response(200, json=[])
+        raise AssertionError(f"unexpected request: {request.method} {path}")
+
+    mock_client = httpx.Client(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr(cs, "load_audit_settings", lambda: _DummySettings())
+    monkeypatch.setattr(cs.httpx, "Client", lambda **_: mock_client)
+
+    result = cs.main(apply=True, report_path=str(tmp_path / "report.json"), target="dev")
+
+    assert result == 1
+    assert all(method != "POST" for method, _ in calls)
+
+
+def test_같은_slug가_점유한_sort_order는_충돌이_아니다() -> None:
+    existing = [{"slug": c["slug"], "sort_order": c["sort_order"]} for c in NEW_COLLECTIONS]
+    assert find_sort_order_conflicts(existing) == []
+    assert build_report(fonts=[], existing=existing)["sort_order_conflicts"] == []
+
+
+def test_다른_slug가_점유한_sort_order는_충돌이다() -> None:
+    existing = [{"slug": "unrelated", "sort_order": 10}]
+    assert find_sort_order_conflicts(existing) == [10]
+    assert build_report(fonts=[], existing=existing)["sort_order_conflicts"] == [10]
+
+
+def _fonts_for(spec: dict, count: int, prefix: str) -> list[dict]:
+    tag = spec["tags"][0]
+    category = spec["categories"][0]
+    return [_font(f"{prefix}{i}", [tag], category_ko=category) for i in range(count)]
+
+
+def test_반쪽_상태는_재실행시_충돌로_중단되지_않고_아이템만_보정된다(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """4종이 이미 존재하고 그중 calligraphy-brush만 아이템이 비어 있는 재실행 시나리오."""
+    fonts: list[dict] = []
+    for i, spec in enumerate(NEW_COLLECTIONS):
+        fonts += _fonts_for(spec, count=5, prefix=f"s{i}-")
+    calls: list[tuple[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append((request.method, request.url.path))
+        path = request.url.path
+        params = request.url.params
+        if path == "/rest/v1/collections" and request.method == "GET":
+            slug_param = params.get("slug")
+            if slug_param:
+                slug = slug_param.removeprefix("eq.")
+                return httpx.Response(200, json=[{"id": f"col-{slug}"}])
+            return httpx.Response(
+                200,
+                json=[{"slug": c["slug"], "sort_order": c["sort_order"]} for c in NEW_COLLECTIONS],
+            )
+        if path == "/rest/v1/fonts" and request.method == "GET":
+            return httpx.Response(200, json=fonts)
+        if path == "/rest/v1/collection_items" and request.method == "GET":
+            collection_id = params.get("collection_id", "")
+            if collection_id == "eq.col-calligraphy-brush":
+                return httpx.Response(200, json=[])
+            return httpx.Response(200, json=[{"font_id": "existing-item"}])
+        if path == "/rest/v1/collection_items" and request.method == "POST":
+            return httpx.Response(201, json=[])
+        raise AssertionError(f"unexpected request: {request.method} {path} {dict(params)}")
+
+    mock_client = httpx.Client(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr(cs, "load_audit_settings", lambda: _DummySettings())
+    monkeypatch.setattr(cs.httpx, "Client", lambda **_: mock_client)
+
+    result = cs.main(apply=True, report_path=str(tmp_path / "report.json"), target="dev")
+
+    assert result == 0
+    assert all(path != "/rest/v1/collections" or method != "POST" for method, path in calls)
+    item_posts = [1 for method, path in calls if path == "/rest/v1/collection_items" and method == "POST"]
+    assert len(item_posts) == 1
+
+
+def test_후보부족으로_건너뛴_컬렉션이_있으면_apply는_1을_반환한다(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[tuple[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append((request.method, request.url.path))
+        path = request.url.path
+        if path == "/rest/v1/collections" and request.method == "GET":
+            return httpx.Response(200, json=[])
         if path == "/rest/v1/fonts" and request.method == "GET":
             return httpx.Response(200, json=[])
         raise AssertionError(f"unexpected request: {request.method} {path}")
