@@ -41,6 +41,8 @@ class NoonnuFontSnapshot(BaseModel):
     raw_text: str | None = None
     raw_sha256: str | None = None
     global_social_links: list[str] = Field(default_factory=list)
+    official_url: str | None = None
+    official_url_anchor_text: str | None = None
     license_id: str | None = None
     license_version: str | None = None
     extractor: ExtractorKind = "deterministic"
@@ -120,6 +122,13 @@ def extract_noonnu_font(html: str, source_url: str) -> NoonnuFontSnapshot:
         evidence["weights"] = f"{style_locations} @font-face font-weight"
         evidence["styles"] = f"{style_locations} @font-face font-style"
 
+    official_url, official_anchor_text, official_selector = _extract_official_url(
+        detail, source_url
+    )
+    global_social_links = _collect_global_social_links(soup, detail, source_url)
+    if official_selector is not None:
+        evidence["official_url"] = official_selector
+
     return NoonnuFontSnapshot(
         source_url=source_url,
         page_id=_page_id(source_url),
@@ -140,6 +149,9 @@ def extract_noonnu_font(html: str, source_url: str) -> NoonnuFontSnapshot:
         evidence_locations=evidence,
         raw_text=None,
         raw_sha256=raw_sha256,
+        official_url=official_url,
+        official_url_anchor_text=official_anchor_text,
+        global_social_links=global_social_links,
     )
 
 
@@ -276,6 +288,67 @@ def _download_candidates(detail: Tag, source_url: str) -> tuple[list[str], list[
 def _http_url(href: str, source_url: str) -> str | None:
     absolute = urljoin(source_url, href.strip())
     return absolute if urlparse(absolute).scheme in {"http", "https"} else None
+
+
+_NOONNU_HOSTS = ("noonnu.cc",)
+_SOCIAL_HOSTS = (
+    "instagram.com",
+    "facebook.com",
+    "twitter.com",
+    "x.com",
+    "youtube.com",
+    "pinterest.com",
+    "threads.net",
+)
+
+
+def _is_noonnu_host(url: str) -> bool:
+    """URL이 눈누 자체 도메인인지 판정한다."""
+    host = urlparse(url).netloc.lower()
+    return any(host == name or host.endswith(f".{name}") for name in _NOONNU_HOSTS)
+
+
+def _is_social_host(url: str) -> bool:
+    """URL이 SNS 도메인인지 판정한다."""
+    host = urlparse(url).netloc.lower()
+    return any(host == name or host.endswith(f".{name}") for name in _SOCIAL_HOSTS)
+
+
+def _collect_global_social_links(soup: BeautifulSoup, detail: Tag, source_url: str) -> list[str]:
+    """상세 영역 바깥에 있는 SNS 링크를 모은다.
+
+    눈누 자체 계정 링크가 제작사 공식 출처로 오인되는 것을 막기 위해 따로 담는다.
+    """
+    detail_hrefs = {anchor.get("href") for anchor in detail.find_all("a", href=True)}
+    links: list[str] = []
+    for anchor in soup.find_all("a", href=True):
+        href = anchor.get("href")
+        if not isinstance(href, str) or href in detail_hrefs:
+            continue
+        url = _http_url(href, source_url)
+        if url is None or not _is_social_host(url):
+            continue
+        if url not in links:
+            links.append(url)
+    return links
+
+
+def _extract_official_url(detail: Tag, source_url: str) -> tuple[str | None, str | None, str | None]:
+    """상세 영역 안에서 제작사 공식 URL 후보를 뽑는다.
+
+    Returns:
+        (공식 URL, 앵커 텍스트, 셀렉터 경로). 후보가 없으면 모두 None.
+    """
+    for anchor in detail.find_all("a", href=True):
+        href = anchor.get("href")
+        if not isinstance(href, str):
+            continue
+        url = _http_url(href, source_url)
+        if url is None or _is_noonnu_host(url):
+            continue
+        anchor_text = _text(anchor)
+        return url, anchor_text, _selector_path(anchor)
+    return None, None, None
 
 
 def _section_after_heading(detail: Tag, title: str, tag_name: str) -> Tag | None:
