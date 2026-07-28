@@ -919,6 +919,21 @@ def _summarize_findings_by_field(findings: list[dict[str, object]]) -> dict[str,
 
 
 def main_audit_review(args: argparse.Namespace) -> int:
+    """font-audit-review 서브커맨드 진입점: action으로 auto-approve/approve를 분기한다.
+
+    - auto-approve: metadata findings을 무인 승인(evidence-values 대조 필수, 기존 동작 유지)
+    - approve: 사람이 검수를 마친 findings를 --field로 지정한 필드(기본 전체)만 배치 승인
+      (main_audit_review_approve로 위임)
+    """
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+
+    if args.action == "approve":
+        return main_audit_review_approve(args)
+
+    return _main_audit_review_auto_approve(args)
+
+
+def _main_audit_review_auto_approve(args: argparse.Namespace) -> int:
     """metadata findings을 무인 승인한다.
 
     - run_id로 기준 run을 조회
@@ -938,7 +953,6 @@ def main_audit_review(args: argparse.Namespace) -> int:
     from fontagit_pipeline.audit_store import SupabaseAuditStore
     from fontagit_pipeline.config import load_audit_settings
 
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     try:
         if args.action != "auto-approve":
             raise ValueError(f"지원하지 않는 action: {args.action}")
@@ -1099,6 +1113,148 @@ def main_audit_review(args: argparse.Namespace) -> int:
         return 1
     except Exception as exc:  # settings 로드 또는 상위 DB 경계 오류
         logger.error("metadata 승인 실패: %s", exc)
+        return 3
+
+
+def main_audit_review_approve(args: argparse.Namespace) -> int:
+    """사람이 검수를 마친 proposed findings를 필드 단위로 배치 승인한다.
+
+    - run_id의 status='proposed' findings 중 --field로 지정한 field_name(생략 시
+      MANUAL_APPROVABLE_FIELDS 전체)만 조회한다. legal 필드(allow_commercial 등)는
+      MANUAL_APPROVABLE_FIELDS에 없으므로 --field로 지정해도 입력값 오류로 거부한다
+      (이슈 #128 - legal 필드는 이 CLI에서는 별도 사람 게이트 절차 대상이라 이번 범위가
+      아니다. 다만 기존 noonnu-review approve는 필드 화이트리스트가 없어 legal finding도
+      승인 가능하다 - 선행 존재하는 별도 경로이며 이번 범위 밖이다).
+    - run.status가 completed가 아니면 거부한다(아직 findings가 insert 중일 수 있는
+      running run이나 실패한 run의 findings를 승인하지 못하게 막는 최소 게이트).
+    - auto-approve와 달리 evidence-values 재대조는 하지 않는다: 이 경로는 사람이 이미
+      findings 내용을 확인하고 승인을 지시한 상태를 전제로 한다.
+    - --dry-run이면 조회만 하고 승인/건너뜀 집계 없이 대상 건수와 필드별 분포만 로깅한다.
+    - 조회 필터를 신뢰하지 않고 각 finding에서 field_name을 다시 확인한다. 이 재확인이
+      걸리면 쿼리 필터가 뚫렸다는 보안 이벤트이므로 건별 WARNING을 남기고 exit code를
+      0이 아닌 값으로 바꾼다.
+
+    Exit codes:
+    - 0: 승인 성공(0건 포함) 또는 dry-run
+    - 1: 입력값 오류 (invalid run-id, 허용되지 않은 --field, run status != completed 등)
+    - 2: 방어선(field_name 재확인)에서 legal 필드 유입이 1건 이상 감지됨
+    - 3: 일부 finding 승인 실패 또는 DB 오류
+    """
+    from uuid import UUID
+
+    from fontagit_pipeline.audit_store import MANUAL_APPROVABLE_FIELDS, SupabaseAuditStore
+    from fontagit_pipeline.config import load_audit_settings
+
+    try:
+        run_id = UUID(args.run_id)
+        reviewed_by = args.reviewed_by
+        if not reviewed_by or not str(reviewed_by).strip():
+            raise ValueError("approve는 --reviewed-by가 필수입니다")
+
+        requested_fields = args.field if args.field else sorted(MANUAL_APPROVABLE_FIELDS)
+        disallowed_fields = [f for f in requested_fields if f not in MANUAL_APPROVABLE_FIELDS]
+        if disallowed_fields:
+            raise ValueError(f"승인 대상이 아닌 --field: {disallowed_fields}")
+
+        settings = load_audit_settings()
+        dev_url, dev_secret = settings.dev_write_credentials()
+        store = SupabaseAuditStore.from_dev_credentials(dev_url, dev_secret)
+
+        # run 게이트: completed가 아닌 run(진행 중이라 findings가 계속 insert되거나,
+        # 실패한 run)의 findings는 사람 승인 경로에서도 막는다 (MEDIUM 리뷰 지적).
+        run = store.get_run(run_id)
+        run_status = run.get("status")
+        if run_status != "completed":
+            logger.error("run status는 completed여야 합니다: status=%s", run_status)
+            return 1
+
+        proposed_findings = store.get_proposed_findings_by_fields(run_id, requested_fields)
+        logger.info(
+            "배치 승인 대상 조회: run_id=%s fields=%s count=%d",
+            run_id,
+            requested_fields,
+            len(proposed_findings),
+        )
+
+        if args.dry_run:
+            field_distribution = _summarize_findings_by_field(proposed_findings)
+            logger.info(
+                "dry-run: 승인 대상 %d건 field_distribution=%s (실제 승인 없음)",
+                len(proposed_findings),
+                field_distribution,
+            )
+            return 0
+
+        approved_count = 0
+        skipped_count = 0
+        defense_triggered_count = 0
+        failed_findings: list[dict[str, object]] = []
+
+        for finding in proposed_findings:
+            finding_id = finding.get("id")
+            field_name = finding.get("field_name")
+            status = finding.get("status")
+
+            # 이중 방어: 조회 필터를 신뢰하지 않고 각 finding에서 다시 확인한다
+            # (legal 필드가 어떤 경로로든 섞여 들어오면 여기서 건너뛴다). field_name 쪽
+            # 방어선이 걸리는 것은 "쿼리 필터가 뚫렸다"는 보안 이벤트이므로 건별
+            # WARNING을 남기고 별도로 집계한다. status 불일치(동시성)는 보안 이벤트가
+            # 아니므로 기존처럼 skipped_count에만 반영한다.
+            if field_name not in MANUAL_APPROVABLE_FIELDS:
+                logger.warning(
+                    "방어선 발동: 승인 대상이 아닌 field가 조회 결과에 섞여 있음 id=%s field=%s",
+                    finding_id,
+                    field_name,
+                )
+                defense_triggered_count += 1
+                skipped_count += 1
+                continue
+            if status != "proposed":
+                skipped_count += 1
+                continue
+
+            try:
+                if not isinstance(finding_id, str):
+                    raise ValueError(f"invalid finding_id: {finding_id}")
+                store.approve_finding(UUID(finding_id), reviewed_by=reviewed_by)
+                approved_count += 1
+            except Exception as exc:  # DB 호출 경계: APIError, RuntimeError, ValueError 등
+                logger.warning(
+                    "finding 승인 실패: id=%s field=%s type=%s reason=%s",
+                    finding_id,
+                    field_name,
+                    exc.__class__.__name__,
+                    exc,
+                )
+                failed_findings.append(finding)
+
+        logger.info(
+            "승인=%d 건너뜀=%d 실패=%d (run_id=%s)",
+            approved_count,
+            skipped_count,
+            len(failed_findings),
+            run_id,
+        )
+
+        if failed_findings:
+            logger.error("일부 findings 승인 실패: 수동 재확인 필요")
+            return 3
+
+        if defense_triggered_count:
+            logger.error(
+                "방어선 발동 %d건: 쿼리 필터 유입 경로 점검 필요 (run_id=%s)",
+                defense_triggered_count,
+                run_id,
+            )
+            return 2
+
+        return 0
+
+    except ValueError as exc:
+        logger.error("입력값 오류: %s", exc)
+        return 1
+    except Exception as exc:  # settings 로드 또는 상위 DB 경계 오류
+        logger.error("배치 승인 실패: %s", exc)
         return 3
 
 
@@ -1699,17 +1855,44 @@ if __name__ == "__main__":
 
     review_parser = subparsers.add_parser(
         "font-audit-review",
-        help="metadata findings 무인 승인",
+        help="metadata findings 무인 승인 또는 사람 검수 findings 배치 승인",
     )
-    review_parser.add_argument(
-        "action",
-        choices=["auto-approve"],
-        help="실행 액션",
+    # action별로 인자를 완전히 분리한다(HIGH 리뷰 지적 - 공유 플래그에서는 auto-approve에
+    # --dry-run/--field/--reviewed-by를 줘도 argparse가 통과시키고 auto-approve 경로가
+    # 이를 조용히 무시해 "미리보기인 줄 알았는데 실제 승인됨" 사고가 난다). 이제
+    # auto-approve 서브파서에는 approve 전용 플래그 자체가 존재하지 않으므로 그런
+    # 인자를 주면 argparse가 "unrecognized arguments"로 즉시 거부한다.
+    review_subparsers = review_parser.add_subparsers(dest="action", required=True)
+
+    review_auto_approve_parser = review_subparsers.add_parser(
+        "auto-approve", help="metadata findings 무인 승인(evidence-values 대조 필수)"
     )
-    review_parser.add_argument(
+    review_auto_approve_parser.add_argument(
         "--run-id", required=True, help="조회할 감사 run의 UUID"
     )
-    review_parser.set_defaults(func=main_audit_review)
+    review_auto_approve_parser.set_defaults(func=main_audit_review)
+
+    review_approve_parser = review_subparsers.add_parser(
+        "approve", help="사람이 검수를 마친 findings를 필드 단위로 배치 승인"
+    )
+    review_approve_parser.add_argument(
+        "--run-id", required=True, help="조회할 감사 run의 UUID"
+    )
+    review_approve_parser.add_argument(
+        "--reviewed-by", type=str, default=None, help="검수자 식별자(필수)"
+    )
+    review_approve_parser.add_argument(
+        "--field",
+        action="append",
+        default=None,
+        help="승인 대상 field_name(반복 가능, 생략 시 MANUAL_APPROVABLE_FIELDS 전체)",
+    )
+    review_approve_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="승인 없이 대상 건수와 필드별 분포만 로깅",
+    )
+    review_approve_parser.set_defaults(func=main_audit_review)
 
     crawl_all_parser = subparsers.add_parser(
         "font-audit-crawl-all",

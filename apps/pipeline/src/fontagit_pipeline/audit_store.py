@@ -7,11 +7,31 @@
 from __future__ import annotations
 
 import unicodedata
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol
 from uuid import UUID, uuid4
+
+# 사람이 직접 검수해 승인할 수 있는 필드. tags/weights는 기존 metadata 승인 경로,
+# 나머지 5개(foundry/foundry_url/download_url/download_source_kind/license_source_url)는
+# Tier A METADATA.pb 수집(collect_tier_a_meta)이 만드는 archive 등급 링크-표기 제안이다
+# (이슈 #128 - 감사 findings 사람 승인 경로).
+#
+# 이 집합에는 법적 판단(allow_commercial 등)이 필요한 legal 필드를 절대 넣지 않는다 -
+# legal 필드는 별도 사람 게이트 절차가 필요하고 이번 범위가 아니다
+# (test_manual_approvable_fields_excludes_legal_fields가 이를 고정한다).
+MANUAL_APPROVABLE_FIELDS = frozenset(
+    {
+        "tags",
+        "weights",
+        "foundry",
+        "foundry_url",
+        "download_url",
+        "download_source_kind",
+        "license_source_url",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -496,7 +516,7 @@ class SupabaseAuditStore:
     def approve_finding(
         self, finding_id: UUID, *, reviewed_by: str
     ) -> None:
-        """명시적 검증 후 metadata tags/weights finding을 approved로 상태 전이.
+        """명시적 검증 후 MANUAL_APPROVABLE_FIELDS에 속하는 finding을 approved로 상태 전이.
 
         Args:
             finding_id: 승인할 finding UUID
@@ -505,9 +525,10 @@ class SupabaseAuditStore:
         Raises:
             ValueError: finding 미존재, field 불허, status 불일치, 동시성 실패, reviewed_by 비어있음
         """
-        # 검증 0: reviewed_by 필수
+        # 검증 0: reviewed_by 필수 (noonnu_review.py 관례와 동일하게 앞뒤 공백은 제거하고 저장)
         if not reviewed_by or not str(reviewed_by).strip():
             raise ValueError("reviewed_by는 필수 입력입니다")
+        reviewer = str(reviewed_by).strip()
 
         # SELECT: finding 검색
         query = self._schema.table("font_audit_findings").select("id", "field_name", "status").eq("id", str(finding_id)).limit(1)
@@ -525,8 +546,8 @@ class SupabaseAuditStore:
         field_name = row.get("field_name")
         current_status = row.get("status")
 
-        # 검증 2: field_name (tags, weights만 승인 가능)
-        if field_name not in {"tags", "weights"}:
+        # 검증 2: field_name (MANUAL_APPROVABLE_FIELDS만 승인 가능, legal 필드는 영구 제외)
+        if field_name not in MANUAL_APPROVABLE_FIELDS:
             raise ValueError(f"field '{field_name}' 는 승인 대상이 아닙니다")
 
         # 검증 3: 현재 상태 (proposed만)
@@ -539,7 +560,7 @@ class SupabaseAuditStore:
             .update(
                 {
                     "status": "approved",
-                    "reviewed_by": reviewed_by,
+                    "reviewed_by": reviewer,
                     "reviewed_at": datetime.now(UTC).isoformat(),
                 }
             )
@@ -857,6 +878,60 @@ class SupabaseAuditStore:
                 .eq("run_id", str(run_id))
                 .eq("status", "proposed")
                 .in_("field_name", ["tags", "weights", "foundry", "download_url", "download_source_kind"])
+                .order("id", desc=False)
+                .range(offset, offset + page_size - 1)
+                .execute()
+            )
+            data = result.data
+            if not isinstance(data, list):
+                raise RuntimeError("proposed findings 조회 결과가 올바르지 않습니다")
+
+            all_findings.extend(data)
+
+            if len(data) < page_size:
+                break
+
+            offset += page_size
+
+        return all_findings
+
+    def get_proposed_findings_by_fields(
+        self, run_id: UUID, field_names: Sequence[str]
+    ) -> list[dict[str, object]]:
+        """font_audit_findings 테이블에서 지정한 field_name들의 proposed findings 조회 (페이지네이션).
+
+        사람 검수 배치 승인 CLI(font-audit-review approve) 전용 조회다. get_proposed_findings와
+        달리 조회할 field_name 목록을 호출자가 좁힐 수 있다(기본값은 MANUAL_APPROVABLE_FIELDS
+        전체). 호출자 검증에만 기대지 않고(misuse-proof) 이 메서드 내부에서도
+        MANUAL_APPROVABLE_FIELDS와 교집합을 취한다 - legal 필드가 field_names에 섞여 들어와도
+        조회 대상에서 제외된다.
+
+        Args:
+            run_id: 조회할 감사 run의 UUID
+            field_names: 조회할 field_name 목록. MANUAL_APPROVABLE_FIELDS와 교집합이
+                비어 있으면 DB 조회 없이 빈 리스트 반환.
+
+        Returns:
+            proposed 상태이고 field_names∩MANUAL_APPROVABLE_FIELDS에 속하는 finding 레코드 리스트
+
+        Raises:
+            RuntimeError: 부분 조회 실패(1,000행 제한 초과 가능성)
+        """
+        allowed_field_names = [name for name in field_names if name in MANUAL_APPROVABLE_FIELDS]
+        if not allowed_field_names:
+            return []
+
+        all_findings: list[dict[str, object]] = []
+        page_size = 1000
+        offset = 0
+
+        while True:
+            result = (
+                self._schema.table("font_audit_findings")
+                .select("*")
+                .eq("run_id", str(run_id))
+                .eq("status", "proposed")
+                .in_("field_name", allowed_field_names)
                 .order("id", desc=False)
                 .range(offset, offset + page_size - 1)
                 .execute()
