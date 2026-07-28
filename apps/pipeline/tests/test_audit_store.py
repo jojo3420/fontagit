@@ -6,7 +6,24 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from fontagit_pipeline.audit_store import SupabaseAuditStore
+from fontagit_pipeline.audit_store import MANUAL_APPROVABLE_FIELDS, SupabaseAuditStore
+
+# 별도 사람 게이트 절차가 필요한 legal 필드 - MANUAL_APPROVABLE_FIELDS에 절대 포함되면 안 된다
+# (이슈 #128, 감사 findings 사람 승인 경로).
+_LEGAL_FIELDS = frozenset(
+    {
+        "allow_commercial",
+        "allow_modify",
+        "allow_redistribute",
+        "allow_embedding",
+        "allow_font_sale",
+        "attribution_requirement",
+        "license_source_kind",
+        "license_status",
+        "license_verified",
+        "is_commercial_free",
+    }
+)
 
 
 def _query(data: list[dict[str, object]]) -> MagicMock:
@@ -157,14 +174,14 @@ def test_approve_finding_raises_on_nonexistent_finding() -> None:
 
 
 def test_approve_finding_raises_on_legal_field() -> None:
-    """download_url(legal) 필드는 승인 대상이 아님."""
+    """allow_commercial(legal) 필드는 MANUAL_APPROVABLE_FIELDS에 없어 승인 대상이 아님."""
     finding_id = "00000000-0000-0000-0000-000000000903"
 
     select_response = _query(
         [
             {
                 "id": finding_id,
-                "field_name": "download_url",  # legal field
+                "field_name": "allow_commercial",  # legal field
                 "status": "proposed",
             }
         ]
@@ -230,6 +247,106 @@ def test_approve_finding_raises_on_zero_affected_rows() -> None:
     store = SupabaseAuditStore(client)
     with pytest.raises(ValueError, match="동시성 충돌"):
         store.approve_finding(UUID(finding_id), reviewed_by="test_user")
+
+
+def test_manual_approvable_fields_excludes_legal_fields() -> None:
+    """MANUAL_APPROVABLE_FIELDS에는 legal 필드 10종이 하나도 없어야 한다.
+
+    legal 필드는 별도 사람 게이트 절차가 필요하고 이번 사람 승인 경로(이슈 #128)의
+    범위가 아니다 - 이 단언이 깨지면 legal 필드가 실수로 승인 대상에 섞여 들어간 것이다.
+    """
+    assert MANUAL_APPROVABLE_FIELDS.isdisjoint(_LEGAL_FIELDS)
+
+
+def test_manual_approvable_fields_contains_expected_metadata_fields() -> None:
+    """MANUAL_APPROVABLE_FIELDS는 기존 tags/weights + 신규 5개 필드로 정확히 구성된다."""
+    assert MANUAL_APPROVABLE_FIELDS == {
+        "tags",
+        "weights",
+        "foundry",
+        "foundry_url",
+        "download_url",
+        "download_source_kind",
+        "license_source_url",
+    }
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ["foundry", "foundry_url", "download_url", "download_source_kind", "license_source_url"],
+)
+def test_approve_finding_accepts_new_manual_approvable_fields(field_name: str) -> None:
+    """이슈 #128 - Tier A archive findings 5필드는 approve_finding으로 승인 가능해야 한다."""
+    finding_id = "00000000-0000-0000-0000-000000000907"
+
+    select_response = _query(
+        [
+            {
+                "id": finding_id,
+                "field_name": field_name,
+                "status": "proposed",
+            }
+        ]
+    )
+    update_response = _query([{"id": finding_id}])
+
+    schema = MagicMock()
+    schema.table.side_effect = [select_response, update_response]
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+    # 호출 시 ValueError 발생 안 함
+    store.approve_finding(UUID(finding_id), reviewed_by="test_user")
+
+
+def test_get_proposed_findings_by_fields_filters_status_and_fields() -> None:
+    """get_proposed_findings_by_fields(run_id, field_names)는 지정 필드의 proposed만 반환."""
+    run_id = UUID("00000000-0000-0000-0000-000000000920")
+
+    findings_data = [
+        {
+            "id": "00000000-0000-0000-0000-000000000921",
+            "run_id": str(run_id),
+            "field_name": "foundry",
+            "status": "proposed",
+        },
+        {
+            "id": "00000000-0000-0000-0000-000000000922",
+            "run_id": str(run_id),
+            "field_name": "download_url",
+            "status": "proposed",
+        },
+    ]
+
+    select_response = _query(findings_data)
+    schema = MagicMock()
+    schema.table.return_value = select_response
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+    results = store.get_proposed_findings_by_fields(run_id, ["foundry", "download_url"])
+
+    assert len(results) == 2
+    assert {row["field_name"] for row in results} == {"foundry", "download_url"}
+    select_response.in_.assert_called_with("field_name", ["foundry", "download_url"])
+    select_response.eq.assert_any_call("status", "proposed")
+
+
+def test_get_proposed_findings_by_fields_empty_field_names_skips_query() -> None:
+    """field_names가 비어 있으면 DB 조회 없이 빈 리스트를 반환한다."""
+    run_id = UUID("00000000-0000-0000-0000-000000000923")
+
+    schema = MagicMock()
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    store = SupabaseAuditStore(client)
+    results = store.get_proposed_findings_by_fields(run_id, [])
+
+    assert results == []
+    schema.table.assert_not_called()
 
 
 def test_get_run_returns_correct_audit_run() -> None:
