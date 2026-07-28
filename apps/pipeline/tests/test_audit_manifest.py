@@ -313,6 +313,128 @@ def test_evidence_role_is_valid_tags_noonnu_missing_evidence_role() -> None:
     assert _evidence_role_is_valid("tags", snapshot, "reference") is False
 
 
+_NOONNU_SCRIPT_EVIDENCE = {
+    "source_kind": "noonnu",
+    "document_kind": "metadata",
+    "extracted": {"evidence_role": "font-file-script"},
+}
+_TIER_A_EVIDENCE = {
+    "source_kind": "archive",  # 이슈 #133: Tier A 스냅샷 저장 등급
+    "provider": "google-fonts",
+    "document_kind": "metadata",
+    "extracted": {"evidence_role": "tier-a-metadata-pb"},
+}
+_REFERENCE_EVIDENCE_TEST_FIELDS = (
+    "foundry",
+    "foundry_url",
+    "download_url",
+    "download_source_kind",
+    "license_source_url",
+)
+
+
+@pytest.mark.parametrize("snapshot", [_NOONNU_SCRIPT_EVIDENCE, _TIER_A_EVIDENCE], ids=["noonnu", "tier_a"])
+@pytest.mark.parametrize("field_name", _REFERENCE_EVIDENCE_TEST_FIELDS)
+def test_evidence_role_is_valid_reference_fields_allow_noonnu_and_tier_a(
+    field_name: str, snapshot: dict[str, object]
+) -> None:
+    """이슈 #131: foundry/foundry_url/download_url/download_source_kind/license_source_url은
+    눈누 font-file-script 및 Tier A(google-fonts) metadata를 reference 신뢰도로 허용한다."""
+    assert _evidence_role_is_valid(field_name, snapshot, "reference") is True
+    # confidence가 reference가 아니면(예: official) 여전히 거부된다.
+    assert _evidence_role_is_valid(field_name, snapshot, "official") is False
+
+
+@pytest.mark.parametrize("snapshot", [_NOONNU_SCRIPT_EVIDENCE, _TIER_A_EVIDENCE], ids=["noonnu", "tier_a"])
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "license_source_kind",
+        "allow_commercial",
+        "license_verified",
+        "allow_modify",
+        "allow_redistribute",
+        "allow_embedding",
+        "allow_font_sale",
+        "attribution_requirement",
+        "is_commercial_free",
+    ],
+)
+def test_evidence_role_is_valid_protected_fields_reject_reference_evidence(
+    field_name: str, snapshot: dict[str, object]
+) -> None:
+    """legal 필드(allow_*)와 license_source_kind는 눈누/Tier A reference 우회 대상이 아니다."""
+    assert _evidence_role_is_valid(field_name, snapshot, "reference") is False
+
+
+def test_evidence_role_is_valid_tier_a_rejects_non_google_fonts_provider() -> None:
+    """이슈 #133: provider가 google-fonts가 아니면 Tier A 우회가 성립하지 않는다."""
+    snapshot = {**_TIER_A_EVIDENCE, "source_kind": "public", "provider": "some-other-provider"}
+    assert _evidence_role_is_valid("foundry_url", snapshot, "reference") is False
+
+
+def test_evidence_role_is_valid_public_metadata_without_tier_a_marker_rejects_reference() -> None:
+    """이슈 #133: public metadata라도 tier-a-metadata-pb 마커가 없으면 reference 우회가 되지 않는다."""
+    snapshot = {
+        "source_kind": "public",
+        "provider": "google-fonts",
+        "document_kind": "metadata",
+        "extracted": {},  # evidence_role 없음
+    }
+    assert _evidence_role_is_valid("foundry_url", snapshot, "reference") is False
+
+
+@pytest.mark.parametrize("field_name", ["name_en", "tags", "weights"])
+def test_evidence_role_is_valid_tier_a_archive_does_not_leak_into_non_reference_fields(
+    field_name: str,
+) -> None:
+    """회귀 잠금(이슈 #131): archive 등급 Tier A 스냅샷은 _REFERENCE_EVIDENCE_FIELDS 5개
+    바깥의 name_en/tags/weights를 confidence="public"으로 승인시키지 못한다.
+    SourceKind에 "archive"를 추가해도 allowed_source_kinds={"official","public"} 분기는
+    그대로 archive를 거부해야 한다."""
+    assert _evidence_role_is_valid(field_name, _TIER_A_EVIDENCE, "public") is False
+
+
+@pytest.mark.parametrize("field_name", _REFERENCE_EVIDENCE_TEST_FIELDS)
+def test_evidence_role_is_valid_legacy_public_tier_a_marker_still_allows_reference(
+    field_name: str,
+) -> None:
+    """회귀 잠금(이슈 #131): archive 등급 도입 이전에 source_kind="public"으로 저장된
+    Tier A(google-fonts) 레거시 스냅샷도 tier-a-metadata-pb 마커만 있으면 여전히
+    reference 신뢰도로 5개 필드를 승인한다(과거 데이터 호환)."""
+    legacy_snapshot = {**_TIER_A_EVIDENCE, "source_kind": "public"}
+    assert _evidence_role_is_valid(field_name, legacy_snapshot, "reference") is True
+
+
+def test_build_manifest_accepts_reference_evidence_for_link_role_fields() -> None:
+    """이슈 #131: foundry/foundry_url/download_url/download_source_kind/license_source_url이
+    눈누 font-file-script metadata 근거(reference 신뢰도)로 정상 승인된다."""
+    row = deepcopy(_row())
+    row["evidence_snapshots"][0].update(_NOONNU_SCRIPT_EVIDENCE)
+    row["evidence_snapshots"][1].update(_NOONNU_SCRIPT_EVIDENCE)
+
+    findings = []
+    for offset, (field_name, proposed) in enumerate(
+        (
+            ("foundry", "네이버"),
+            ("foundry_url", "https://hangeul.naver.com/fonts"),
+            ("download_url", "https://fonts.google.com/specimen/Noto+Sans"),
+            ("download_source_kind", "archive"),
+            (
+                "license_source_url",
+                "https://raw.githubusercontent.com/google/fonts/main/ofl/notosans/LICENSE.txt",
+            ),
+        )
+    ):
+        finding = _finding(field_name, None, proposed)
+        finding["id"] = str(UUID(int=FINDING_ID.int + 10 + offset))
+        finding["confidence"] = "reference"
+        findings.append(finding)
+
+    bundle = build_manifest(_run(), findings, [row])
+    assert set(bundle.forward.entries[0].after) == set(_REFERENCE_EVIDENCE_TEST_FIELDS)
+
+
 def test_build_manifest_snapshot_run_id_invalid_uuid() -> None:
     """비정상: snapshot run_id가 유효한 UUID가 아니면 ManifestError."""
     row = deepcopy(_row())

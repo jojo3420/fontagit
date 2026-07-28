@@ -132,14 +132,59 @@ class ManifestError(ValueError):
     """manifest가 안전하게 생성-검증될 수 없을 때 발생한다."""
 
 
+# foundry/download/license_source_url은 링크-표기 등급이며 legal 필드(allow_*)나
+# license_source_kind와 달리 사람 검수 전 reference 신뢰도 근거(눈누 font-file-script,
+# Tier A google/fonts METADATA.pb)를 허용한다. legal 필드는 절대 포함하지 않는다.
+_REFERENCE_EVIDENCE_FIELDS = frozenset(
+    {"foundry", "foundry_url", "download_url", "download_source_kind", "license_source_url"}
+)
+
+
+def _is_reference_metadata_evidence(snapshot: Mapping[str, object]) -> bool:
+    """눈누 font-file-script 또는 Tier A(google-fonts) metadata 스냅샷인지 판정한다.
+
+    tags/weights에 이미 허용된 눈누 예외와 같은 신뢰 수준으로,
+    _REFERENCE_EVIDENCE_FIELDS 5개 필드에 한해서만 사용한다.
+    """
+    if snapshot.get("document_kind") != "metadata":
+        return False
+    extracted = snapshot.get("extracted")
+    if not isinstance(extracted, Mapping):
+        return False
+    source_kind = snapshot.get("source_kind")
+    evidence_role = extracted.get("evidence_role")
+    if source_kind == "noonnu" and evidence_role == "font-file-script":
+        return True
+    if (
+        # Tier A(google-fonts) 스냅샷은 archive 등급으로 저장한다(이슈 #133).
+        # provider+evidence_role 마커로 판정하므로 archive여도 그대로 동작해야 하고,
+        # 과거 데이터 호환을 위해 public도 함께 허용한다.
+        source_kind in {"public", "archive"}
+        and snapshot.get("provider") == "google-fonts"
+        and evidence_role == "tier-a-metadata-pb"
+    ):
+        return True
+    return False
+
+
 def _evidence_role_is_valid(
     field_name: str, snapshot: Mapping[str, object], confidence: object
 ) -> bool:
+    # SQL(0023)의 5필드 우회는 additive(continue 후 아래 일반 분기로 진행)다.
+    # Python도 동일하게 조건 불충족 시 아래 일반 분기로 내려가야 1:1이 유지된다.
+    if (
+        field_name in _REFERENCE_EVIDENCE_FIELDS
+        and confidence == "reference"
+        and _is_reference_metadata_evidence(snapshot)
+    ):
+        return True
     if field_name.startswith("download_"):
         required_document = "download"
-        # font_source_snapshots.source_kind CHECK는 official/public/noonnu만 허용해
-        # archive는 스냅샷 근거로 절대 도달하지 않는다(archive 등급은 근거 없는
-        # reference finding으로만 생성됨). 여기 포함하면 죽은 코드가 된다.
+        # font_source_snapshots.source_kind CHECK는 0024부터 archive도 허용하지만,
+        # archive 등급 근거(Tier A google/fonts METADATA.pb)는 항상 confidence="reference"로만
+        # finding을 만든다(tier_a_meta.py) - 그 경로는 위 첫 if에서 이미 처리되어 여기까지
+        # 내려오지 않는다. 따라서 archive를 여기 포함해도 confidence!="official"/"public"인
+        # 경로로는 도달할 수 없어 죽은 코드가 된다.
         allowed_source_kinds = {"official", "public"}
     elif field_name.startswith("license_") or field_name in {
         "allow_commercial",

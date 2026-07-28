@@ -1,8 +1,9 @@
 """Tier A 공식 메타데이터 수집기 테스트."""
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fontagit_pipeline.audit_http import FetchResult
+from fontagit_pipeline.audit_metadata import derive_proposed_value
 from fontagit_pipeline.audit_policy import SourceRegistry, RegistryEntry
 from fontagit_pipeline.audit_store import InMemoryAuditStore
 from fontagit_pipeline.tier_a_meta import (
@@ -164,6 +165,98 @@ fonts {
     assert foundry_finding["proposed_value"] == "네이버"
     assert foundry_finding["auto_applicable"] is True
     assert result["errors"] == []
+
+    # 이슈 #131: dry_run=False면 Tier A 근거 스냅샷이 저장되고,
+    # 5개 finding 모두 같은 evidence_id(스냅샷 id)로 연결된다.
+    evidence_ids = {finding["evidence_id"] for finding in findings}
+    assert None not in evidence_ids
+    assert len(evidence_ids) == 1
+    snapshot_id = UUID(next(iter(evidence_ids)))
+    run_id_stored, snapshot = store.snapshot_draft(snapshot_id)
+    assert run_id_stored == run_id
+    assert snapshot.provider == "google-fonts"
+    assert snapshot.provider_record_id == "Noto Sans"
+    # 이슈 #133: google/fonts raw.githubusercontent.com 근거는 archive 등급으로 저장한다
+    # (public으로 저장하면 일반 metadata 승인 분기의 official/public 허용과 겹친다).
+    assert snapshot.source_kind == "archive"
+    assert snapshot.document_kind == "metadata"
+    assert snapshot.extracted["evidence_role"] == "tier-a-metadata-pb"
+
+    # 이슈 #133 재리뷰: extracted에는 designer/copyright 원문과 name_en/license_type/
+    # noonnu_foundry 식별자만 남고, 구성된 제안값(foundry/foundry_url/download_url/
+    # download_source_kind/license_source_url)은 담지 않는다. auto-approve CLI의 evidence
+    # 대조(derive_proposed_value)는 이 원문 근거로부터 각 필드를 독립 재계산해 수집기가
+    # 만든 제안값과 비교한다 - 같은 출처를 그대로 베껴 자기 자신과 비교하지 않는다.
+    assert "foundry" not in snapshot.extracted
+    assert "foundry_url" not in snapshot.extracted
+    assert "download_url" not in snapshot.extracted
+    assert "download_source_kind" not in snapshot.extracted
+    assert "license_source_url" not in snapshot.extracted
+    assert snapshot.extracted["name_en"] == "Noto Sans"
+    assert snapshot.extracted["license_type"] == "OFL"
+    assert snapshot.extracted["noonnu_foundry"] == "네이버"
+
+    proposed_by_field = {f["field_name"]: f["proposed_value"] for f in findings}
+    for field_name in (
+        "foundry",
+        "foundry_url",
+        "download_url",
+        "download_source_kind",
+        "license_source_url",
+    ):
+        assert derive_proposed_value(field_name, snapshot.extracted) == proposed_by_field[field_name]
+
+
+def test_collect_tier_a_meta_dry_run_skips_snapshot() -> None:
+    """이슈 #131: dry_run=True면 스냅샷을 저장하지 않고 evidence_id는 None으로 남는다."""
+    run_id = uuid4()
+    store = InMemoryAuditStore()
+    font_id = uuid4()
+
+    registry = SourceRegistry(
+        version=1,
+        entries=[
+            RegistryEntry(
+                maker="Google Fonts (archive)",
+                domain="fonts.google.com",
+                roles=["download", "homepage"],
+                source_kind="archive",
+            ),
+            RegistryEntry(
+                maker="google/fonts GitHub (archive)",
+                domain="raw.githubusercontent.com",
+                roles=["license", "metadata"],
+                source_kind="archive",
+            ),
+        ],
+    )
+    norm = BrandNormalization(entries=[])
+    targets = [
+        TierATarget(font_id=font_id, name_en="Noto Sans", license_type="OFL", noonnu_foundry=None)
+    ]
+
+    def fake_fetcher(url: str, **kwargs: object) -> FetchResult:
+        if "METADATA.pb" in url:
+            content = '''name: "Noto Sans"
+designer: "Google"
+license: "OFL"
+fonts {
+  copyright: "Copyright © 2012 Google Inc."
+}
+'''
+            return FetchResult(
+                status=200, final_url=url, content=content.encode(),
+                content_sha256="abc123", redirect_count=0,
+            )
+        return FetchResult(status=404, final_url=url, content=b"", content_sha256="def456", redirect_count=0)
+
+    result = collect_tier_a_meta(run_id, targets, store, registry, norm, dry_run=True, fetcher=fake_fetcher)
+
+    assert result["success_count"] == 1
+    assert store._snapshot_drafts == {}
+    assert store._finding_drafts == {}
+    for finding in result["findings"]:
+        assert finding["evidence_id"] is None
 
 
 def test_collect_tier_a_meta_fetch_failure() -> None:

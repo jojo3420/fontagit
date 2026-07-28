@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from fontagit_pipeline.__main__ import main_audit_review
+from fontagit_pipeline.tier_a_meta import BrandEntry, BrandNormalization
 
 
 def _mock_run(stage: str = "metadata") -> dict:
@@ -330,6 +331,65 @@ def test_audit_review_evidence_mismatch() -> None:
         assert result == 3, f"Expected exit code 3 but got {result}"
         # 첫 번째는 실패로 건너뛰고, 두 번째만 승인 호출
         assert mock_store.approve_finding.call_count == 1
+
+
+def test_audit_review_tier_a_evidence_mismatch_rejects_tampered_copyright() -> None:
+    """이슈 #133 재리뷰: Tier A(google-fonts) 근거 대조는 재계산 방식이라 스냅샷의
+    copyright가 변조/오염되면 수집기가 만든 제안값과 재계산 결과가 달라져 승인이 거부된다.
+
+    extracted에 제안값을 그대로 담아두던 예전 방식이면 이 테스트는 항상 통과해버린다
+    (자기 자신과 비교하는 꼴이라 대조가 자기 인증이 됨) - 그 회귀를 잠근다.
+    """
+    run = _mock_run()
+    evidence_id = str(uuid4())
+    finding = {
+        **_mock_finding(run["id"], "foundry", auto_applicable=True),
+        "evidence_id": evidence_id,
+        "proposed_value": "네이버",
+    }
+    # copyright를 변조: rights_holder가 "NHN Corporation"이 아닌 다른 값으로 파싱된다.
+    # "foundry": "네이버"는 예전 방식(수집기가 만든 제안값을 extracted에 그대로 저장)이었다면
+    # 남아있었을 값이다 - 재계산 없이 이 키를 그대로 읽으면 proposed_value와 자기 자신을
+    # 비교하는 꼴이라 항상 일치해버린다. 이 키가 있어도 새 코드는 무시하고 copyright로부터
+    # 독립 재계산하므로 실제로는 불일치가 드러나 승인이 거부되어야 한다.
+    tampered_extracted = {
+        "evidence_role": "tier-a-metadata-pb",
+        "designer": "Someone Else",
+        "copyright": "Copyright © 2020 Totally Different Corp.",
+        "name_en": "Nanum Gothic",
+        "license_type": "OFL",
+        "noonnu_foundry": "네이버",
+        "foundry": "네이버",
+    }
+    normalization = BrandNormalization(
+        entries=[
+            BrandEntry(
+                source_name="NHN Corporation",
+                display_name="네이버",
+                evidence_url="https://hangeul.naver.com/fonts",
+                status="approved",
+            )
+        ]
+    )
+
+    args = argparse.Namespace(action="auto-approve", run_id=run["id"], reviewed_by="auto")
+
+    with (
+        patch("fontagit_pipeline.audit_store.SupabaseAuditStore.from_dev_credentials") as mock_store_ctor,
+        patch("fontagit_pipeline.tier_a_meta.load_brand_normalization", return_value=normalization),
+    ):
+        mock_store = MagicMock()
+        mock_store.get_run.return_value = run
+        mock_store.get_proposed_findings.return_value = [finding]
+        mock_store._schema.table.return_value.select.return_value.in_.return_value.execute.return_value.data = [
+            {"id": evidence_id, "extracted": tampered_extracted},
+        ]
+        mock_store_ctor.return_value = mock_store
+
+        result = main_audit_review(args)
+
+        assert result == 3, f"Expected exit code 3 but got {result}"
+        mock_store.approve_finding.assert_not_called()
 
 
 def test_audit_review_missing_evidence_fails_closed() -> None:
