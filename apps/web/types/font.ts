@@ -65,6 +65,7 @@ export interface Font {
   priceFrom?: number;
   status?: "draft" | "published" | "archived" | "hold" | "discontinued";
   subsets: string[]; // 예: ["korean"], ["latin"], ["korean", "latin"]
+  createdAt?: string;
 }
 
 export interface TrendItem {

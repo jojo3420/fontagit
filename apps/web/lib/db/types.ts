@@ -37,6 +37,7 @@ export interface FontRow {
   script_status?: ScriptStatus;
   script_checked_at?: string | null;
   script_evidence_id?: string | null;
+  created_at?: string;
 }
 
 export interface AliasRow {
