@@ -208,6 +208,47 @@ class TestExtractFontData:
         _, _, _, official_url = result
         assert official_url == "https://clova.ai/handwriting/list.html"
 
+    def test_extract_official_url_blocks_uppercase_noonnu_domain(self) -> None:
+        """대소문자 표기가 섞인 눈누 자체 링크도 차단 목록에 걸려야 한다(HIGH 회귀)."""
+        html = """
+<html>
+    <body>
+        <h1>테스트폰트</h1>
+        <div>Foundry: Test Maker</div>
+        <div class="noon-page-content">
+            <a href="https://INSTAGRAM.COM/noonnu_official">인스타그램(대문자)</a>
+            <a href="https://Instagram.Com/Noonnu_Official">인스타그램(혼합)</a>
+        </div>
+    </body>
+</html>
+"""
+        result = _extract_font_data(html, "https://noonnu.cc/font_page/604")
+        assert result is not None
+        _, _, _, official_url = result
+        assert official_url is None
+
+    def test_extract_official_url_ignores_asset_link_with_query_string(
+        self,
+    ) -> None:
+        """쿼리스트링이 붙은 에셋 URL(.png?v=1 등)도 제외되어야 한다(LOW 회귀)."""
+        html = """
+<html>
+    <body>
+        <h1>테스트폰트</h1>
+        <div>Foundry: Test Maker</div>
+        <div class="noon-page-content">
+            <a href="https://cdn.example.com/logo.png?v=1">로고 이미지</a>
+            <a href="https://cdn.example.com/style.css?hash=abc">스타일시트</a>
+            <a href="https://clova.ai/handwriting/list.html">공식 홈페이지</a>
+        </div>
+    </body>
+</html>
+"""
+        result = _extract_font_data(html, "https://noonnu.cc/font_page/605")
+        assert result is not None
+        _, _, _, official_url = result
+        assert official_url == "https://clova.ai/handwriting/list.html"
+
 
 class TestCleanFontName:
     """폰트 이름 정리 테스트."""

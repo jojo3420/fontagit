@@ -7,6 +7,7 @@ import json
 import logging
 import re
 import time
+from urllib.parse import urlsplit
 from urllib.robotparser import RobotFileParser
 from xml.etree import ElementTree
 from datetime import datetime, timezone
@@ -212,12 +213,18 @@ def _extract_official_url(content_container: Tag, source_url: str) -> Optional[s
         if not href.startswith(("http://", "https://")):
             continue
 
+        # 대소문자 표기 차이(INSTAGRAM.COM 등)에도 차단/에셋 검사가 동일하게
+        # 동작하도록 소문자 정규화 후 재사용한다.
+        href_lower = href.lower()
+
         # 눈누 자체 도메인/SNS/폼(2차 방어).
-        if any(blocked in href for blocked in _NOONNU_OWN_LINK_BLOCKLIST):
+        if any(blocked in href_lower for blocked in _NOONNU_OWN_LINK_BLOCKLIST):
             continue
 
         # 이미지/폰트/스타일 등 에셋 링크는 제작사 사이트가 아니다.
-        if href.lower().endswith(_ASSET_LINK_EXTENSIONS):
+        # 쿼리스트링/프래그먼트(.png?v=1 등)에 속지 않도록 path만 떼어 검사한다.
+        asset_path = urlsplit(href_lower).path
+        if asset_path.endswith(_ASSET_LINK_EXTENSIONS):
             continue
 
         return href
