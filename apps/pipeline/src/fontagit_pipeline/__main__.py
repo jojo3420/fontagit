@@ -180,7 +180,7 @@ def main_noonnu_url_scan(args: argparse.Namespace) -> int:
     종료 코드:
         0: 성공, 재시도 대상 없이 전부 처리됨.
         1: CLI 인자 검증 실패(음수 --limit, --state와 --out 경로 동일).
-        2: supabase_url/secret_key 설정 없음.
+        2: --target 환경의 supabase_url/secret_key 설정 없음.
         3: 예상치 못한 오류.
         4: no_container 비율이 임계치를 넘어 구조 가정이 깨진 것으로 판단.
         5: robots.txt 거부 또는 회로차단기 발동으로 스캔 중단(부분 리포트 기록됨).
@@ -216,11 +216,22 @@ def _run_url_scan(args: argparse.Namespace) -> int:
 
     from supabase import create_client
 
-    settings = load_settings()
-    if not settings.supabase_url or not settings.supabase_secret_key:
-        logger.error("supabase_url 또는 supabase_secret_key가 없습니다")
+    from fontagit_pipeline.config import load_audit_settings
+
+    settings = load_audit_settings()
+    if args.target == "prod":
+        url, secret = settings.supabase_prod_url, settings.supabase_prod_secret_key
+    else:
+        url, secret = settings.supabase_dev_url, settings.supabase_dev_secret_key
+    if not url or not secret:
+        logger.error(
+            "%s 환경의 supabase_%s_url 또는 supabase_%s_secret_key가 없습니다",
+            args.target,
+            args.target,
+            args.target,
+        )
         return 2
-    client = create_client(settings.supabase_url, settings.supabase_secret_key)
+    client = create_client(url, secret)
     targets = load_scan_targets(client)
     if args.limit:
         targets = targets[: args.limit]
@@ -1959,6 +1970,9 @@ if __name__ == "__main__":
     url_scan_parser = subparsers.add_parser(
         "noonnu-url-scan",
         help="눈누 Tier B 공식 URL 전수 대조 (읽기 전용)",
+    )
+    url_scan_parser.add_argument(
+        "--target", choices=["dev", "prod"], required=True, help="대상 환경"
     )
     url_scan_parser.add_argument(
         "--state", type=Path, required=True, help="진행 상태 JSONL 경로 (재개용)"

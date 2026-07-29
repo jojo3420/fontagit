@@ -585,7 +585,9 @@ def test_main_rejects_negative_limit() -> None:
 
     from fontagit_pipeline.__main__ import main_noonnu_url_scan
 
-    args = argparse.Namespace(state=Path("s.jsonl"), out=Path("o.json"), limit=-1)
+    args = argparse.Namespace(
+        target="dev", state=Path("s.jsonl"), out=Path("o.json"), limit=-1
+    )
 
     assert main_noonnu_url_scan(args) != 0
 
@@ -597,7 +599,7 @@ def test_main_rejects_same_state_and_out_path(tmp_path: Path) -> None:
     from fontagit_pipeline.__main__ import main_noonnu_url_scan
 
     same_path = tmp_path / "same.jsonl"
-    args = argparse.Namespace(state=same_path, out=same_path, limit=0)
+    args = argparse.Namespace(target="dev", state=same_path, out=same_path, limit=0)
 
     assert main_noonnu_url_scan(args) != 0
 
@@ -622,11 +624,14 @@ def test_main_returns_nonzero_when_retryable_records_remain(tmp_path: Path) -> N
         "retryable_font_ids": ["font-1"],
     }
     args = argparse.Namespace(
-        state=tmp_path / "state.jsonl", out=tmp_path / "report.json", limit=0
+        target="dev",
+        state=tmp_path / "state.jsonl",
+        out=tmp_path / "report.json",
+        limit=0,
     )
 
     with (
-        patch("fontagit_pipeline.__main__.load_settings") as mock_settings,
+        patch("fontagit_pipeline.config.load_audit_settings") as mock_settings,
         patch("supabase.create_client"),
         patch("fontagit_pipeline.__main__.load_scan_targets", return_value=[_target()]),
         patch("fontagit_pipeline.__main__.build_robots_checker", return_value=lambda url: True),
@@ -634,11 +639,128 @@ def test_main_returns_nonzero_when_retryable_records_remain(tmp_path: Path) -> N
         patch("fontagit_pipeline.__main__.summarize", return_value=fake_summary),
     ):
         mock_settings.return_value = MagicMock(
-            supabase_url="https://test.supabase.co", supabase_secret_key="secret"
+            supabase_dev_url="https://test.supabase.co",
+            supabase_dev_secret_key="secret",
+            supabase_prod_url=None,
+            supabase_prod_secret_key=None,
         )
         result = main_noonnu_url_scan(args)
 
     assert result != 0
+
+
+def test_cli_rejects_noonnu_url_scan_without_target(tmp_path: Path) -> None:
+    """--target 없이 noonnu-url-scan을 호출하면 argparse가 거부한다."""
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "fontagit_pipeline",
+            "noonnu-url-scan",
+            "--state",
+            str(tmp_path / "state.jsonl"),
+            "--out",
+            str(tmp_path / "report.json"),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "--target" in result.stderr
+
+
+def test_main_reads_dev_credentials_when_target_is_dev(tmp_path: Path) -> None:
+    """--target dev면 supabase_dev_url/supabase_dev_secret_key로 client를 만든다."""
+    import argparse
+    from unittest.mock import MagicMock, patch
+
+    from fontagit_pipeline.__main__ import main_noonnu_url_scan
+
+    args = argparse.Namespace(
+        target="dev",
+        state=tmp_path / "state.jsonl",
+        out=tmp_path / "report.json",
+        limit=0,
+    )
+
+    with (
+        patch("fontagit_pipeline.config.load_audit_settings") as mock_settings,
+        patch("supabase.create_client") as mock_create_client,
+        patch("fontagit_pipeline.__main__.load_scan_targets", return_value=[]),
+        patch("fontagit_pipeline.__main__.build_robots_checker", return_value=lambda url: True),
+        patch("fontagit_pipeline.__main__.scan_targets", return_value=[]),
+    ):
+        mock_settings.return_value = MagicMock(
+            supabase_dev_url="https://dev.supabase.co",
+            supabase_dev_secret_key="dev-secret",
+            supabase_prod_url="https://prod.supabase.co",
+            supabase_prod_secret_key="prod-secret",
+        )
+        main_noonnu_url_scan(args)
+
+    mock_create_client.assert_called_once_with("https://dev.supabase.co", "dev-secret")
+
+
+def test_main_reads_prod_credentials_when_target_is_prod(tmp_path: Path) -> None:
+    """--target prod면 supabase_prod_url/supabase_prod_secret_key로 client를 만든다."""
+    import argparse
+    from unittest.mock import MagicMock, patch
+
+    from fontagit_pipeline.__main__ import main_noonnu_url_scan
+
+    args = argparse.Namespace(
+        target="prod",
+        state=tmp_path / "state.jsonl",
+        out=tmp_path / "report.json",
+        limit=0,
+    )
+
+    with (
+        patch("fontagit_pipeline.config.load_audit_settings") as mock_settings,
+        patch("supabase.create_client") as mock_create_client,
+        patch("fontagit_pipeline.__main__.load_scan_targets", return_value=[]),
+        patch("fontagit_pipeline.__main__.build_robots_checker", return_value=lambda url: True),
+        patch("fontagit_pipeline.__main__.scan_targets", return_value=[]),
+    ):
+        mock_settings.return_value = MagicMock(
+            supabase_dev_url="https://dev.supabase.co",
+            supabase_dev_secret_key="dev-secret",
+            supabase_prod_url="https://prod.supabase.co",
+            supabase_prod_secret_key="prod-secret",
+        )
+        main_noonnu_url_scan(args)
+
+    mock_create_client.assert_called_once_with("https://prod.supabase.co", "prod-secret")
+
+
+def test_main_reports_missing_target_credentials(tmp_path: Path) -> None:
+    """--target 환경의 url/secret 중 하나라도 비어 있으면 exit 2를 낸다."""
+    import argparse
+    from unittest.mock import MagicMock, patch
+
+    from fontagit_pipeline.__main__ import main_noonnu_url_scan
+
+    args = argparse.Namespace(
+        target="prod",
+        state=tmp_path / "state.jsonl",
+        out=tmp_path / "report.json",
+        limit=0,
+    )
+
+    with patch("fontagit_pipeline.config.load_audit_settings") as mock_settings:
+        mock_settings.return_value = MagicMock(
+            supabase_dev_url="https://dev.supabase.co",
+            supabase_dev_secret_key="dev-secret",
+            supabase_prod_url=None,
+            supabase_prod_secret_key=None,
+        )
+        result = main_noonnu_url_scan(args)
+
+    assert result == 2
 
 
 def test_fetch_scan_html_preserves_status_code_for_backoff(tmp_path: Path) -> None:
