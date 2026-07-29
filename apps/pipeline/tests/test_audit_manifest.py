@@ -180,7 +180,7 @@ def test_manifest_rejects_unapproved_forbidden_stale_or_unbound_evidence(
 ) -> None:
     proposed = _finding("download_url", None, "https://clova.ai/font.zip")
     proposed["status"] = "proposed"
-    forbidden = _finding("official_url", "https://instagram.com/wrong-old-link", "https://clova.ai")
+    forbidden = _finding("slug", "old-slug", "new-slug")
     stale = _finding("download_status", "verified", "needs_review")
 
     for finding, message in (
@@ -289,6 +289,13 @@ def test_manifest_rejects_unapproved_forbidden_stale_or_unbound_evidence(
     )
     with pytest.raises(ManifestError, match="manifest JSON"):
         verify_manifest_file(paths.forward, paths.forward_sha256)
+
+
+def test_manifest_rejects_official_url_nullify() -> None:
+    """official_url은 fonts.official_url이 NOT NULL이라 다른 URL 필드와 달리 nullify를 거부한다."""
+    finding = _finding("official_url", "https://instagram.com/wrong-old-link", None)
+    with pytest.raises(ManifestError, match="official_url"):
+        build_manifest(_run(), [finding], [_row()])
 
 
 def test_evidence_role_is_valid_tags_noonnu_font_file_script_reference() -> None:
