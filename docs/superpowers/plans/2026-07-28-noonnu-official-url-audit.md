@@ -1373,7 +1373,7 @@ Expected: 약 20-30분 소요. 종료 코드 0. 중단되면 같은 명령을 �
 - `license_source_url`: 같은 값으로 정정
 - `license_verified`: 설계 문서의 정책표에 따라 결정. 새 URL이 제작사 공식 도메인이지만 라이선스 문구를 확인하지 않았다면 `false`
 
-`nullify` 건은 세 필드를 각각 빈 값과 `false`로 만든다. `manual_review`와 `keep`은 manifest에 넣지 않는다.
+`nullify` 건은 manifest에 넣지 않는다(정정 2026-07-29): `fonts.official_url`이 NOT NULL 컬럼이라 비움 자체가 불가능하다. `license_source_url`(nullable)과 `license_verified=false`만 정책표대로 조정할지, NULL 전환(0027 제약 완화)까지 갈지는 스캔 리포트의 분포를 보고 별도 결정한다. 그 전까지 nullify 판정 건은 보류 목록으로 리포트에만 남긴다. `manual_review`와 `keep`도 manifest에 넣지 않는다.
 
 - [ ] **Step 5: dev에 적용하고 쓰기 후 재조회로 확인한다**
 

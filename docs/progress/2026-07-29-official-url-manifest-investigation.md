@@ -56,6 +56,30 @@ null_official=0, has_official=1240, total=1240
 
 적용 순서는 `0021 → 0022 → 0023 → 0024 → 0025 → 0026`이다. 건너뛰면 실패한다(#134 기록).
 
+## 정정 (2026-07-29, 로컬 실측 후)
+
+위 "발견"과 "결론"의 두 주장이 **실측으로 반박됐다.** Task 6 구현자가 로컬 PostgreSQL(0001~0026 적용)에서 nullify manifest를 실제로 넣어본 결과다.
+
+- "nullify는 한 번은 적용되고 그다음부터 막힌다" → **틀림.** `fonts.official_url`은 `0001_fontagit_schema.sql`부터 **NOT NULL**이라 nullify는 애초에 UPDATE 단계에서 제약 위반으로 항상 실패한다. prod `information_schema` 재확인으로도 `is_nullable=NO`.
+- "낙관적 잠금의 NULL 함정" → jsonb 의미론 자체는 맞지만(위 실측 3건 유효) **발동 조건이 성립 불가**하다. NULL인 행이 존재할 수 없기 때문이다. `0025`가 이 줄에 coalesce를 안 붙인 것은 누락이 아니라 NOT NULL 컬럼이라 불필요했던 것으로 보는 게 맞다.
+
+내 오류의 원인: prod에서 "NULL 0건"을 확인하고도 **왜 0건인지**(제약 때문인지 우연인지)를 컬럼 정의에서 확인하지 않고 데이터 분포로만 해석했다.
+
+추가 사실: `license_source_url`은 **nullable**이다. 두 필드의 정정 정책이 달라야 한다.
+
+- `official_url`: 교체만 가능. 비움 불가 (제약이 안전장치)
+- `license_source_url`: 정책표대로 비울 수 있음 (기존 value_valid도 null 허용)
+
+### 수정된 0026 범위 (4곳, 잠금 변경 철회)
+
+1. `v_allowed`에 `official_url` 추가
+2. `_audit_manifest_value_valid`에 official_url **별도 분기** (`string`만 허용, null 불허 — "nullify 미지원"을 계약 수준에 새김)
+3. `_audit_font_value`에 official_url case 추가 (NOT NULL이므로 coalesce 없이)
+4. UPDATE 절에 official_url 반영
+- ~~낙관적 잠금 coalesce~~ 철회: NULL 불가 컬럼이라 죽은 코드가 됨. 대신 테스트에 tripwire를 둔다 — NOT NULL 제약이 존재하는지 assert하고, 제약을 풀 때는 잠금 coalesce를 함께 넣어야 한다는 의존성을 주석으로 남긴다
+
+nullify 판정(`recommended_action=nullify`) 건은 정정 manifest에서 제외하고 보류 목록으로 보고한다. NULL 전환이 정말 필요하다고 스캔 리포트 이후 결정되면 그때 0027(제약 완화 + 잠금 coalesce + 웹 화면 영향 검토)로 별도 진행한다.
+
 ## 별건: CLI 설정 배선이 어긋나 있다
 
 Task 4 Step 6(실제 DB 소규모 실행)이 실패한 원인을 찾았다. 자격증명이 없어서가 아니라 **읽는 키가 다르다.**
