@@ -27,7 +27,7 @@ _DETAIL_HTML = """
   <header><a href="https://www.instagram.com/noonnu_official/">눈누</a></header>
   <div data-font-detail>
     <h1>효남 늘 화이팅</h1>
-    <a href="https://clova.ai/handwriting/list.html">다운로드 페이지로 이동</a>
+    <a href="https://example-foundry.test/download">다운로드 페이지로 이동</a>
   </div>
 </body></html>
 """
@@ -64,7 +64,7 @@ def test_scan_produces_verdict_per_target(tmp_path: Path) -> None:
     # 없어 foundry_ok가 성립하지 않으므로, 두 근거를 모두 요구하는
     # judge_official_url은 자동수정이 아니라 사람 확인으로 보낸다.
     assert records[0].recommended_action == "manual_review"
-    assert records[0].new_official_url == "https://clova.ai/handwriting/list.html"
+    assert records[0].new_official_url == "https://example-foundry.test/download"
 
 
 def test_scan_skips_already_recorded_targets(tmp_path: Path) -> None:
