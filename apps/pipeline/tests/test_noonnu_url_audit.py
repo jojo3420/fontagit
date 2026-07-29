@@ -90,13 +90,64 @@ def test_anchor_and_foundry_match_makes_auto_fix_safe() -> None:
 
 
 def test_anchor_only_evidence_requires_manual_review() -> None:
-    """앵커 근거만 있고 제작사 도메인 매칭이 없으면 자동 정정하지 않는다 (AND 조건)."""
+    """앵커 근거만 있고 제작사 도메인 매칭도 등록부 매칭도 없으면 자동 정정하지 않는다 (AND 조건).
+
+    official_url은 등록부(_VERIFIED_FOUNDRY_HOSTS)에 없는 도메인으로 골라
+    검증된 제작사 호스트 조건과 섞이지 않게 한다.
+    """
+    verdict = judge_official_url(
+        _snapshot(foundry="네이버", official_url="https://example.com/handwriting/list.html"),
+        db_official_url="https://www.instagram.com/noonnu_official/",
+        db_license_source_url="https://www.instagram.com/noonnu_official/",
+    )
+    assert verdict.recommended_action == "manual_review"
+
+
+def test_verified_foundry_host_makes_auto_fix_safe_with_korean_foundry_name() -> None:
+    """등록부에 있는 호스트면 한글 제작사명이라 도메인 문자열 매칭이 안 돼도 자동 정정한다."""
     verdict = judge_official_url(
         _snapshot(foundry="네이버", official_url="https://clova.ai/handwriting/list.html"),
         db_official_url="https://www.instagram.com/noonnu_official/",
         db_license_source_url="https://www.instagram.com/noonnu_official/",
     )
+    assert verdict.recommended_action == "auto_fix_safe"
+
+
+def test_anchor_with_unverified_platform_host_still_requires_manual_review() -> None:
+    """notion.site처럼 등록부에 없는 플랫폼 호스팅 도메인은 앵커가 있어도 자동 정정하지 않는다."""
+    verdict = judge_official_url(
+        _snapshot(
+            foundry="Yanadoo Corp",
+            official_url="https://yafitmove.notion.site/move-sans",
+        ),
+        db_official_url="https://www.instagram.com/noonnu_official/",
+        db_license_source_url="https://www.instagram.com/noonnu_official/",
+    )
     assert verdict.recommended_action == "manual_review"
+
+
+def test_verified_foundry_host_without_anchor_requires_manual_review() -> None:
+    """앵커 근거가 없으면 등록부 호스트여도 자동 정정하지 않는다 (앵커는 여전히 필수)."""
+    verdict = judge_official_url(
+        _snapshot(
+            foundry="네이버",
+            official_url="https://clova.ai/handwriting/list.html",
+            official_url_anchor_text="자세히",
+        ),
+        db_official_url="https://www.instagram.com/noonnu_official/",
+        db_license_source_url="https://www.instagram.com/noonnu_official/",
+    )
+    assert verdict.recommended_action == "manual_review"
+
+
+def test_verified_foundry_host_matches_subdomain() -> None:
+    """등록부 호스트의 서브도메인도 검증된 것으로 인정한다."""
+    verdict = judge_official_url(
+        _snapshot(foundry="이민서", official_url="https://galmuri.quiple.dev/font"),
+        db_official_url="https://www.instagram.com/noonnu_official/",
+        db_license_source_url="https://www.instagram.com/noonnu_official/",
+    )
+    assert verdict.recommended_action == "auto_fix_safe"
 
 
 def test_weak_evidence_requires_manual_review() -> None:

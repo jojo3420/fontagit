@@ -52,6 +52,47 @@ _CONTAMINATED_TYPES: tuple[ContaminationType, ...] = (
     "shortener",
 )
 
+# 2026-07-29 dev 전수 스캔(1,110종) + 사람 검수로 확인한 검증된 제작사 호스트.
+# docs/progress/2026-07-29-noonnu-url-scan-result.md 참고. 한글 제작사명이 영문
+# 도메인과 문자열로 매칭될 수 없어 _foundry_matches_host가 못 잡는 오염 169건 중
+# 다수(호스트 32개로 수렴)를 이 화이트리스트로 보완한다.
+_VERIFIED_FOUNDRY_HOSTS = frozenset(
+    {
+        "clova.ai",  # 네이버
+        "www.ssro.net",  # 스스로넷
+        "www.kopus.org",  # 한국출판인회의
+        "freesentation.blog",  # 오토노머스에이투지 X 이주임 (프리젠테이션 전용 도메인)
+        "416foundation.org",  # 4・16재단
+        "elice.io",  # 엘리스
+        "quiple.dev",  # 이민서 (hbios/galmuri 서브도메인 포함)
+        "nelna.shop",  # (주)낼나
+        "flightsans.jejuair.net",  # 제주항공
+        "goorm-sans.goorm.io",  # 구름
+        "trend.mangoboard.net",  # (주)리아모어소프트
+        "toss.im",  # (주)비바리퍼블리카
+        "sun.fo",  # SUNN YOUN
+        "www.dongguk.edu",  # 동국대학교
+        "www.adoba.net",  # 아도바 주식회사
+        "gwangjuro.net",  # 지역공공정책플랫폼광주로
+        "www.bookend.tech",  # (주)북엔드
+        "seed.line.me",  # 라인
+        "hcroh.org",  # 노회찬재단
+        "gamwulchi.associates",  # 가물치들
+        "www.kita.net",  # 한국무역협회
+        "www.kofih.org",  # 한국국제보건의료재단
+        "tdtd.io",  # (주)와이즈폰트
+        "oddatelier.net",  # OA 엔터테인먼트 주식회사
+        "beomdolee.com",  # beomdolee (드리프트 5건의 목적지)
+    }
+)
+# 아래는 검토했지만 등록부에서 제외한 호스트다(모두 manual_review 유지):
+# - yafitmove.notion.site, jinseong-kim.notion.site, hagibrew.oopy.io:
+#   notion.site/oopy.io는 플랫폼 호스팅이라 도메인 소유가 제작사 증명이 되지 않는다.
+# - webtoon.daum.net: 다음 웹툰이라는 플랫폼 페이지, 제작사 전용 도메인이 아니다.
+# - blog.howeverina.studio: 제작사-도메인 대응 근거가 약함.
+# - i-eumcreative.org: 재추출 제작사명(엉뚱상상)과 도메인 이름(i-eum)이 불일치.
+# - supernovice.org: 단일 건, 대응 근거 약함.
+
 
 @dataclass(frozen=True)
 class UrlAuditVerdict:
@@ -153,6 +194,15 @@ def _foundry_matches_host(foundry: str | None, url: str) -> bool:
     return normalized == _registrable_domain_label(_host(url))
 
 
+def _is_verified_foundry_host(url: str) -> bool:
+    """URL 호스트가 검증된 제작사 호스트 등록부에 있는지 본다.
+
+    정확 일치 또는 서브도메인(예: hbios.quiple.dev)까지 인정한다.
+    """
+    host = _host(url)
+    return any(host == entry or host.endswith(f".{entry}") for entry in _VERIFIED_FOUNDRY_HOSTS)
+
+
 def judge_official_url(
     snapshot: NoonnuFontSnapshot | None,
     db_official_url: str | None,
@@ -235,15 +285,20 @@ def judge_official_url(
     anchor_text = snapshot.official_url_anchor_text or ""
     anchor_ok = bool(_DOWNLOAD_ANCHOR_PATTERN.search(anchor_text))
     foundry_ok = _foundry_matches_host(snapshot.foundry, new_url)
+    verified_host = _is_verified_foundry_host(new_url)
 
-    if anchor_ok and foundry_ok:
+    if anchor_ok and (foundry_ok or verified_host):
+        if foundry_ok:
+            domain_reason = f"제작사명 '{snapshot.foundry}' 도메인 매칭"
+        else:
+            domain_reason = f"검증된 제작사 호스트({_host(new_url)}={snapshot.foundry or '제작사명 미상'})"
         return UrlAuditVerdict(
             classification="mismatch",
             recommended_action="auto_fix_safe",
             official_url_contamination=official_contamination,
             license_source_url_contamination=license_source_contamination,
             new_official_url=new_url,
-            evidence=f"앵커 텍스트 '{anchor_text}' + 제작사명 '{snapshot.foundry}' 도메인 매칭",
+            evidence=f"앵커 텍스트 '{anchor_text}' + {domain_reason}",
         )
 
     return UrlAuditVerdict(
