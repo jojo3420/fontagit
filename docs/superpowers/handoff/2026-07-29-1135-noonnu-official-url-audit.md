@@ -65,7 +65,7 @@
 | 6 마이그레이션 0026 | 완료 | 로컬 PG 검증 + **dev 적용 완료** (실측 3항목 확인) |
 | 7 Step 1 dev 0026 | 완료 | psql 풀러 접속 |
 | 7 Step 2 전수 스캔 v1 | 완료 | `output/noonnu-url-scan-report.json`, 오염 172종 확인 |
-| 7 Step 2' 재스캔 v2 (등록부 반영) | ⚠️ 진행 중 | 세션 종료 시점 1014/1110. 상태 파일로 재개 가능 |
+| 7 Step 2' 재스캔 v2 (등록부 반영) | 완료 | 1,110종 전수, exit 0, 오류 0 |
 | 7 Step 4~5 finding 적재 + dev 정정 | 미착수 | **아래 갭 참조** |
 | 8 prod 적용 | 미착수 | dev 검증 후 |
 
@@ -122,15 +122,48 @@ keep 925 / manual_review 182 / auto_fix_safe 2 / nullify(보류) 1
 
 오염 169건의 재추출 값이 **32개 호스트로 수렴**했다(clova.ai 하나가 109건). 전부 앵커 근거 보유. 상세 표는 `docs/progress/2026-07-29-noonnu-url-scan-result.md`.
 
-v2는 등록부 25개 반영으로 `auto_fix_safe`가 크게 늘 것으로 예상된다(예상 140건 안팎, ⚠️ 미확인).
+## v2 스캔 결과 (등록부 반영, 최종)
+
+```
+1,110종 전수, exit 0, 오류 0, retryable 0, no_container 0건
+match 925 / mismatch 184 / no_link 1
+keep 925 / auto_fix_safe 174 / manual_review 10 / nullify(보류) 1
+오염: noonnu_account 172 (v1과 동일, prod 실측과도 일치)
+```
+
+**등록부 효과**: `auto_fix_safe` 2 -> 174건, `manual_review` 182 -> 10건.
+
+오염 172종의 조치 분포:
+
+| 조치 | 건수 | 의미 |
+|---|---|---|
+| `auto_fix_safe` | 164 | 앵커 근거 + 검증된 제작사 호스트. 정정 대상 |
+| `manual_review` | 7 | 플랫폼 호스팅(notion.site, oopy.io 등) 의도적 제외분 |
+| `nullify` | 1 | `google-sans-flex`, 본문에 외부 링크 없음. NOT NULL이라 보류 |
+
+`manual_review` 10건 전체(사람 판단 필요):
+
+| slug | 재추출 값 | 사유 |
+|---|---|---|
+| move-sans | yafitmove.notion.site | 플랫폼 호스팅 |
+| 민산스 | jinseong-kim.notion.site | 플랫폼 호스팅 |
+| 문래양조-영철체 | hagibrew.oopy.io | 플랫폼 호스팅 |
+| 그리운-연이나-둥둥 | blog.howeverina.studio | 제작사명 대응 약함 |
+| tiquitaca | i-eumcreative.org | 제작사명 불일치(엉뚱상상) |
+| 양진체 | supernovice.org | 대응 근거 약함 |
+| 미생체 | webtoon.daum.net | 플랫폼 페이지 |
+| interop | interop.design | 드리프트(github LICENSE -> 프로젝트 페이지) |
+| 밍기적체 | youtube.com/watch | SNS, 기존 값도 유튜브 |
+| 아임크리수진체 | drive.google.com | 기존 imcrefont.com이 더 공식적 |
+
+마지막 항목이 중요하다. **재추출 값이 항상 정답은 아니라는 실증**이며, 등록부 방식이 이런 건을 자동 정정하지 않고 걸러낸다는 증거다.
 
 ---
 
 ## 다음 단계 (Next)
 
 🔴 **MUST**
-- [ ] 재스캔 v2 완료 확인 및 분포 분석 (`output/noonnu-url-scan-report-v2.json`의 summary). 중단됐으면 같은 명령으로 재개
-- [ ] 위 "미해결 갭" 해소 방안 결정 후 구현 (finding 적재 경로)
+- [ ] 위 "미해결 갭" 해소 방안 결정 후 구현 (finding 적재 경로). **정정 대상은 `auto_fix_safe` 164건으로 확정됨**
 - [ ] dev 정정 적용 + 쓰기 후 재조회 실측
 - [ ] task7 브랜치 처리 방침 결정 (PR #151 합류 vs 별도 PR)
 
