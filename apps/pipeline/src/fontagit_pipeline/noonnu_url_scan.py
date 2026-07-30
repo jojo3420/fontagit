@@ -27,10 +27,12 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
+from uuid import UUID
 
 import httpx
 
 from fontagit_pipeline.audit_noonnu import NoonnuFontSnapshot, extract_noonnu_font
+from fontagit_pipeline.audit_store import AuditStore
 from fontagit_pipeline.noonnu_seed import (
     _ROBOT_USER_AGENT,
     _ROBOTS_URL,
@@ -235,17 +237,20 @@ def _build_untrusted_host_record(target: ScanTarget) -> ScanRecord:
     )
 
 
-def fetch_scan_html(client: httpx.Client, url: str) -> str:
-    """눈누 상세 HTML을 받는다.
+@dataclass(frozen=True)
+class FetchedPage:
+    """HTML과 함께 감사 근거에 필요한 응답 메타를 담는다."""
 
-    `noonnu_seed._fetch_url`과 달리 httpx 예외를 `NoonnuSeedError`로 감싸지 않고
-    그대로 올린다. 감싸면 상태 코드가 메시지 문자열에 뭉개져
-    `_resolve_backoff_seconds`가 429/403을 알아볼 수 없기 때문이다.
+    html: str
+    final_url: str
+    http_status: int
 
-    리다이렉트는 client의 자동 추종(follow_redirects) 대신 매 홉마다
-    `_is_allowed_scan_url`로 확인한 뒤에만 따라가는 수동 루프로 처리한다.
-    자동 추종은 서버 응답이 임의로 지정한 호스트를 그대로 따라가는 SSRF 경로가
-    된다.
+
+def fetch_scan_page(client: httpx.Client, url: str) -> FetchedPage:
+    """눈누 상세 페이지를 받아 HTML과 응답 메타를 함께 돌려준다.
+
+    `fetch_scan_html`과 같은 리다이렉트 정책을 쓰되, 감사 근거에 필요한
+    최종 URL과 상태 코드를 버리지 않는다.
     """
     current_url = url
     for _ in range(_MAX_REDIRECTS):
@@ -257,12 +262,21 @@ def fetch_scan_html(client: httpx.Client, url: str) -> str:
         )
         if not response.has_redirect_location:
             response.raise_for_status()
-            return response.text
+            return FetchedPage(
+                html=response.text,
+                final_url=current_url,
+                http_status=response.status_code,
+            )
         next_url = urljoin(current_url, response.headers["location"])
         if not _is_allowed_scan_url(next_url):
             raise ValueError(f"신뢰할 수 없는 리다이렉트 대상: {next_url}")
         current_url = next_url
     raise ValueError(f"리다이렉트 한도({_MAX_REDIRECTS})를 초과했습니다: {url}")
+
+
+def fetch_scan_html(client: httpx.Client, url: str) -> str:
+    """눈누 상세 HTML만 받는다. 기존 호출부 호환용 얇은 위임이다."""
+    return fetch_scan_page(client, url).html
 
 
 def _looks_like_normal_html_document(html: str) -> bool:
@@ -374,12 +388,47 @@ def build_robots_checker(client: httpx.Client) -> Callable[[str], bool]:
     return lambda url: policy.can_fetch(_ROBOT_USER_AGENT, url)
 
 
+@dataclass(frozen=True)
+class IngestContext:
+    """판정 결과를 감사 저장소에 적재할 때 필요한 문맥.
+
+    `page_fetcher`가 따로 있는 이유: 감사 근거에는 최종 URL과 상태 코드가
+    필요한데 기존 `fetcher`는 HTML만 돌려주기 때문이다. 적재하지 않는
+    호출부는 이 문맥 없이 지금까지처럼 `fetcher`만 쓴다.
+    """
+
+    store: AuditStore
+    run_id: UUID
+    page_fetcher: Callable[[str], FetchedPage]
+
+
+def select_actionable(records: Sequence[ScanRecord]) -> list[ScanRecord]:
+    """정정이 필요한 판정만 남긴다(keep 제외)."""
+    return [record for record in records if record.recommended_action != "keep"]
+
+
+def load_actionable_records(
+    state_path: Path, *, retry_failed_only: bool
+) -> list[ScanRecord]:
+    """이전 상태 파일에서 재스캔 대상을 고른다.
+
+    Args:
+        state_path: 이전 실행이 남긴 JSONL 경로.
+        retry_failed_only: True면 error가 남은 건만, False면 keep이 아닌 전부.
+    """
+    records = load_state_records(state_path)
+    if retry_failed_only:
+        return [record for record in records if record.error is not None]
+    return select_actionable(records)
+
+
 def scan_targets(
     targets: Iterable[ScanTarget],
     fetcher: Callable[[str], str],
     state_path: Path,
     sleeper: Callable[[float], None] = time.sleep,
     robots_checker: Callable[[str], bool] = lambda _url: True,
+    ingest: IngestContext | None = None,
 ) -> list[ScanRecord]:
     """대상을 순회하며 공식 URL을 대조한다.
 
@@ -389,6 +438,7 @@ def scan_targets(
         state_path: 진행 상태를 남길 JSONL 경로.
         sleeper: 대기 함수. 테스트에서 즉시 반환하도록 주입한다.
         robots_checker: URL별 robots.txt 허용 여부. 기본값은 항상 허용(테스트 호환용).
+        ingest: 있으면 판정 결과를 감사 저장소에도 함께 적재한다.
 
     Returns:
         이번에 넘어온 target_list에 한해, 상태 파일 기록과 이번 처리 결과를
@@ -423,7 +473,12 @@ def scan_targets(
 
         should_abort = False
         try:
-            html = fetcher(target.source_url)
+            if ingest is not None:
+                page = ingest.page_fetcher(target.source_url)
+                html = page.html
+            else:
+                page = None
+                html = fetcher(target.source_url)
         except Exception as exc:  # 네트워크-HTTP 등 일시적 실패 → 재개 시 재시도
             snapshot: NoonnuFontSnapshot | None = None
             error: str | None = f"{type(exc).__name__}: {exc}"
@@ -498,6 +553,8 @@ def scan_targets(
             error=error,
             retryable_error=retryable_error,
         )
+        if ingest is not None and page is not None and record.error is None:
+            _ingest_record(ingest, record, page)
         _append_record(state_path, record)
         records[record.font_id] = record
         logger.info(
@@ -639,3 +696,26 @@ def load_scan_targets(client: object) -> list[ScanTarget]:
     if not targets:
         raise RuntimeError("스캔 대상이 0건입니다. 조회 조건 또는 DB 상태를 확인하세요.")
     return targets
+
+
+def _ingest_record(
+    ingest: IngestContext, record: ScanRecord, page: FetchedPage
+) -> None:
+    """판정 1건을 감사 저장소에 적재한다.
+
+    keep 판정은 정정 대상이 아니므로 적재하지 않는다. 저장 중 예외는 삼키지
+    않고 그대로 올린다. 부분 적재 상태로 조용히 넘어가면 나중에 finding 수
+    검사에서야 드러나기 때문이다.
+    """
+    from fontagit_pipeline.noonnu_url_ingest import (
+        build_finding_drafts,
+        build_snapshot_draft,
+    )
+
+    if record.recommended_action == "keep":
+        return
+    evidence_id = ingest.store.save_snapshot(
+        ingest.run_id, build_snapshot_draft(record, page)
+    )
+    for draft in build_finding_drafts(record, evidence_id):
+        ingest.store.save_finding(ingest.run_id, draft)

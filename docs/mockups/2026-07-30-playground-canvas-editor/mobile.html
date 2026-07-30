@@ -1,0 +1,63 @@
+<h2>모바일에서는 어디까지 되게 할까요?</h2>
+<p class="subtitle">좌우 패널을 넣을 자리가 없어 배치가 달라집니다. 국내 트래픽은 모바일 비중이 크지만, 터치로 하는 캔버스 편집은 검증 비용이 가장 큰 영역입니다.</p>
+
+<style>
+  .ph { width:150px; border:1px solid #3a3a46; border-radius:14px; overflow:hidden; background:#16161b; }
+  .ph-top { background:#2f2f38; padding:6px; font-size:9px; display:flex; gap:5px; }
+  .ph-body { height:170px; display:flex; align-items:center; justify-content:center; padding:10px; text-align:center; }
+  .ph-art { background:#fff; color:#222; width:110px; height:110px; display:flex; align-items:center; justify-content:center; font-size:11px; border-radius:2px; }
+  .ph-sheet { background:#26262e; padding:7px; font-size:9px; }
+  .ph-tab { display:flex; gap:4px; margin-bottom:5px; }
+  .ph-chip { background:#3a3a46; border-radius:10px; padding:2px 7px; }
+  .ph-chip.on { background:#5a6ea8; }
+  .ph-line { background:#3a3a46; border-radius:3px; padding:4px; margin-bottom:3px; }
+  .ph-msg { color:#8a8a99; font-size:10px; line-height:1.5; padding:0 10px; }
+</style>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>모바일은 안내 화면만</h3>
+      <p>좁은 화면에서는 편집기를 띄우지 않고 "넓은 화면에서 이용해 주세요" 안내와 폰트 목록으로 가는 링크만 보여줍니다. 구현과 검증이 가장 싸지만, 모바일 유입은 그대로 이탈합니다.</p>
+      <div class="ph">
+        <div class="ph-top"><span>FontAgit</span></div>
+        <div class="ph-body"><div class="ph-msg">플레이그라운드는<br>PC 화면에서<br>이용해 주세요<br><br>폰트 둘러보기 &gt;</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>축소 경험 (추천)</h3>
+      <p>캔버스는 화면에 맞춰 보여주고, 폰트와 속성은 아래에서 올라오는 시트에 탭으로 담습니다. 터치로는 이동과 선택만 되고, 크기 조절 손잡이나 회전 같은 정밀 조작은 데스크톱에만 둡니다. 내보내기는 그대로 됩니다.</p>
+      <div class="ph">
+        <div class="ph-top"><span>텍스트 추가</span><span style="margin-left:auto">내보내기</span></div>
+        <div class="ph-body"><div class="ph-art">캔버스</div></div>
+        <div class="ph-sheet">
+          <div class="ph-tab"><span class="ph-chip on">폰트</span><span class="ph-chip">속성</span></div>
+          <div class="ph-line">에스코어 드림</div>
+          <div class="ph-line">지마켓 산스</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>데스크톱과 동등하게</h3>
+      <p>터치로 확대·축소, 두 손가락 회전, 손잡이 조작까지 모두 지원합니다. 사용성은 가장 좋지만 터치 제스처 검증과 기기별 대응이 1차 일정을 크게 늘리고, 캔버스 라이브러리의 터치 지원 범위를 먼저 확인해야 합니다.</p>
+      <div class="ph">
+        <div class="ph-top"><span>텍스트</span><span>도형</span><span style="margin-left:auto">내보내기</span></div>
+        <div class="ph-body"><div class="ph-art">캔버스<br>(핀치 줌)</div></div>
+        <div class="ph-sheet"><div class="ph-tab"><span class="ph-chip on">폰트</span><span class="ph-chip">속성</span><span class="ph-chip">정렬</span><span class="ph-chip">순서</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="subtitle">추천은 B입니다. 모바일 유입을 버리지 않으면서, 검증이 어려운 정밀 터치 조작은 피합니다. 다만 B도 "어느 폭부터 모바일로 볼지"와 "시트가 캔버스를 얼마나 가릴지"를 정해야 합니다.</p>
+</div>

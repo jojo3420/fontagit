@@ -291,7 +291,7 @@ def test_manual_approvable_fields_excludes_legal_fields() -> None:
 
 
 def test_manual_approvable_fields_contains_expected_metadata_fields() -> None:
-    """MANUAL_APPROVABLE_FIELDS는 기존 tags/weights + 신규 5개 필드로 정확히 구성된다."""
+    """MANUAL_APPROVABLE_FIELDS는 기존 tags/weights + 신규 6개 필드로 정확히 구성된다."""
     assert MANUAL_APPROVABLE_FIELDS == {
         "tags",
         "weights",
@@ -300,15 +300,38 @@ def test_manual_approvable_fields_contains_expected_metadata_fields() -> None:
         "download_url",
         "download_source_kind",
         "license_source_url",
+        "official_url",
     }
+
+
+def test_official_url_is_manually_approvable() -> None:
+    """0026이 manifest에서 허용한 official_url을 승인 경로도 받아야 한다."""
+    assert "official_url" in MANUAL_APPROVABLE_FIELDS
+
+
+def test_legal_fields_stay_excluded() -> None:
+    """법적 판정 필드는 사람 배치 승인 대상이 아니다."""
+    assert "allow_commercial" not in MANUAL_APPROVABLE_FIELDS
+    assert "license_verified" not in MANUAL_APPROVABLE_FIELDS
 
 
 @pytest.mark.parametrize(
     "field_name",
-    ["foundry", "foundry_url", "download_url", "download_source_kind", "license_source_url"],
+    [
+        "foundry",
+        "foundry_url",
+        "download_url",
+        "download_source_kind",
+        "license_source_url",
+        "official_url",
+    ],
 )
 def test_approve_finding_accepts_new_manual_approvable_fields(field_name: str) -> None:
-    """이슈 #128 - Tier A archive findings 5필드는 approve_finding으로 승인 가능해야 한다."""
+    """사람 승인 대상 필드는 approve_finding으로 승인 가능해야 한다.
+
+    #128의 Tier A archive 5필드에 #150의 official_url이 더해졌다. 상수에 이름만
+    올라가고 실제 승인 경로에서 거부되는 상태를 잡아내는 테스트다.
+    """
     finding_id = "00000000-0000-0000-0000-000000000907"
 
     select_response = _query(
@@ -364,6 +387,23 @@ def test_get_proposed_findings_by_fields_filters_status_and_fields() -> None:
     assert {row["field_name"] for row in results} == {"foundry", "download_url"}
     select_response.in_.assert_called_with("field_name", ["foundry", "download_url"])
     select_response.eq.assert_any_call("status", "proposed")
+    select_response.eq.assert_any_call("auto_applicable", True)
+
+
+def test_get_proposed_findings_by_fields_can_include_manual_review() -> None:
+    """auto_applicable_only=False면 사람 판단 대상까지 조회한다(#150 후속 7종 경로)."""
+    run_id = UUID("00000000-0000-0000-0000-000000000924")
+    select_response = _query([])
+    schema = MagicMock()
+    schema.table.return_value = select_response
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    SupabaseAuditStore(client).get_proposed_findings_by_fields(
+        run_id, ["foundry"], auto_applicable_only=False
+    )
+
+    assert ("auto_applicable", True) not in [call.args for call in select_response.eq.call_args_list]
 
 
 def test_get_proposed_findings_by_fields_empty_field_names_skips_query() -> None:

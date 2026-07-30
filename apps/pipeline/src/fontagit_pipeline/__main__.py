@@ -4,6 +4,7 @@ import argparse
 import logging
 import os
 import sys
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -20,15 +21,19 @@ from fontagit_pipeline.noonnu_enrich import enrich_fonts, NoonnuEnrichError
 from fontagit_pipeline.noonnu_import import import_noonnu_seeds, NoonnuImportError
 from fontagit_pipeline.noonnu_seed import _USER_AGENT, collect_noonnu_seeds, NoonnuSeedError
 from fontagit_pipeline.noonnu_url_scan import (
+    IngestContext,
     ScanAbortedError,
     ScanLockError,
     ScanRecord,
     acquire_scan_lock,
     build_robots_checker,
     fetch_scan_html,
+    fetch_scan_page,
+    load_actionable_records,
     load_scan_targets,
     load_state_records,
     scan_targets,
+    select_actionable,
     summarize,
 )
 from fontagit_pipeline.transform import build_records
@@ -211,6 +216,13 @@ def main_noonnu_url_scan(args: argparse.Namespace) -> int:
 
 def _run_url_scan(args: argparse.Namespace) -> int:
     """잠금을 쥔 상태에서 실제 스캔을 수행하고 리포트를 남긴다."""
+    if args.store_findings and args.target != "dev":
+        logger.error("--store-findings는 dev에서만 허용됩니다: %s", args.target)
+        return 1
+    if args.retry_failed and args.only_actionable is None:
+        logger.error("--retry-failed는 --only-actionable과 함께 써야 합니다")
+        return 1
+
     import json
     from typing import cast
 
@@ -237,14 +249,53 @@ def _run_url_scan(args: argparse.Namespace) -> int:
         targets = targets[: args.limit]
     logger.info("스캔 대상 %d종", len(targets))
 
+    if args.only_actionable is not None:
+        previous = load_actionable_records(
+            args.only_actionable, retry_failed_only=args.retry_failed
+        )
+        wanted = {record.font_id for record in previous}
+        targets = [target for target in targets if target.font_id in wanted]
+        logger.info("재스캔 대상 %d종으로 좁혔습니다", len(targets))
+
+    ingest: IngestContext | None = None
+    run_id: UUID | None = None
+
     try:
         with httpx.Client(headers={"User-Agent": _USER_AGENT}) as http:
             robots_checker = build_robots_checker(http)
+
+            if args.store_findings:
+                import hashlib
+                from uuid import uuid4
+
+                from fontagit_pipeline.audit_store import SupabaseAuditStore
+
+                store = SupabaseAuditStore.from_dev_credentials(url, secret)
+                baseline_sha256 = hashlib.sha256(
+                    json.dumps(
+                        sorted(target.font_id for target in targets),
+                        separators=(",", ":"),
+                    ).encode("utf-8")
+                ).hexdigest()
+                run_id = store.start_run(
+                    stage="metadata",
+                    target_count=len(targets),
+                    baseline_sha256=baseline_sha256,
+                    dry_run=False,
+                )
+                logger.info("감사 run 시작: %s (대상 %d종)", run_id, len(targets))
+                ingest = IngestContext(
+                    store=store,
+                    run_id=run_id,
+                    page_fetcher=lambda page_url: fetch_scan_page(http, page_url),
+                )
+
             records = scan_targets(
                 targets,
                 fetcher=lambda url: fetch_scan_html(http, url),
                 state_path=args.state,
                 robots_checker=robots_checker,
+                ingest=ingest,
             )
     except ScanAbortedError as exc:
         logger.error("스캔 중단: %s", exc)
@@ -255,6 +306,35 @@ def _run_url_scan(args: argparse.Namespace) -> int:
         return 5
 
     summary = summarize(records)
+
+    if ingest is not None and run_id is not None:
+        from fontagit_pipeline.noonnu_url_ingest import build_finding_drafts
+
+        actionable = select_actionable(records)
+        expected_findings = sum(
+            len(build_finding_drafts(record, uuid4())) for record in actionable
+        )
+        logger.info(
+            "적재 완료: 대상 %d종, 예상 finding %d건",
+            len(actionable),
+            expected_findings,
+        )
+        # complete_run은 집계 4종을 정수로 요구한다(audit_store.py:530-533).
+        raw_actions = summary["recommended_action"]
+        action_counts = raw_actions if isinstance(raw_actions, Mapping) else {}
+        total = int(cast(int, summary["total"]))
+        error_count = int(cast(int, summary["error_count"]))
+        ingest.store.complete_run(
+            run_id,
+            {
+                "success_count": total - error_count,
+                "verified_count": int(action_counts.get("auto_fix_safe", 0)),
+                "needs_review_count": int(action_counts.get("manual_review", 0)),
+                "broken_count": error_count,
+                "summary": summary,
+            },
+        )
+
     _write_scan_report(args.out, summary, records)
     logger.info("요약: %s", json.dumps(summary, ensure_ascii=False))
     if not summary["structure_assumption_ok"]:
@@ -1454,11 +1534,15 @@ def main_audit_review_approve(args: argparse.Namespace) -> int:
             logger.error("run status는 completed여야 합니다: status=%s", run_status)
             return 1
 
-        proposed_findings = store.get_proposed_findings_by_fields(run_id, requested_fields)
+        auto_applicable_only = not getattr(args, "include_manual_review", False)
+        proposed_findings = store.get_proposed_findings_by_fields(
+            run_id, requested_fields, auto_applicable_only=auto_applicable_only
+        )
         logger.info(
-            "배치 승인 대상 조회: run_id=%s fields=%s count=%d",
+            "배치 승인 대상 조회: run_id=%s fields=%s auto_applicable_only=%s count=%d",
             run_id,
             requested_fields,
+            auto_applicable_only,
             len(proposed_findings),
         )
 
@@ -1983,6 +2067,22 @@ if __name__ == "__main__":
     url_scan_parser.add_argument(
         "--limit", type=int, default=0, help="대상 상한 (0=전체)"
     )
+    url_scan_parser.add_argument(
+        "--store-findings",
+        action="store_true",
+        help="판정을 감사 저장소에 run/snapshot/finding으로 적재한다",
+    )
+    url_scan_parser.add_argument(
+        "--only-actionable",
+        type=Path,
+        default=None,
+        help="이전 스캔 상태 JSONL 경로. keep이 아닌 대상만 재스캔한다",
+    )
+    url_scan_parser.add_argument(
+        "--retry-failed",
+        action="store_true",
+        help="--only-actionable 상태 파일에서 error가 있는 건만 다시 시도한다",
+    )
     url_scan_parser.set_defaults(func=main_noonnu_url_scan)
 
     # noonnu-import 명령
@@ -2210,6 +2310,11 @@ if __name__ == "__main__":
         "--dry-run",
         action="store_true",
         help="승인 없이 대상 건수와 필드별 분포만 로깅",
+    )
+    review_approve_parser.add_argument(
+        "--include-manual-review",
+        action="store_true",
+        help="auto_applicable=false인 finding까지 승인 대상에 포함(사람이 개별 검토한 뒤에만 사용)",
     )
     review_approve_parser.set_defaults(func=main_audit_review)
 

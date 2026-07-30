@@ -17,9 +17,13 @@ from uuid import UUID, uuid4
 logger = logging.getLogger(__name__)
 
 # 사람이 직접 검수해 승인할 수 있는 필드. tags/weights는 기존 metadata 승인 경로,
-# 나머지 5개(foundry/foundry_url/download_url/download_source_kind/license_source_url)는
+# foundry/foundry_url/download_url/download_source_kind/license_source_url 5개는
 # Tier A METADATA.pb 수집(collect_tier_a_meta)이 만드는 archive 등급 링크-표기 제안이다
 # (이슈 #128 - 감사 findings 사람 승인 경로).
+#
+# official_url은 0026 마이그레이션이 manifest 허용 필드에 넣었으나 이 집합에 빠져 있어
+# 어떤 경로로도 승인할 수 없었다(#150 Task 1에서 발견). 무인 승인(get_proposed_findings)
+# 대상은 넓히지 않고 사람 검수 경로만 연다.
 #
 # 이 집합에는 법적 판단(allow_commercial 등)이 필요한 legal 필드를 절대 넣지 않는다 -
 # legal 필드는 별도 사람 게이트 절차가 필요하고 이번 범위가 아니다
@@ -33,6 +37,7 @@ MANUAL_APPROVABLE_FIELDS = frozenset(
         "download_url",
         "download_source_kind",
         "license_source_url",
+        "official_url",
     }
 )
 
@@ -913,7 +918,11 @@ class SupabaseAuditStore:
         return all_findings
 
     def get_proposed_findings_by_fields(
-        self, run_id: UUID, field_names: Sequence[str]
+        self,
+        run_id: UUID,
+        field_names: Sequence[str],
+        *,
+        auto_applicable_only: bool = True,
     ) -> list[dict[str, object]]:
         """font_audit_findings 테이블에서 지정한 field_name들의 proposed findings 조회 (페이지네이션).
 
@@ -927,6 +936,10 @@ class SupabaseAuditStore:
             run_id: 조회할 감사 run의 UUID
             field_names: 조회할 field_name 목록. MANUAL_APPROVABLE_FIELDS와 교집합이
                 비어 있으면 DB 조회 없이 빈 리스트 반환.
+            auto_applicable_only: True(기본)면 auto_applicable=true인 finding만 반환한다.
+                끄면 스캔기가 사람 판단 대상으로 분류한 건까지 일괄 승인돼 오적용으로
+                이어지므로(#150 dev 실측: 349건 기대에 370건 조회), 사람이 개별 검토한
+                뒤에만 False로 호출한다.
 
         Returns:
             proposed 상태이고 field_names∩MANUAL_APPROVABLE_FIELDS에 속하는 finding 레코드 리스트
@@ -943,15 +956,17 @@ class SupabaseAuditStore:
         offset = 0
 
         while True:
-            result = (
+            query = (
                 self._schema.table("font_audit_findings")
                 .select("*")
                 .eq("run_id", str(run_id))
                 .eq("status", "proposed")
                 .in_("field_name", allowed_field_names)
-                .order("id", desc=False)
-                .range(offset, offset + page_size - 1)
-                .execute()
+            )
+            if auto_applicable_only:
+                query = query.eq("auto_applicable", True)
+            result = (
+                query.order("id", desc=False).range(offset, offset + page_size - 1).execute()
             )
             data = result.data
             if not isinstance(data, list):

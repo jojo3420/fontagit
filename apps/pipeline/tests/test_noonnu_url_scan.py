@@ -1,24 +1,31 @@
 """눈누 공식 URL 전수 스캔 실행기 테스트."""
 
 import json
+import tempfile
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from pathlib import Path
 from types import SimpleNamespace
+from uuid import UUID
 
 import httpx
 import pytest
 
 from fontagit_pipeline.noonnu_url_scan import (
+    FetchedPage,
+    IngestContext,
     ScanAbortedError,
     ScanLockError,
     ScanRecord,
     ScanTarget,
     acquire_scan_lock,
     fetch_scan_html,
+    fetch_scan_page,
+    load_actionable_records,
     load_scan_targets,
     scan_targets,
+    select_actionable,
     summarize,
 )
 
@@ -44,6 +51,30 @@ def _target(font_id: str = "11111111-1111-1111-1111-111111111111") -> ScanTarget
         db_official_url="https://www.instagram.com/noonnu_official/",
         db_license_source_url="https://www.instagram.com/noonnu_official/",
         db_license_verified=True,
+    )
+
+
+def _tmp_state() -> Path:
+    """호출마다 새 임시 상태 파일 경로를 만든다."""
+    return Path(tempfile.mkdtemp()) / "state.jsonl"
+
+
+def _scan_record(recommended_action: str = "keep") -> ScanRecord:
+    """select_actionable 테스트용 최소 판정 레코드를 만든다."""
+    return ScanRecord(
+        font_id="11111111-1111-1111-1111-111111111111",
+        slug="효남-늘-화이팅",
+        source_url="https://noonnu.cc/font_page/600",
+        db_official_url=None,
+        db_license_source_url=None,
+        db_license_verified=False,
+        new_official_url=None,
+        new_foundry=None,
+        classification="match",
+        official_url_contamination="none",
+        license_source_url_contamination="none",
+        recommended_action=recommended_action,
+        evidence="",
     )
 
 
@@ -628,6 +659,9 @@ def test_main_returns_nonzero_when_retryable_records_remain(tmp_path: Path) -> N
         state=tmp_path / "state.jsonl",
         out=tmp_path / "report.json",
         limit=0,
+        store_findings=False,
+        only_actionable=None,
+        retry_failed=False,
     )
 
     with (
@@ -685,6 +719,9 @@ def test_main_reads_dev_credentials_when_target_is_dev(tmp_path: Path) -> None:
         state=tmp_path / "state.jsonl",
         out=tmp_path / "report.json",
         limit=0,
+        store_findings=False,
+        only_actionable=None,
+        retry_failed=False,
     )
 
     with (
@@ -717,6 +754,9 @@ def test_main_reads_prod_credentials_when_target_is_prod(tmp_path: Path) -> None
         state=tmp_path / "state.jsonl",
         out=tmp_path / "report.json",
         limit=0,
+        store_findings=False,
+        only_actionable=None,
+        retry_failed=False,
     )
 
     with (
@@ -749,6 +789,9 @@ def test_main_reports_missing_target_credentials(tmp_path: Path) -> None:
         state=tmp_path / "state.jsonl",
         out=tmp_path / "report.json",
         limit=0,
+        store_findings=False,
+        only_actionable=None,
+        retry_failed=False,
     )
 
     with patch("fontagit_pipeline.config.load_audit_settings") as mock_settings:
@@ -786,3 +829,147 @@ def test_fetch_scan_html_preserves_status_code_for_backoff(tmp_path: Path) -> No
 
     assert len(sleeps) == 1
     assert sleeps[0] > 30.0
+
+
+def test_fetch_scan_page_returns_final_url_after_redirect() -> None:
+    """리다이렉트를 따라간 뒤 최종 URL과 상태 코드를 함께 돌려준다."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/font_page/1":
+            return httpx.Response(
+                302, headers={"location": "https://noonnu.cc/font_page/2"}
+            )
+        return httpx.Response(200, text="<html><body>ok</body></html>")
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    page = fetch_scan_page(client, "https://noonnu.cc/font_page/1")
+
+    assert page.html == "<html><body>ok</body></html>"
+    assert page.final_url == "https://noonnu.cc/font_page/2"
+    assert page.http_status == 200
+
+
+class _RecordingStore:
+    """save_snapshot/save_finding 호출만 기록하는 테스트용 저장소."""
+
+    def __init__(self) -> None:
+        self.snapshots: list[object] = []
+        self.findings: list[object] = []
+        self._next = 0
+
+    def save_snapshot(self, run_id: UUID, snapshot: object) -> UUID:
+        self.snapshots.append(snapshot)
+        self._next += 1
+        return UUID(int=self._next)
+
+    def save_finding(self, run_id: UUID, finding: object) -> UUID:
+        self.findings.append(finding)
+        self._next += 1
+        return UUID(int=self._next)
+
+
+def test_scan_targets_without_ingest_does_not_store() -> None:
+    """적재 문맥이 없으면 기존 동작 그대로다."""
+    store = _RecordingStore()
+    records = scan_targets(
+        [_target()],
+        fetcher=lambda _url: _DETAIL_HTML,
+        state_path=_tmp_state(),
+        sleeper=lambda _s: None,
+    )
+
+    assert records
+    assert store.snapshots == []
+
+
+def test_scan_targets_with_ingest_saves_snapshot_and_findings() -> None:
+    """적재 문맥이 있으면 판정 1건당 snapshot 1건 + finding 2건을 남긴다."""
+    store = _RecordingStore()
+    ingest = IngestContext(
+        store=store,  # type: ignore[arg-type]
+        run_id=UUID(int=99),
+        page_fetcher=lambda url: FetchedPage(
+            html=_DETAIL_HTML, final_url=url, http_status=200
+        ),
+    )
+
+    records = scan_targets(
+        [_target()],
+        fetcher=lambda _url: _DETAIL_HTML,
+        state_path=_tmp_state(),
+        sleeper=lambda _s: None,
+        ingest=ingest,
+    )
+
+    assert len(records) == 1
+    assert len(store.snapshots) == 1
+    assert len(store.findings) == 2
+
+
+def test_select_actionable_drops_keep() -> None:
+    """keep 판정은 정정 대상에서 제외한다."""
+    keep = _scan_record(recommended_action="keep")
+    fix = _scan_record(recommended_action="auto_fix_safe")
+
+    assert select_actionable([keep, fix]) == [fix]
+
+
+def _record_dict() -> dict[str, object]:
+    """ScanRecord 필드를 모두 채운 dict를 돌려준다.
+
+    Task 3 테스트(`tests/test_noonnu_url_ingest.py`의 `_record()`)와 같은 값을 쓴다.
+    """
+    return {
+        "font_id": "22222222-2222-2222-2222-222222222222",
+        "slug": "sample-font",
+        "source_url": "https://noonnu.cc/font_page/589",
+        "db_official_url": "https://www.instagram.com/noonnu_official/",
+        "db_license_source_url": "https://www.instagram.com/noonnu_official/",
+        "db_license_verified": True,
+        "new_official_url": "https://clova.ai/handwriting",
+        "new_foundry": "네이버",
+        "classification": "mismatch",
+        "official_url_contamination": "noonnu_account",
+        "license_source_url_contamination": "noonnu_account",
+        "recommended_action": "auto_fix_safe",
+        "evidence": "앵커 텍스트 '다운로드 페이지로 이동' + 검증된 제작사 호스트",
+        "error": None,
+        "retryable_error": False,
+    }
+
+
+def test_store_findings_requires_dev_target() -> None:
+    """prod 적재는 막는다. 정정은 dev에서 만들고 manifest로 승격한다."""
+    import argparse
+
+    from fontagit_pipeline.__main__ import main_noonnu_url_scan
+
+    args = argparse.Namespace(
+        target="prod",
+        state=Path("/tmp/s.jsonl"),
+        out=Path("/tmp/o.json"),
+        limit=0,
+        store_findings=True,
+        only_actionable=None,
+        retry_failed=False,
+    )
+
+    assert main_noonnu_url_scan(args) == 1
+
+
+def test_only_actionable_loads_non_keep_targets(tmp_path: Path) -> None:
+    """상태 파일에서 keep이 아닌 대상만 골라낸다."""
+    state = tmp_path / "state.jsonl"
+    state.write_text(
+        json.dumps({**_record_dict(), "slug": "a", "recommended_action": "keep"})
+        + "\n"
+        + json.dumps(
+            {**_record_dict(), "slug": "b", "recommended_action": "auto_fix_safe"}
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    slugs = [r.slug for r in load_actionable_records(state, retry_failed_only=False)]
+
+    assert slugs == ["b"]

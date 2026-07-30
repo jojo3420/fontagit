@@ -1,0 +1,85 @@
+<h2>조정된 편집기 화면 (데스크톱)</h2>
+<p class="subtitle">목적이 "설치 없이 서체 조합과 배치를 실험하는 작업대"로 잡히면서 정렬 도구, 단순 도형, 사용 중 폰트 목록이 들어왔습니다.</p>
+
+<style>
+  .ed { border:1px solid #3a3a46; border-radius:8px; overflow:hidden; font-size:11px; }
+  .ed-bar { background:#2f2f38; padding:7px 9px; display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .ed-b { background:#4a4a58; border-radius:4px; padding:3px 8px; }
+  .ed-sep { width:1px; height:16px; background:#565664; }
+  .ed-row { display:flex; min-height:280px; }
+  .ed-side { background:#26262e; padding:9px; width:165px; flex:none; }
+  .ed-stage { flex:1; background:#16161b; display:flex; align-items:center; justify-content:center; padding:16px; position:relative; }
+  .ed-art { background:#fff; color:#222; width:250px; height:190px; position:relative; border-radius:2px; }
+  .ed-t1 { position:absolute; top:26px; left:22px; font-size:19px; font-weight:800; }
+  .ed-t2 { position:absolute; top:56px; left:22px; font-size:11px; color:#666; }
+  .ed-box { position:absolute; bottom:22px; left:22px; width:130px; height:34px; background:#eee; }
+  .ed-t3 { position:absolute; bottom:32px; left:30px; font-size:10px; }
+  .ed-guide { position:absolute; top:0; bottom:0; left:22px; width:1px; background:#e0457b; }
+  .ed-lbl { font-size:9px; letter-spacing:.05em; opacity:.55; margin:0 0 6px; }
+  .ed-used { background:#31313c; border-radius:6px; padding:7px; margin-bottom:9px; }
+  .ed-u { display:flex; justify-content:space-between; font-size:10px; padding:2px 0; }
+  .ed-chips { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:7px; }
+  .ed-chip { background:#3a3a46; border-radius:20px; padding:2px 8px; font-size:10px; }
+  .ed-chip.on { background:#5a6ea8; }
+  .ed-item { border-bottom:1px solid #34343e; padding:6px 2px; }
+  .ed-nm { font-size:9px; opacity:.5; }
+  .ed-sm { font-size:14px; }
+  .ed-prop { background:#33333d; border-radius:4px; padding:5px 6px; margin-bottom:4px; font-size:10px; display:flex; justify-content:space-between; }
+  .ed-note { font-size:10px; color:#8a8a99; margin-top:6px; }
+</style>
+
+<div class="section">
+  <div class="ed">
+    <div class="ed-bar">
+      <span class="ed-b">제목</span><span class="ed-b">부제</span><span class="ed-b">본문</span>
+      <span class="ed-sep"></span>
+      <span class="ed-b">사각형</span><span class="ed-b">선</span>
+      <span class="ed-sep"></span>
+      <span class="ed-b">맞춤</span><span class="ed-b">간격</span><span class="ed-b">앞뒤</span>
+      <span class="ed-sep"></span>
+      <span class="ed-b">되돌리기</span><span class="ed-b">다시</span>
+      <span class="ed-sep"></span>
+      <span class="ed-b">1:1</span><span class="ed-b">줌 60%</span>
+      <span class="ed-b" style="margin-left:auto; background:#2f6b4f">PNG 내보내기</span>
+    </div>
+    <div class="ed-row">
+      <div class="ed-side">
+        <p class="ed-lbl">이 작업에 쓴 폰트</p>
+        <div class="ed-used">
+          <div class="ed-u"><span>지마켓 산스</span><span style="opacity:.6">상세</span></div>
+          <div class="ed-u"><span>고운돋움</span><span style="opacity:.6">상세</span></div>
+        </div>
+        <p class="ed-lbl">폰트 140종</p>
+        <div class="ed-prop" style="opacity:.6"><span>폰트 검색</span></div>
+        <div class="ed-chips"><span class="ed-chip on">전체</span><span class="ed-chip">고딕</span><span class="ed-chip">명조</span><span class="ed-chip">손글씨</span><span class="ed-chip">장식</span></div>
+        <div class="ed-item"><div class="ed-nm">에스코어 드림</div><div class="ed-sm">가을 밤 산책</div></div>
+        <div class="ed-item"><div class="ed-nm">고운돋움</div><div class="ed-sm">가을 밤 산책</div></div>
+      </div>
+      <div class="ed-stage">
+        <div class="ed-art">
+          <div class="ed-guide"></div>
+          <div class="ed-t1">가을 밤 산책</div>
+          <div class="ed-t2">서체 조합 실험</div>
+          <div class="ed-box"></div>
+          <div class="ed-t3">본문이 놓이는 자리</div>
+        </div>
+      </div>
+      <div class="ed-side" style="width:135px">
+        <p class="ed-lbl">선택: 제목</p>
+        <div class="ed-prop"><span>크기</span><span>72</span></div>
+        <div class="ed-prop"><span>굵기</span><span>700</span></div>
+        <div class="ed-prop"><span>색</span><span>#111</span></div>
+        <div class="ed-prop"><span>자간</span><span>-2</span></div>
+        <div class="ed-prop"><span>행간</span><span>1.3</span></div>
+        <div class="ed-prop"><span>정렬</span><span>왼쪽</span></div>
+        <div class="ed-prop"><span>불투명도</span><span>100</span></div>
+        <p class="ed-note">분홍 세로선은 끌 때 붙는 안내선입니다. 여러 개를 선택하면 맞춤과 간격 버튼이 켜집니다.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>이렇게 바뀌었습니다</h3>
+  <p class="subtitle">툴바에 제목·부제·본문 프리셋과 도형 2종, 정렬 묶음이 들어왔습니다. 왼쪽 패널 맨 위에는 지금 작업에 쓰인 폰트가 고정되고 각 항목에서 폰트 상세로 갑니다. 이미지 올리기와 PDF는 2차입니다.</p>
+</div>

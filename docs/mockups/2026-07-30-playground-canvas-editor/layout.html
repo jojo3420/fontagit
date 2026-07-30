@@ -1,0 +1,100 @@
+<h2>편집기 화면 배치, 어느 쪽이 맞나요?</h2>
+<p class="subtitle">데스크톱 기준입니다. 1차 MVP 요소는 캔버스, 폰트 목록(약 140종), 텍스트 속성, 내보내기, 폰트 상세로 가는 CTA입니다.</p>
+
+<style>
+  .wf { border:1px solid var(--border,#3a3a3a); border-radius:8px; overflow:hidden; font-size:11px; }
+  .wf-top { background:#2f2f38; padding:7px 10px; display:flex; gap:8px; align-items:center; }
+  .wf-chip { background:#4a4a58; border-radius:4px; padding:3px 8px; }
+  .wf-row { display:flex; min-height:210px; }
+  .wf-left, .wf-right { background:#26262e; padding:8px; width:120px; flex:none; }
+  .wf-canvas { flex:1; background:#16161b; display:flex; align-items:center; justify-content:center; padding:12px; position:relative; }
+  .wf-art { background:#f2f2f2; color:#333; display:flex; align-items:center; justify-content:center; border-radius:2px; }
+  .wf-item { background:#3a3a46; border-radius:3px; padding:5px 6px; margin-bottom:5px; }
+  .wf-label { font-size:9px; text-transform:uppercase; letter-spacing:.05em; opacity:.6; margin-bottom:6px; }
+  .wf-float { position:absolute; background:#2f2f38; border-radius:6px; padding:5px 8px; display:flex; gap:6px; font-size:10px; }
+  .wf-cta { background:#2f6b4f; border-radius:4px; padding:4px 6px; font-size:10px; text-align:center; margin-top:6px; }
+</style>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>3분할 (좌 폰트 / 캔버스 / 우 속성)</h3>
+      <p>캔바·미리캔버스와 같은 익숙한 배치. 폰트 목록이 항상 보여 여러 폰트를 빠르게 갈아끼울 수 있습니다. 캔버스 표시 영역이 가장 좁습니다.</p>
+      <div class="wf">
+        <div class="wf-top"><span class="wf-chip">텍스트 추가</span><span class="wf-chip">프리셋 1:1</span><span class="wf-chip">줌 55%</span><span style="margin-left:auto" class="wf-chip">내보내기</span></div>
+        <div class="wf-row">
+          <div class="wf-left">
+            <div class="wf-label">폰트 140종</div>
+            <div class="wf-item">검색</div>
+            <div class="wf-item">에스코어드림</div>
+            <div class="wf-item">지마켓 산스</div>
+            <div class="wf-item">프리텐다드</div>
+            <div class="wf-cta">이 폰트 받기</div>
+          </div>
+          <div class="wf-canvas"><div class="wf-art" style="width:150px;height:150px">캔버스</div></div>
+          <div class="wf-right">
+            <div class="wf-label">속성</div>
+            <div class="wf-item">크기 72</div>
+            <div class="wf-item">굵기 700</div>
+            <div class="wf-item">색</div>
+            <div class="wf-item">자간 / 행간</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>좌 폰트 + 떠 있는 속성 바</h3>
+      <p>속성은 선택한 텍스트 바로 위에 작은 바로 뜹니다. 캔버스가 넓고 시선 이동이 짧지만, 속성 항목이 늘어나면 바가 좁아 접기 처리가 필요합니다.</p>
+      <div class="wf">
+        <div class="wf-top"><span class="wf-chip">텍스트 추가</span><span class="wf-chip">프리셋 16:9</span><span class="wf-chip">줌 fit</span><span style="margin-left:auto" class="wf-chip">내보내기</span></div>
+        <div class="wf-row">
+          <div class="wf-left">
+            <div class="wf-label">폰트 140종</div>
+            <div class="wf-item">검색</div>
+            <div class="wf-item">에스코어드림</div>
+            <div class="wf-item">지마켓 산스</div>
+            <div class="wf-item">프리텐다드</div>
+            <div class="wf-cta">이 폰트 받기</div>
+          </div>
+          <div class="wf-canvas">
+            <div class="wf-float" style="top:16px; left:50%; transform:translateX(-50%)"><span>72</span><span>700</span><span>색</span><span>정렬</span><span>더보기</span></div>
+            <div class="wf-art" style="width:230px;height:130px; margin-top:22px">캔버스</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>우측 단일 패널 (탭 전환)</h3>
+      <p>패널 하나를 폰트 탭과 속성 탭으로 나눕니다. 구조가 가장 단순하고 모바일에서 하단 시트로 바꾸기 쉽지만, 폰트를 바꿔보려면 탭을 왕복해야 합니다.</p>
+      <div class="wf">
+        <div class="wf-top"><span class="wf-chip">텍스트 추가</span><span class="wf-chip">프리셋 자유</span><span class="wf-chip">줌 100%</span><span style="margin-left:auto" class="wf-chip">내보내기</span></div>
+        <div class="wf-row">
+          <div class="wf-canvas"><div class="wf-art" style="width:200px;height:150px">캔버스</div></div>
+          <div class="wf-right" style="width:150px">
+            <div style="display:flex; gap:4px; margin-bottom:8px">
+              <span class="wf-chip" style="background:#5a5a6e">폰트</span><span class="wf-chip">속성</span>
+            </div>
+            <div class="wf-item">검색</div>
+            <div class="wf-item">에스코어드림</div>
+            <div class="wf-item">지마켓 산스</div>
+            <div class="wf-item">프리텐다드</div>
+            <div class="wf-cta">이 폰트 받기</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="subtitle">추천은 A입니다. 이 기능의 목적이 "폰트를 계속 갈아끼워 보게 만드는 것"이라 폰트 목록이 항상 보이는 편이 퍼널에 유리하고, 속성 패널이 따로 있으면 항목이 늘어도 배치가 깨지지 않습니다.</p>
+</div>
