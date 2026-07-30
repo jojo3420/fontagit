@@ -30,6 +30,7 @@ _ALLOWED_FIELDS = frozenset(
         "foundry_url",
         "download_url",
         "license_source_url",
+        "official_url",
         "license_summary",
         "download_source_kind",
         "license_source_kind",
@@ -486,6 +487,10 @@ def _validated_value(field_name: str, value: object) -> object:
     if field_name in _TEXT_FIELDS:
         if value is not None and not isinstance(value, str):
             raise ManifestError(f"field {field_name} requires text or null")
+    elif field_name == "official_url":
+        # fonts.official_url은 DB에서 NOT NULL이라 다른 URL 필드와 달리 null을 허용하지 않는다.
+        if not isinstance(value, str):
+            raise ManifestError("field official_url requires text")
     elif field_name in _SOURCE_KIND_FIELDS:
         # download_source_kind만 archive 허용 (license는 자동 승인 불가)
         allowed = {"official", "public", "archive"} if field_name == "download_source_kind" else {"official", "public"}

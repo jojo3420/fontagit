@@ -37,7 +37,9 @@ def test_extracts_only_font_detail_and_uses_structured_only_storage() -> None:
     assert snapshot.license_permissions == {"인쇄": "허용"}
     assert snapshot.raw_text is None
     assert len(snapshot.raw_sha256) == 64
-    assert snapshot.global_social_links == []
+    assert snapshot.global_social_links == ["https://www.instagram.com/noonnu"]
+    assert snapshot.official_url == "https://clova.ai/handwriting/list.html"
+    assert snapshot.official_url_anchor_text == "다운로드 페이지로 이동"
 
 
 def test_preserves_reported_404_candidate_for_later_observation() -> None:
@@ -67,3 +69,63 @@ def test_unmarked_articles_must_identify_one_font_detail(html: str) -> None:
     """관련 폰트 카드나 여러 후보를 첫 article로 오인하지 않는다."""
     with pytest.raises(ValueError, match="font detail region"):
         extract_noonnu_font(html, "https://noonnu.cc/font_page/999")
+
+
+def test_official_url_excludes_noonnu_global_social_links() -> None:
+    """상세 영역 밖의 눈누 공식 SNS는 official_url이 되지 않는다."""
+    html = """
+    <html><body>
+      <header><a href="https://www.instagram.com/noonnu_official/">눈누 인스타그램</a></header>
+      <div data-font-detail>
+        <h1>효남 늘 화이팅</h1>
+        <a href="https://clova.ai/handwriting/list.html">다운로드 페이지로 이동</a>
+      </div>
+    </body></html>
+    """
+    snapshot = extract_noonnu_font(html, "https://noonnu.cc/font_page/600")
+
+    assert snapshot.official_url == "https://clova.ai/handwriting/list.html"
+    assert snapshot.official_url_anchor_text == "다운로드 페이지로 이동"
+    assert "https://www.instagram.com/noonnu_official/" in snapshot.global_social_links
+    assert "official_url" in snapshot.evidence_locations
+
+
+def test_official_url_is_none_when_detail_has_no_external_link() -> None:
+    """상세 영역에 외부 링크가 없으면 official_url은 None이다."""
+    html = """
+    <html><body>
+      <header><a href="https://www.instagram.com/noonnu_official/">눈누 인스타그램</a></header>
+      <div data-font-detail><h1>어떤 폰트</h1><a href="/font_page/601">다른 폰트</a></div>
+    </body></html>
+    """
+    snapshot = extract_noonnu_font(html, "https://noonnu.cc/font_page/600")
+
+    assert snapshot.official_url is None
+    assert snapshot.official_url_anchor_text is None
+
+
+@pytest.mark.parametrize(
+    "account_url",
+    [
+        "https://www.instagram.com/noonnu_official/",
+        "https://instagram.com/noonnu",
+    ],
+)
+def test_official_url_excludes_noonnu_account_link_inside_detail(account_url: str) -> None:
+    """상세 영역 안에 눈누 자체 계정 링크가 있어도 official_url로 추출되지 않는다.
+
+    172종 오염 사고의 원인 링크(눈누 홍보 계정)가 상세 영역 안에도 실려 있는
+    페이지가 있어, 상세 영역 밖 필터(global_social_links)만으로는 못 막는다.
+    """
+    html = f"""
+    <html><body>
+      <div data-font-detail>
+        <h1>어떤 폰트</h1>
+        <a href="{account_url}">눈누 인스타그램</a>
+        <a href="https://example-foundry.com" class="noon-yellow-button">제작사 홈페이지</a>
+      </div>
+    </body></html>
+    """
+    snapshot = extract_noonnu_font(html, "https://noonnu.cc/font_page/600")
+
+    assert snapshot.official_url == "https://example-foundry.com"

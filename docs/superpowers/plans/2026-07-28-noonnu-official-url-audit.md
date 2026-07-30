@@ -22,6 +22,30 @@
 
 ---
 
+## 진행 현황 (2026-07-29 기준)
+
+| Task | 상태 | 비고 |
+|---|---|---|
+| 1. 감사 파서 확장 | 완료 | `2743846`, `a552509` |
+| 2. 대조 판정 | 완료 후 재작업 | `e016f57` → 리뷰 반영 `2758022` |
+| 3. 스캔 실행기 | 완료 후 재작업 | `493f263` → `b0acd10`, `6e01e22` |
+| 4. CLI + 요약 | 완료 후 재작업 | `9ec3f9c` → 진행 중 |
+| 5~8 | 미착수 | PR #151 머지 후 |
+
+PR #151에 대해 자체 코드 리뷰(code-reviewer)와 Codex 리뷰를 각각 한 차례 받았고, 두 리뷰에서 나온 결함을 Task 1~4에 되먹여 수정했다. 그래서 아래 Step 체크박스가 켜져 있어도 그 산출물은 최초 작성분과 다르다.
+
+되먹인 주요 결함은 다음과 같다.
+
+- 재개 시 실패 건이 완료로 기록돼 영구 누락 (#142와 같은 결함이 계획 자체에 있었음)
+- 판정이 오염 검사보다 일치 검사를 먼저 해, 찾아야 할 오염이 정상으로 통과
+- `auto_fix_safe`가 OR 조건이라 자동 정정 문턱이 낮음
+- 페이지네이션에 정렬이 없어 조용한 중복-누락 가능
+- 429/403 백오프가 실전 경로에서 죽은 코드
+
+Task 4의 `Step 6`(실제 DB 소규모 실행)은 `supabase_url`/`supabase_secret_key`가 환경에 없어 수행하지 못했다. 머지 후 env가 있는 환경에서 먼저 확인해야 한다.
+
+---
+
 ## File Structure
 
 **신규**
@@ -55,7 +79,7 @@
 - Consumes: 기존 `_detail_root(soup: BeautifulSoup) -> Tag`, `_http_url(href: str, source_url: str) -> str | None`, `_selector_path(node: Tag) -> str`
 - Produces: `NoonnuFontSnapshot.official_url: str | None`, `NoonnuFontSnapshot.official_url_anchor_text: str | None`, `NoonnuFontSnapshot.global_social_links: list[str]` (채워짐), `evidence_locations["official_url"]` 셀렉터 경로
 
-- [ ] **Step 1: 실패하는 테스트를 작성한다**
+- [x] **Step 1: 실패하는 테스트를 작성한다**
 
 `apps/pipeline/tests/test_audit_noonnu.py` 끝에 추가한다.
 
@@ -95,12 +119,12 @@ def test_official_url_is_none_when_detail_has_no_external_link() -> None:
 
 기존 파일 상단에 `extract_noonnu_font` import가 이미 있으면 그대로 쓴다. 없으면 `from fontagit_pipeline.audit_noonnu import extract_noonnu_font`를 추가한다.
 
-- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+- [x] **Step 2: 테스트가 실패하는지 확인한다**
 
 Run: `cd apps/pipeline && uv run pytest tests/test_audit_noonnu.py -k official_url -v`
 Expected: FAIL — `AttributeError: 'NoonnuFontSnapshot' object has no attribute 'official_url'`
 
-- [ ] **Step 3: 모델 필드를 추가한다**
+- [x] **Step 3: 모델 필드를 추가한다**
 
 `audit_noonnu.py`의 `NoonnuFontSnapshot`에서 `global_social_links` 선언 바로 아래에 추가한다.
 
@@ -109,7 +133,7 @@ Expected: FAIL — `AttributeError: 'NoonnuFontSnapshot' object has no attribute
     official_url_anchor_text: str | None = None
 ```
 
-- [ ] **Step 4: 추출 함수를 추가한다**
+- [x] **Step 4: 추출 함수를 추가한다**
 
 `audit_noonnu.py`에 아래 두 함수를 추가한다. `_http_url`, `_selector_path` 정의 근처에 둔다.
 
@@ -177,7 +201,7 @@ def _extract_official_url(detail: Tag, source_url: str) -> tuple[str | None, str
 
 파일 상단 import에 `from urllib.parse import urlparse`가 없으면 추가한다.
 
-- [ ] **Step 5: 추출 결과를 스냅샷에 연결한다**
+- [x] **Step 5: 추출 결과를 스냅샷에 연결한다**
 
 `extract_noonnu_font` 안에서 `detail`을 얻은 뒤, 반환값을 만들기 전에 아래를 넣는다. 기존 코드가 `evidence_locations` 딕셔너리를 조립하는 위치를 찾아 그 다음에 둔다.
 
@@ -196,17 +220,17 @@ def _extract_official_url(detail: Tag, source_url: str) -> tuple[str | None, str
         global_social_links=global_social_links,
 ```
 
-- [ ] **Step 6: 테스트가 통과하는지 확인한다**
+- [x] **Step 6: 테스트가 통과하는지 확인한다**
 
 Run: `cd apps/pipeline && uv run pytest tests/test_audit_noonnu.py -v`
 Expected: PASS (신규 2건 포함, 기존 테스트도 그대로 통과)
 
-- [ ] **Step 7: 린트와 타입 검사를 돌린다**
+- [x] **Step 7: 린트와 타입 검사를 돌린다**
 
 Run: `cd apps/pipeline && uv run ruff check . && uv run mypy src`
 Expected: 신규 오류 없음. 기존 오류가 있으면 그 수와 내용이 작업 전과 같은지 확인한다.
 
-- [ ] **Step 8: 커밋한다**
+- [x] **Step 8: 커밋한다**
 
 ```bash
 git add apps/pipeline/src/fontagit_pipeline/audit_noonnu.py apps/pipeline/tests/test_audit_noonnu.py
@@ -231,7 +255,7 @@ git commit -m "feat: 눈누 감사 파서에 공식 URL 추출과 전역 SNS 분
   - `UrlAuditVerdict` 데이터클래스
   - `judge_official_url(snapshot: NoonnuFontSnapshot | None, db_official_url: str | None, db_license_source_url: str | None) -> UrlAuditVerdict`
 
-- [ ] **Step 1: 실패하는 테스트를 작성한다**
+- [x] **Step 1: 실패하는 테스트를 작성한다**
 
 `apps/pipeline/tests/test_noonnu_url_audit.py`를 새로 만든다.
 
@@ -333,12 +357,12 @@ def test_no_container_keeps_current_value() -> None:
     assert verdict.recommended_action == "keep"
 ```
 
-- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+- [x] **Step 2: 테스트가 실패하는지 확인한다**
 
 Run: `cd apps/pipeline && uv run pytest tests/test_noonnu_url_audit.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'fontagit_pipeline.noonnu_url_audit'`
 
-- [ ] **Step 3: 판정 모듈을 구현한다**
+- [x] **Step 3: 판정 모듈을 구현한다**
 
 `apps/pipeline/src/fontagit_pipeline/noonnu_url_audit.py`를 만든다.
 
@@ -511,17 +535,17 @@ def judge_official_url(
     )
 ```
 
-- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+- [x] **Step 4: 테스트가 통과하는지 확인한다**
 
 Run: `cd apps/pipeline && uv run pytest tests/test_noonnu_url_audit.py -v`
 Expected: PASS 7건
 
-- [ ] **Step 5: 린트와 타입 검사를 돌린다**
+- [x] **Step 5: 린트와 타입 검사를 돌린다**
 
 Run: `cd apps/pipeline && uv run ruff check . && uv run mypy src`
 Expected: 신규 오류 없음
 
-- [ ] **Step 6: 커밋한다**
+- [x] **Step 6: 커밋한다**
 
 ```bash
 git add apps/pipeline/src/fontagit_pipeline/noonnu_url_audit.py apps/pipeline/tests/test_noonnu_url_audit.py
@@ -545,7 +569,7 @@ git commit -m "feat: 눈누 공식 URL 대조 판정과 조치 권고 추가 (#1
   - `ScanRecord` 데이터클래스 (판정 1건의 직렬화 단위)
   - `scan_targets(targets, fetcher, state_path, sleeper=time.sleep) -> list[ScanRecord]`
 
-- [ ] **Step 1: 실패하는 테스트를 작성한다**
+- [x] **Step 1: 실패하는 테스트를 작성한다**
 
 `apps/pipeline/tests/test_noonnu_url_scan.py`를 새로 만든다.
 
@@ -671,12 +695,12 @@ def test_state_file_is_written_per_target(tmp_path: Path) -> None:
     assert json.loads(lines[0])["font_id"] == _target().font_id
 ```
 
-- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+- [x] **Step 2: 테스트가 실패하는지 확인한다**
 
 Run: `cd apps/pipeline && uv run pytest tests/test_noonnu_url_scan.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'fontagit_pipeline.noonnu_url_scan'`
 
-- [ ] **Step 3: 실행기를 구현한다**
+- [x] **Step 3: 실행기를 구현한다**
 
 `apps/pipeline/src/fontagit_pipeline/noonnu_url_scan.py`를 만든다.
 
@@ -880,17 +904,17 @@ def scan_targets(
     return records
 ```
 
-- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+- [x] **Step 4: 테스트가 통과하는지 확인한다**
 
 Run: `cd apps/pipeline && uv run pytest tests/test_noonnu_url_scan.py -v`
 Expected: PASS 4건
 
-- [ ] **Step 5: 린트와 타입 검사를 돌린다**
+- [x] **Step 5: 린트와 타입 검사를 돌린다**
 
 Run: `cd apps/pipeline && uv run ruff check . && uv run mypy src`
 Expected: 신규 오류 없음
 
-- [ ] **Step 6: 커밋한다**
+- [x] **Step 6: 커밋한다**
 
 ```bash
 git add apps/pipeline/src/fontagit_pipeline/noonnu_url_scan.py apps/pipeline/tests/test_noonnu_url_scan.py
@@ -912,7 +936,7 @@ DB에서 대상을 읽어 스캔을 돌리고, 판정 분포를 요약해 사람
 - Consumes: Task 3의 `ScanRecord`, `scan_targets`. 기존 `load_settings()`, `create_client`
 - Produces: `summarize(records: Sequence[ScanRecord]) -> dict[str, object]`, `main_noonnu_url_scan(args: argparse.Namespace) -> int`
 
-- [ ] **Step 1: 실패하는 테스트를 작성한다**
+- [x] **Step 1: 실패하는 테스트를 작성한다**
 
 `apps/pipeline/tests/test_noonnu_url_scan.py`에 추가한다. 상단 import에 `summarize`를 더한다.
 
@@ -950,12 +974,12 @@ def test_summarize_counts_by_classification_and_action() -> None:
     assert summary["structure_assumption_ok"] is False
 ```
 
-- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+- [x] **Step 2: 테스트가 실패하는지 확인한다**
 
 Run: `cd apps/pipeline && uv run pytest tests/test_noonnu_url_scan.py -k summarize -v`
 Expected: FAIL — `ImportError: cannot import name 'summarize'`
 
-- [ ] **Step 3: 요약 함수를 구현한다**
+- [x] **Step 3: 요약 함수를 구현한다**
 
 `noonnu_url_scan.py` 끝에 추가한다.
 
@@ -994,12 +1018,12 @@ def summarize(records: Sequence[ScanRecord]) -> dict[str, object]:
 
 `Sequence`는 이미 Task 3에서 import 했다.
 
-- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+- [x] **Step 4: 테스트가 통과하는지 확인한다**
 
 Run: `cd apps/pipeline && uv run pytest tests/test_noonnu_url_scan.py -v`
 Expected: PASS 5건
 
-- [ ] **Step 5: 대상 조회와 CLI 진입점을 추가한다**
+- [x] **Step 5: 대상 조회와 CLI 진입점을 추가한다**
 
 `noonnu_url_scan.py` 끝에 추가한다.
 
@@ -1147,12 +1171,12 @@ cd apps/pipeline && uv run python -m fontagit_pipeline noonnu-url-scan \
 ```
 Expected: 종료 코드 0. 리포트 JSON에 5건의 레코드와 요약이 들어 있다. 5건 중 판정이 하나라도 `no_container`면 다음 태스크로 넘어가기 전에 눈누 페이지 구조를 다시 본다.
 
-- [ ] **Step 7: 린트와 타입 검사를 돌린다**
+- [x] **Step 7: 린트와 타입 검사를 돌린다**
 
 Run: `cd apps/pipeline && uv run ruff check . && uv run mypy src`
 Expected: 신규 오류 없음
 
-- [ ] **Step 8: 커밋한다**
+- [x] **Step 8: 커밋한다**
 
 ```bash
 git add apps/pipeline/src/fontagit_pipeline/noonnu_url_scan.py apps/pipeline/src/fontagit_pipeline/__main__.py apps/pipeline/tests/test_noonnu_url_scan.py
@@ -1349,7 +1373,7 @@ Expected: 약 20-30분 소요. 종료 코드 0. 중단되면 같은 명령을 �
 - `license_source_url`: 같은 값으로 정정
 - `license_verified`: 설계 문서의 정책표에 따라 결정. 새 URL이 제작사 공식 도메인이지만 라이선스 문구를 확인하지 않았다면 `false`
 
-`nullify` 건은 세 필드를 각각 빈 값과 `false`로 만든다. `manual_review`와 `keep`은 manifest에 넣지 않는다.
+`nullify` 건은 manifest에 넣지 않는다(정정 2026-07-29): `fonts.official_url`이 NOT NULL 컬럼이라 비움 자체가 불가능하다. `license_source_url`(nullable)과 `license_verified=false`만 정책표대로 조정할지, NULL 전환(0027 제약 완화)까지 갈지는 스캔 리포트의 분포를 보고 별도 결정한다. 그 전까지 nullify 판정 건은 보류 목록으로 리포트에만 남긴다. `manual_review`와 `keep`도 manifest에 넣지 않는다.
 
 - [ ] **Step 5: dev에 적용하고 쓰기 후 재조회로 확인한다**
 
