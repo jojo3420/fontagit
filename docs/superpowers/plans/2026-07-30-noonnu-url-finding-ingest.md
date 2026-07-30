@@ -823,7 +823,7 @@ git commit -m "feat: 스캔 판정을 감사 저장소에 적재 (#150)"
 - Consumes: `IngestContext`, `select_actionable` (Task 4)
 - Produces: CLI 플래그 `--store-findings`, `--only-actionable`, `--retry-failed`
 
-- [ ] **Step 1: 파서에 플래그를 더한다**
+- [x] **Step 1: 파서에 플래그를 더한다**
 
 `__main__.py`의 `url_scan_parser.set_defaults` 바로 앞에 추가:
 
@@ -846,7 +846,7 @@ git commit -m "feat: 스캔 판정을 감사 저장소에 적재 (#150)"
     )
 ```
 
-- [ ] **Step 2: 실패하는 테스트를 쓴다**
+- [x] **Step 2: 실패하는 테스트를 쓴다**
 
 ```python
 def test_store_findings_requires_dev_target() -> None:
@@ -884,7 +884,7 @@ def test_only_actionable_loads_non_keep_targets(tmp_path: Path) -> None:
 
 `load_actionable_records`를 `noonnu_url_scan.py`에서 import한다. `_record_dict()`는 `ScanRecord` 필드를 모두 채운 dict를 돌려주는 헬퍼로, Task 3 테스트의 `_record()`와 같은 값을 쓴다.
 
-- [ ] **Step 3: 실패 확인**
+- [x] **Step 3: 실패 확인**
 
 ```bash
 cd apps/pipeline
@@ -893,7 +893,7 @@ uv run pytest tests/test_noonnu_url_scan.py -k "store_findings or only_actionabl
 
 Expected: FAIL
 
-- [ ] **Step 4: 구현**
+- [x] **Step 4: 구현**
 
 `noonnu_url_scan.py`에 추가:
 
@@ -985,7 +985,7 @@ def load_actionable_records(
 
 `--retry-failed` 없이 `auto_fix_safe` 대상에 실패가 남았으면 종료 코드 6(기존 재시도 코드)이 그대로 뜬다. 설계의 "실패 시 apply 중단"은 Task 7의 게이트에서 이 종료 코드로 판단한다.
 
-- [ ] **Step 5: 통과 확인 + 전체 회귀**
+- [x] **Step 5: 통과 확인 + 전체 회귀**
 
 ```bash
 cd apps/pipeline
@@ -993,7 +993,7 @@ uv run pytest -q 2>&1 | tail -5
 uv run ruff check . && uv run mypy src 2>&1 | tail -3
 ```
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 git add apps/pipeline/src/fontagit_pipeline/__main__.py apps/pipeline/src/fontagit_pipeline/noonnu_url_scan.py apps/pipeline/tests/test_noonnu_url_scan.py
