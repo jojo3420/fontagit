@@ -407,6 +407,21 @@ def select_actionable(records: Sequence[ScanRecord]) -> list[ScanRecord]:
     return [record for record in records if record.recommended_action != "keep"]
 
 
+def load_actionable_records(
+    state_path: Path, *, retry_failed_only: bool
+) -> list[ScanRecord]:
+    """이전 상태 파일에서 재스캔 대상을 고른다.
+
+    Args:
+        state_path: 이전 실행이 남긴 JSONL 경로.
+        retry_failed_only: True면 error가 남은 건만, False면 keep이 아닌 전부.
+    """
+    records = load_state_records(state_path)
+    if retry_failed_only:
+        return [record for record in records if record.error is not None]
+    return select_actionable(records)
+
+
 def scan_targets(
     targets: Iterable[ScanTarget],
     fetcher: Callable[[str], str],
