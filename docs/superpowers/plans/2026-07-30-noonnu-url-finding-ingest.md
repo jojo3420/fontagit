@@ -1059,7 +1059,7 @@ git commit -m "chore: 눈누 URL 정정 검증 쿼리 추가 (#150)"
 
 여기부터는 코드 변경이 아니라 실행이다. 각 단계의 출력을 근거로 남긴다.
 
-- [ ] **Step 1: 대상 185종 재스캔 + 적재**
+- [x] **Step 1: 대상 185종 재스캔 + 적재**
 
 ```bash
 cd apps/pipeline
@@ -1076,7 +1076,7 @@ echo "exit=$?"
 
 exit 6(재시도 대상 남음)이면 `--retry-failed`를 추가해 다시 돌린다. `auto_fix_safe` 대상에 실패가 남은 채로는 **다음 단계로 넘어가지 않는다.**
 
-- [ ] **Step 2: 07-29 대비 대조 리포트**
+- [x] **Step 2: 07-29 대비 대조 리포트**
 
 v2와 v3의 판정을 슬러그 단위로 비교해 값 불일치와 판정 강등을 목록으로 만든다.
 
@@ -1116,11 +1116,11 @@ PY
 
 결과를 사용자에게 보고한다. 판정이 `auto_fix_safe`에서 내려간 건이 있으면 자동 적용 대상에서 빠졌음을 함께 알린다.
 
-- [ ] **Step 3: 적재 정합성 확인**
+- [x] **Step 3: 적재 정합성 확인**
 
 `scripts/verify-noonnu-url-fix.sql`의 (4)를 dev에서 실행한다. `findings == fonts x 2`가 아니면(nullify 1건 때문에 정확히 2배가 아닐 수 있음) 차이를 설명할 수 있어야 한다. 설명되지 않으면 중단하고 보고한다.
 
-- [ ] **Step 4: 사람 배치 승인**
+- [x] **Step 4: 사람 배치 승인**
 
 무인 승인(`auto-approve`)은 대상 필드가 `{tags, weights, foundry, download_url, download_source_kind}`로 하드코딩돼 있어 이 두 필드를 처리하지 못한다(`audit_store.py:897`, Task 1에서 확인). 사람 배치 승인 경로를 쓴다.
 
@@ -1149,7 +1149,7 @@ uv run python -m fontagit_pipeline font-audit-review approve \
   --reviewed-by "#150 dual-review + user approval 2026-07-30" 2>&1 | tail -20
 ```
 
-- [ ] **Step 5: manifest 생성 및 사전점검**
+- [x] **Step 5: manifest 생성 및 사전점검**
 
 ```bash
 cd apps/pipeline
@@ -1163,7 +1163,7 @@ uv run python -m fontagit_pipeline font-audit-manifest preflight \
 
 preflight가 불일치를 보고하면 중단한다.
 
-- [ ] **Step 6: dev 적용**
+- [x] **Step 6: dev 적용**
 
 ```bash
 cd apps/pipeline
@@ -1173,11 +1173,11 @@ uv run python -m fontagit_pipeline font-audit-manifest apply \
   --sha256 <SHA_FILE> --target dev --confirm-hash <HASH> 2>&1 | tail -20
 ```
 
-- [ ] **Step 7: dev 검증**
+- [x] **Step 7: dev 검증**
 
 `scripts/verify-noonnu-url-fix.sql`의 (1)(2)(3)을 dev에서 실행한다. (2)가 175면 통과. 결과를 사용자에게 보고한다.
 
-- [ ] **Step 8: 산출물 커밋**
+- [x] **Step 8: 산출물 커밋**
 
 ```bash
 git add apps/pipeline/output/noonnu-url-scan-report-v3.json docs/progress/
@@ -1192,7 +1192,7 @@ git commit -m "chore: dev 눈누 URL 정정 적용 결과 (#150)"
 
 **⚠️ Task 1의 검증 결과에 따라 이 작업의 내용이 달라진다.** manifest가 `font_id`로 대상을 찾는다면 이 절차는 성립하지 않으므로 재설계가 필요하다.
 
-- [ ] **Step 1: prod manifest 생성**
+- [x] **Step 1: prod manifest 생성**
 
 ```bash
 cd apps/pipeline
@@ -1201,7 +1201,7 @@ uv run python -m fontagit_pipeline font-audit-manifest build \
   --out output/noonnu-url-manifest-prod.json 2>&1 | tail -20
 ```
 
-- [ ] **Step 2: before 값 대조 (필수 게이트)**
+- [x] **Step 2: before 값 대조 (필수 게이트)**
 
 prod manifest의 모든 항목에서 `before`가 오염 URL인지 확인한다.
 
@@ -1228,7 +1228,7 @@ PY
 
 예상 밖 항목이 하나라도 있으면 **적용을 중단하고** 목록을 사용자에게 보고한다. dev 승인 이후 prod에서 값이 바뀐 것이므로 재승인이 필요하다.
 
-- [ ] **Step 3: 승인 패키지 작성**
+- [x] **Step 3: 승인 패키지 작성**
 
 `docs/review/2026-07-30-noonnu-url-prod-approval.md`에 다음을 담는다.
 
@@ -1240,11 +1240,11 @@ PY
 - 되돌리기 방법: `before`/`after`를 뒤집은 역방향 manifest 생성 절차
 - 적용에 쓸 명령 전문과 manifest 해시
 
-- [ ] **Step 4: 사용자 승인 요청**
+- [x] **Step 4: 사용자 승인 요청**
 
 승인 패키지와 **실행할 명령 전문**을 보여주고 승인을 받는다. 승인 없이 다음 단계로 넘어가지 않는다.
 
-- [ ] **Step 5: prod 사전점검**
+- [x] **Step 5: prod 사전점검**
 
 ```bash
 cd apps/pipeline
@@ -1252,7 +1252,7 @@ uv run python -m fontagit_pipeline font-audit-manifest preflight \
   --manifest output/noonnu-url-manifest-prod.json --target prod 2>&1 | tail -20
 ```
 
-- [ ] **Step 6: prod 적용**
+- [x] **Step 6: prod 적용**
 
 ```bash
 cd apps/pipeline
@@ -1266,11 +1266,11 @@ uv run python -m fontagit_pipeline font-audit-manifest apply \
 
 갱신된 행 수가 승인 패키지의 건수와 일치하는지 확인한다.
 
-- [ ] **Step 7: prod 검증**
+- [x] **Step 7: prod 검증**
 
 `scripts/verify-noonnu-url-fix.sql`의 (1)(2)를 prod에서 실행한다. (2)가 175면 통과.
 
-- [ ] **Step 8: manifest와 해시 보관, 커밋**
+- [x] **Step 8: manifest와 해시 보관, 커밋**
 
 ```bash
 cp apps/pipeline/output/noonnu-url-manifest-prod.json docs/review/
