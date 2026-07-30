@@ -17,9 +17,13 @@ from uuid import UUID, uuid4
 logger = logging.getLogger(__name__)
 
 # 사람이 직접 검수해 승인할 수 있는 필드. tags/weights는 기존 metadata 승인 경로,
-# 나머지 5개(foundry/foundry_url/download_url/download_source_kind/license_source_url)는
+# foundry/foundry_url/download_url/download_source_kind/license_source_url 5개는
 # Tier A METADATA.pb 수집(collect_tier_a_meta)이 만드는 archive 등급 링크-표기 제안이다
 # (이슈 #128 - 감사 findings 사람 승인 경로).
+#
+# official_url은 0026 마이그레이션이 manifest 허용 필드에 넣었으나 이 집합에 빠져 있어
+# 어떤 경로로도 승인할 수 없었다(#150 Task 1에서 발견). 무인 승인(get_proposed_findings)
+# 대상은 넓히지 않고 사람 검수 경로만 연다.
 #
 # 이 집합에는 법적 판단(allow_commercial 등)이 필요한 legal 필드를 절대 넣지 않는다 -
 # legal 필드는 별도 사람 게이트 절차가 필요하고 이번 범위가 아니다

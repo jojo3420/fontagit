@@ -327,7 +327,11 @@ def test_legal_fields_stay_excluded() -> None:
     ],
 )
 def test_approve_finding_accepts_new_manual_approvable_fields(field_name: str) -> None:
-    """이슈 #128 - Tier A archive findings 5필드는 approve_finding으로 승인 가능해야 한다."""
+    """사람 승인 대상 필드는 approve_finding으로 승인 가능해야 한다.
+
+    #128의 Tier A archive 5필드에 #150의 official_url이 더해졌다. 상수에 이름만
+    올라가고 실제 승인 경로에서 거부되는 상태를 잡아내는 테스트다.
+    """
     finding_id = "00000000-0000-0000-0000-000000000907"
 
     select_response = _query(
