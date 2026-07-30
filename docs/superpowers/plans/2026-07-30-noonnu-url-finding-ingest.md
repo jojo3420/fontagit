@@ -53,7 +53,7 @@
 **Interfaces:**
 - Produces: `PROVIDER_RECORD_ID_SOURCE` (Task 3이 snapshot에 넣을 값의 출처와 형식), `CONFIDENCE_VALUE` (Task 3이 `FindingDraft.confidence`에 넣을 값)
 
-- [ ] **Step 1: manifest apply가 대상 폰트를 찾는 경로를 코드로 추적**
+- [x] **Step 1: manifest apply가 대상 폰트를 찾는 경로를 코드로 추적**
 
 ```bash
 cd apps/pipeline
@@ -65,7 +65,7 @@ grep -n "provider_record_id\|font_sources\|from fontagit.fonts" supabase/../../s
 
 확인할 것: apply가 `font_id`로 직접 찾는지, `(provider, provider_record_id)`로 조인해 찾는지. 전자라면 prod에는 dev의 `font_id`가 없으므로 **설계 3.7절이 틀린 것이며 Task 8을 전면 재설계해야 한다.**
 
-- [ ] **Step 2: dev의 font_sources 실제 컬럼과 값 형식 확인 (읽기 전용)**
+- [x] **Step 2: dev의 font_sources 실제 컬럼과 값 형식 확인 (읽기 전용)**
 
 ```bash
 # MCP supabase-dev로 실행
@@ -77,7 +77,7 @@ grep -n "provider_record_id\|font_sources\|from fontagit.fonts" supabase/../../s
 
 `provider_record_id` 컬럼이 없다면 snapshot의 값은 코드가 만들어 넣는 것이며, 그 규칙(`source_url`의 마지막 경로 조각인지 등)을 `audit_bootstrap.py:268,294`에서 확인한다.
 
-- [ ] **Step 3: prod에서 같은 조회 (읽기 전용)**
+- [x] **Step 3: prod에서 같은 조회 (읽기 전용)**
 
 ```bash
 # MCP supabase-prod로 동일 쿼리 실행
@@ -88,7 +88,7 @@ grep -n "provider_record_id\|font_sources\|from fontagit.fonts" supabase/../../s
 
 기대: 0행 (중복 없음). 중복이 있으면 목록을 기록하고 사용자에게 보고한 뒤 중단한다.
 
-- [ ] **Step 4: auto-approve가 승인 대상을 고르는 조건 확인**
+- [x] **Step 4: auto-approve가 승인 대상을 고르는 조건 확인**
 
 ```bash
 grep -n "def main_audit_review" -A 50 src/fontagit_pipeline/__main__.py | grep -n "auto_applicable\|confidence\|evidence\|status"
@@ -96,7 +96,7 @@ grep -n "def main_audit_review" -A 50 src/fontagit_pipeline/__main__.py | grep -
 
 확인할 것: `auto_applicable=True`만 보는지, `confidence` 값도 보는지, "evidence-values 대조"가 정확히 무엇을 대조하는지(help 문구에 언급됨). Task 3이 `confidence`에 넣을 값이 여기서 정해진다.
 
-- [ ] **Step 5: 결과를 문서로 남기고 커밋**
+- [x] **Step 5: 결과를 문서로 남기고 커밋**
 
 `docs/progress/2026-07-30-manifest-prod-path-verification.md`에 위 4단계 결과를 표로 정리한다. 각 항목에 실행한 명령과 출력을 함께 남긴다. 추측은 쓰지 않고 확인된 것만 적는다.
 
@@ -105,7 +105,7 @@ git add docs/progress/2026-07-30-manifest-prod-path-verification.md
 git commit -m "docs: manifest prod 적용 경로 실측 검증 (#150)"
 ```
 
-- [ ] **Step 6: 사용자에게 보고하고 승인 대기**
+- [x] **Step 6: 사용자에게 보고하고 승인 대기**
 
 Step 1의 결과가 "font_id로 직접 찾음"이면 설계 3.7절이 틀린 것이므로, **다음 작업으로 넘어가지 말고** 사용자에게 보고한다. `(provider, provider_record_id)` 조인이면 그대로 진행한다.
 
@@ -124,7 +124,7 @@ Step 1의 결과가 "font_id로 직접 찾음"이면 설계 3.7절이 틀린 것
 **Interfaces:**
 - Produces: `FetchedPage(html: str, final_url: str, http_status: int)`, `fetch_scan_page(client: httpx.Client, url: str) -> FetchedPage`
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 `tests/test_noonnu_url_scan.py` 끝에 추가:
 
@@ -149,7 +149,7 @@ def test_fetch_scan_page_returns_final_url_after_redirect() -> None:
 
 파일 상단 import에 `fetch_scan_page`를 추가한다.
 
-- [ ] **Step 2: 실패를 확인한다**
+- [x] **Step 2: 실패를 확인한다**
 
 ```bash
 cd apps/pipeline
@@ -158,7 +158,7 @@ uv run pytest tests/test_noonnu_url_scan.py::test_fetch_scan_page_returns_final_
 
 Expected: FAIL, `ImportError: cannot import name 'fetch_scan_page'`
 
-- [ ] **Step 3: 최소 구현**
+- [x] **Step 3: 최소 구현**
 
 `noonnu_url_scan.py`의 `fetch_scan_html` 정의 바로 앞에 데이터클래스를 추가한다:
 
@@ -210,7 +210,7 @@ def fetch_scan_html(client: httpx.Client, url: str) -> str:
 
 기존 `fetch_scan_html`의 docstring 중 리다이렉트 정책 설명은 `fetch_scan_page`로 옮긴다.
 
-- [ ] **Step 4: 통과 확인 + 회귀**
+- [x] **Step 4: 통과 확인 + 회귀**
 
 ```bash
 cd apps/pipeline
@@ -219,11 +219,98 @@ uv run pytest tests/test_noonnu_url_scan.py -q
 
 Expected: 새 테스트 PASS, 기존 테스트 전부 PASS
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add apps/pipeline/src/fontagit_pipeline/noonnu_url_scan.py apps/pipeline/tests/test_noonnu_url_scan.py
 git commit -m "feat: 스캔 fetch가 최종 URL과 상태 코드를 함께 반환 (#150)"
+```
+
+---
+
+## Task 2.5: 사람 배치 승인에 official_url 허용
+
+Task 1에서 확인된 차단 결함을 푼다. `0026` 마이그레이션이 manifest 레벨에서 `official_url`을 허용했으나 Python 승인 화이트리스트가 따라오지 않아, 현재 이 필드는 어떤 경로로도 승인할 수 없다.
+
+사용자 결정(2026-07-30): **사람 배치 승인(`font-audit-review approve`)만 연다.** 무인 승인(`auto-approve`)의 대상 필드는 건드리지 않는다. 실서비스 적용 전 사용자 승인 절차가 이미 있어 실질 게이트가 존재하고, 무인 경로를 열려면 근거-값 대조 로직을 새로 짜야 해 그 자체가 버그 지점이 되기 때문이다.
+
+**Files:**
+- Modify: `src/fontagit_pipeline/audit_store.py:27-37`
+- Test: `tests/test_audit_store.py`
+
+**Interfaces:**
+- Produces: `MANUAL_APPROVABLE_FIELDS`에 `"official_url"` 포함
+
+- [ ] **Step 1: 실패하는 테스트를 쓴다**
+
+`tests/test_audit_store.py`에 추가한다(파일이 없으면 신규 생성하고 `from fontagit_pipeline.audit_store import MANUAL_APPROVABLE_FIELDS`를 import한다):
+
+```python
+def test_official_url_is_manually_approvable() -> None:
+    """0026이 manifest에서 허용한 official_url을 승인 경로도 받아야 한다."""
+    assert "official_url" in MANUAL_APPROVABLE_FIELDS
+
+
+def test_legal_fields_stay_excluded() -> None:
+    """법적 판정 필드는 사람 배치 승인 대상이 아니다."""
+    assert "allow_commercial" not in MANUAL_APPROVABLE_FIELDS
+    assert "license_verified" not in MANUAL_APPROVABLE_FIELDS
+```
+
+- [ ] **Step 2: 실패를 확인한다**
+
+```bash
+cd apps/pipeline
+uv run pytest tests/test_audit_store.py -k "manually_approvable or legal_fields" -v 2>&1 | tail -8
+```
+
+Expected: `test_official_url_is_manually_approvable` FAIL, `test_legal_fields_stay_excluded` PASS
+
+- [ ] **Step 3: 상수에 필드를 추가한다**
+
+`audit_store.py:27-37`을 다음으로 바꾼다. 알파벳 순서가 아니라 기존 나열 순서를 유지하고 마지막에 덧붙인다:
+
+```python
+MANUAL_APPROVABLE_FIELDS = frozenset(
+    {
+        "tags",
+        "weights",
+        "foundry",
+        "foundry_url",
+        "download_url",
+        "download_source_kind",
+        "license_source_url",
+        "official_url",
+    }
+)
+```
+
+기존에 상수 위에 docstring이나 주석이 있으면 그대로 두고, 없으면 아래 한 줄을 상수 바로 뒤에 붙인다:
+
+```python
+"""사람이 검수를 마쳤을 때만 승인 가능한 필드. 법적 판정 필드는 영구 제외한다.
+
+`official_url`은 0026 마이그레이션이 manifest 허용 필드에 넣었으나 이 상수에
+빠져 있어 승인이 막혀 있었다(#150 Task 1에서 발견).
+"""
+```
+
+- [ ] **Step 4: 통과 확인 + 전체 회귀**
+
+```bash
+cd apps/pipeline
+uv run pytest -q 2>&1 | tail -4
+```
+
+Expected: 신규 2건 PASS, 기존 473 passed 유지
+
+⚠️ 이 상수를 참조하는 곳이 5군데(`__main__.py:1440,1441,1489`, `audit_store.py:566`)이므로 기존 테스트가 필드 목록을 하드코딩해 단언하고 있다면 함께 깨진다. 깨지면 그 테스트가 무엇을 지키려던 것인지 확인하고, 목록 자체를 검사하는 테스트라면 `official_url`을 더한다.
+
+- [ ] **Step 5: 커밋**
+
+```bash
+git add apps/pipeline/src/fontagit_pipeline/audit_store.py apps/pipeline/tests/test_audit_store.py
+git commit -m "fix: official_url을 사람 배치 승인 대상에 추가 (#150)"
 ```
 
 ---
@@ -1032,14 +1119,34 @@ PY
 
 `scripts/verify-noonnu-url-fix.sql`의 (4)를 dev에서 실행한다. `findings == fonts x 2`가 아니면(nullify 1건 때문에 정확히 2배가 아닐 수 있음) 차이를 설명할 수 있어야 한다. 설명되지 않으면 중단하고 보고한다.
 
-- [ ] **Step 4: 자동 승인**
+- [ ] **Step 4: 사람 배치 승인**
+
+무인 승인(`auto-approve`)은 대상 필드가 `{tags, weights, foundry, download_url, download_source_kind}`로 하드코딩돼 있어 이 두 필드를 처리하지 못한다(`audit_store.py:897`, Task 1에서 확인). 사람 배치 승인 경로를 쓴다.
+
+먼저 대상 분포만 확인한다:
 
 ```bash
 cd apps/pipeline
-uv run python -m fontagit_pipeline font-audit-review auto-approve --run-id <RUN_ID> 2>&1 | tail -20
+uv run python -m fontagit_pipeline font-audit-review approve \
+  --run-id <RUN_ID> \
+  --field official_url --field license_source_url \
+  --reviewed-by "#150 dual-review + user approval 2026-07-30" \
+  --dry-run 2>&1 | tail -20
 ```
 
-승인된 건수가 175인지 확인한다(auto_fix_safe 174 + google-sans-flex의 license_source_url 1). 다르면 중단하고 원인을 보고한다.
+필드별 분포가 예상과 맞는지 확인한다. `official_url` 174건, `license_source_url` 175건이 기대값이다(license 쪽이 1건 많은 이유는 `google-sans-flex`가 이 필드만 자동 적용 대상이기 때문).
+
+⚠️ 이 명령은 `auto_applicable=False`인 finding까지 승인 대상에 넣을 수 있다. `--dry-run` 출력의 건수가 위 기대값보다 크면 **승인하지 말고** 중단한 뒤, `auto_applicable` 필터가 이 경로에 적용되는지 `__main__.py:1440-1500`을 확인해 보고한다.
+
+건수가 맞으면 `--dry-run`을 빼고 다시 실행한다:
+
+```bash
+cd apps/pipeline
+uv run python -m fontagit_pipeline font-audit-review approve \
+  --run-id <RUN_ID> \
+  --field official_url --field license_source_url \
+  --reviewed-by "#150 dual-review + user approval 2026-07-30" 2>&1 | tail -20
+```
 
 - [ ] **Step 5: manifest 생성 및 사전점검**
 
