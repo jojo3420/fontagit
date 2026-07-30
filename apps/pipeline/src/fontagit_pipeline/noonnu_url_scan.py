@@ -27,10 +27,12 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
+from uuid import UUID
 
 import httpx
 
 from fontagit_pipeline.audit_noonnu import NoonnuFontSnapshot, extract_noonnu_font
+from fontagit_pipeline.audit_store import AuditStore
 from fontagit_pipeline.noonnu_seed import (
     _ROBOT_USER_AGENT,
     _ROBOTS_URL,
@@ -386,12 +388,32 @@ def build_robots_checker(client: httpx.Client) -> Callable[[str], bool]:
     return lambda url: policy.can_fetch(_ROBOT_USER_AGENT, url)
 
 
+@dataclass(frozen=True)
+class IngestContext:
+    """판정 결과를 감사 저장소에 적재할 때 필요한 문맥.
+
+    `page_fetcher`가 따로 있는 이유: 감사 근거에는 최종 URL과 상태 코드가
+    필요한데 기존 `fetcher`는 HTML만 돌려주기 때문이다. 적재하지 않는
+    호출부는 이 문맥 없이 지금까지처럼 `fetcher`만 쓴다.
+    """
+
+    store: AuditStore
+    run_id: UUID
+    page_fetcher: Callable[[str], FetchedPage]
+
+
+def select_actionable(records: Sequence[ScanRecord]) -> list[ScanRecord]:
+    """정정이 필요한 판정만 남긴다(keep 제외)."""
+    return [record for record in records if record.recommended_action != "keep"]
+
+
 def scan_targets(
     targets: Iterable[ScanTarget],
     fetcher: Callable[[str], str],
     state_path: Path,
     sleeper: Callable[[float], None] = time.sleep,
     robots_checker: Callable[[str], bool] = lambda _url: True,
+    ingest: IngestContext | None = None,
 ) -> list[ScanRecord]:
     """대상을 순회하며 공식 URL을 대조한다.
 
@@ -401,6 +423,7 @@ def scan_targets(
         state_path: 진행 상태를 남길 JSONL 경로.
         sleeper: 대기 함수. 테스트에서 즉시 반환하도록 주입한다.
         robots_checker: URL별 robots.txt 허용 여부. 기본값은 항상 허용(테스트 호환용).
+        ingest: 있으면 판정 결과를 감사 저장소에도 함께 적재한다.
 
     Returns:
         이번에 넘어온 target_list에 한해, 상태 파일 기록과 이번 처리 결과를
@@ -435,7 +458,12 @@ def scan_targets(
 
         should_abort = False
         try:
-            html = fetcher(target.source_url)
+            if ingest is not None:
+                page = ingest.page_fetcher(target.source_url)
+                html = page.html
+            else:
+                page = None
+                html = fetcher(target.source_url)
         except Exception as exc:  # 네트워크-HTTP 등 일시적 실패 → 재개 시 재시도
             snapshot: NoonnuFontSnapshot | None = None
             error: str | None = f"{type(exc).__name__}: {exc}"
@@ -510,6 +538,8 @@ def scan_targets(
             error=error,
             retryable_error=retryable_error,
         )
+        if ingest is not None and page is not None and record.error is None:
+            _ingest_record(ingest, record, page)
         _append_record(state_path, record)
         records[record.font_id] = record
         logger.info(
@@ -651,3 +681,26 @@ def load_scan_targets(client: object) -> list[ScanTarget]:
     if not targets:
         raise RuntimeError("스캔 대상이 0건입니다. 조회 조건 또는 DB 상태를 확인하세요.")
     return targets
+
+
+def _ingest_record(
+    ingest: IngestContext, record: ScanRecord, page: FetchedPage
+) -> None:
+    """판정 1건을 감사 저장소에 적재한다.
+
+    keep 판정은 정정 대상이 아니므로 적재하지 않는다. 저장 중 예외는 삼키지
+    않고 그대로 올린다. 부분 적재 상태로 조용히 넘어가면 나중에 finding 수
+    검사에서야 드러나기 때문이다.
+    """
+    from fontagit_pipeline.noonnu_url_ingest import (
+        build_finding_drafts,
+        build_snapshot_draft,
+    )
+
+    if record.recommended_action == "keep":
+        return
+    evidence_id = ingest.store.save_snapshot(
+        ingest.run_id, build_snapshot_draft(record, page)
+    )
+    for draft in build_finding_drafts(record, evidence_id):
+        ingest.store.save_finding(ingest.run_id, draft)

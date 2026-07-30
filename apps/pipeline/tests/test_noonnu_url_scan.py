@@ -1,16 +1,20 @@
 """눈누 공식 URL 전수 스캔 실행기 테스트."""
 
 import json
+import tempfile
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from pathlib import Path
 from types import SimpleNamespace
+from uuid import UUID
 
 import httpx
 import pytest
 
 from fontagit_pipeline.noonnu_url_scan import (
+    FetchedPage,
+    IngestContext,
     ScanAbortedError,
     ScanLockError,
     ScanRecord,
@@ -20,6 +24,7 @@ from fontagit_pipeline.noonnu_url_scan import (
     fetch_scan_page,
     load_scan_targets,
     scan_targets,
+    select_actionable,
     summarize,
 )
 
@@ -45,6 +50,30 @@ def _target(font_id: str = "11111111-1111-1111-1111-111111111111") -> ScanTarget
         db_official_url="https://www.instagram.com/noonnu_official/",
         db_license_source_url="https://www.instagram.com/noonnu_official/",
         db_license_verified=True,
+    )
+
+
+def _tmp_state() -> Path:
+    """호출마다 새 임시 상태 파일 경로를 만든다."""
+    return Path(tempfile.mkdtemp()) / "state.jsonl"
+
+
+def _scan_record(recommended_action: str = "keep") -> ScanRecord:
+    """select_actionable 테스트용 최소 판정 레코드를 만든다."""
+    return ScanRecord(
+        font_id="11111111-1111-1111-1111-111111111111",
+        slug="효남-늘-화이팅",
+        source_url="https://noonnu.cc/font_page/600",
+        db_official_url=None,
+        db_license_source_url=None,
+        db_license_verified=False,
+        new_official_url=None,
+        new_foundry=None,
+        classification="match",
+        official_url_contamination="none",
+        license_source_url_contamination="none",
+        recommended_action=recommended_action,
+        evidence="",
     )
 
 
@@ -805,3 +834,68 @@ def test_fetch_scan_page_returns_final_url_after_redirect() -> None:
     assert page.html == "<html><body>ok</body></html>"
     assert page.final_url == "https://noonnu.cc/font_page/2"
     assert page.http_status == 200
+
+
+class _RecordingStore:
+    """save_snapshot/save_finding 호출만 기록하는 테스트용 저장소."""
+
+    def __init__(self) -> None:
+        self.snapshots: list[object] = []
+        self.findings: list[object] = []
+        self._next = 0
+
+    def save_snapshot(self, run_id: UUID, snapshot: object) -> UUID:
+        self.snapshots.append(snapshot)
+        self._next += 1
+        return UUID(int=self._next)
+
+    def save_finding(self, run_id: UUID, finding: object) -> UUID:
+        self.findings.append(finding)
+        self._next += 1
+        return UUID(int=self._next)
+
+
+def test_scan_targets_without_ingest_does_not_store() -> None:
+    """적재 문맥이 없으면 기존 동작 그대로다."""
+    store = _RecordingStore()
+    records = scan_targets(
+        [_target()],
+        fetcher=lambda _url: _DETAIL_HTML,
+        state_path=_tmp_state(),
+        sleeper=lambda _s: None,
+    )
+
+    assert records
+    assert store.snapshots == []
+
+
+def test_scan_targets_with_ingest_saves_snapshot_and_findings() -> None:
+    """적재 문맥이 있으면 판정 1건당 snapshot 1건 + finding 2건을 남긴다."""
+    store = _RecordingStore()
+    ingest = IngestContext(
+        store=store,  # type: ignore[arg-type]
+        run_id=UUID(int=99),
+        page_fetcher=lambda url: FetchedPage(
+            html=_DETAIL_HTML, final_url=url, http_status=200
+        ),
+    )
+
+    records = scan_targets(
+        [_target()],
+        fetcher=lambda _url: _DETAIL_HTML,
+        state_path=_tmp_state(),
+        sleeper=lambda _s: None,
+        ingest=ingest,
+    )
+
+    assert len(records) == 1
+    assert len(store.snapshots) == 1
+    assert len(store.findings) == 2
+
+
+def test_select_actionable_drops_keep() -> None:
+    """keep 판정은 정정 대상에서 제외한다."""
+    keep = _scan_record(recommended_action="keep")
+    fix = _scan_record(recommended_action="auto_fix_safe")
+
+    assert select_actionable([keep, fix]) == [fix]
