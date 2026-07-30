@@ -241,7 +241,7 @@ Task 1에서 확인된 차단 결함을 푼다. `0026` 마이그레이션이 man
 **Interfaces:**
 - Produces: `MANUAL_APPROVABLE_FIELDS`에 `"official_url"` 포함
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 `tests/test_audit_store.py`에 추가한다(파일이 없으면 신규 생성하고 `from fontagit_pipeline.audit_store import MANUAL_APPROVABLE_FIELDS`를 import한다):
 
@@ -257,7 +257,7 @@ def test_legal_fields_stay_excluded() -> None:
     assert "license_verified" not in MANUAL_APPROVABLE_FIELDS
 ```
 
-- [ ] **Step 2: 실패를 확인한다**
+- [x] **Step 2: 실패를 확인한다**
 
 ```bash
 cd apps/pipeline
@@ -266,7 +266,7 @@ uv run pytest tests/test_audit_store.py -k "manually_approvable or legal_fields"
 
 Expected: `test_official_url_is_manually_approvable` FAIL, `test_legal_fields_stay_excluded` PASS
 
-- [ ] **Step 3: 상수에 필드를 추가한다**
+- [x] **Step 3: 상수에 필드를 추가한다**
 
 `audit_store.py:27-37`을 다음으로 바꾼다. 알파벳 순서가 아니라 기존 나열 순서를 유지하고 마지막에 덧붙인다:
 
@@ -295,7 +295,7 @@ MANUAL_APPROVABLE_FIELDS = frozenset(
 """
 ```
 
-- [ ] **Step 4: 통과 확인 + 전체 회귀**
+- [x] **Step 4: 통과 확인 + 전체 회귀**
 
 ```bash
 cd apps/pipeline
@@ -306,7 +306,7 @@ Expected: 신규 2건 PASS, 기존 473 passed 유지
 
 ⚠️ 이 상수를 참조하는 곳이 5군데(`__main__.py:1440,1441,1489`, `audit_store.py:566`)이므로 기존 테스트가 필드 목록을 하드코딩해 단언하고 있다면 함께 깨진다. 깨지면 그 테스트가 무엇을 지키려던 것인지 확인하고, 목록 자체를 검사하는 테스트라면 `official_url`을 더한다.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add apps/pipeline/src/fontagit_pipeline/audit_store.py apps/pipeline/tests/test_audit_store.py
@@ -332,7 +332,7 @@ git commit -m "fix: official_url을 사람 배치 승인 대상에 추가 (#150)
   - `build_snapshot_draft(record: ScanRecord, page: FetchedPage) -> SnapshotDraft`
   - `build_finding_drafts(record: ScanRecord, evidence_id: UUID) -> list[FindingDraft]`
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 `tests/test_noonnu_url_ingest.py` 신규 작성:
 
@@ -461,7 +461,7 @@ def test_uncontaminated_field_is_skipped() -> None:
     assert {f.field_name for f in findings} == {"official_url"}
 ```
 
-- [ ] **Step 2: 실패를 확인한다**
+- [x] **Step 2: 실패를 확인한다**
 
 ```bash
 cd apps/pipeline
@@ -470,7 +470,7 @@ uv run pytest tests/test_noonnu_url_ingest.py -q
 
 Expected: FAIL, `ModuleNotFoundError: No module named 'fontagit_pipeline.noonnu_url_ingest'`
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `src/fontagit_pipeline/noonnu_url_ingest.py` 신규 작성:
 
@@ -605,7 +605,7 @@ def build_finding_drafts(record: ScanRecord, evidence_id: UUID) -> list[FindingD
     return drafts
 ```
 
-- [ ] **Step 4: 통과 확인**
+- [x] **Step 4: 통과 확인**
 
 ```bash
 cd apps/pipeline
@@ -614,11 +614,11 @@ uv run pytest tests/test_noonnu_url_ingest.py -q
 
 Expected: 7 passed
 
-- [ ] **Step 5: Task 1 결과를 반영한다**
+- [x] **Step 5: Task 1 결과를 반영한다**
 
 Task 1 Step 4에서 확인한 `auto-approve`의 승인 조건이 `confidence` 값을 본다면, `_CONFIDENCE` 상수를 그 값으로 바꾸고 테스트에 단언을 추가한다. `auto_applicable`만 본다면 그대로 둔다. Task 1 문서에서 확인한 사실을 이 모듈 docstring에 한 줄로 근거로 남긴다.
 
-- [ ] **Step 6: 린트-타입 확인 후 커밋**
+- [x] **Step 6: 린트-타입 확인 후 커밋**
 
 ```bash
 cd apps/pipeline
@@ -644,7 +644,7 @@ git commit -m "feat: 눈누 URL 판정을 감사 draft로 변환 (#150)"
   - `scan_targets(..., ingest: IngestContext | None = None)`
   - `select_actionable(records: Sequence[ScanRecord]) -> list[ScanRecord]`
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 `tests/test_noonnu_url_scan.py`에 추가:
 
@@ -716,7 +716,7 @@ def test_select_actionable_drops_keep() -> None:
 
 `_target()`, `_tmp_state()`, `_CONTAMINATED_HTML`, `_scan_record()`는 기존 테스트 파일의 헬퍼를 재사용한다. 없으면 기존 테스트가 쓰는 fixture 이름에 맞춰 만든다. import에 `IngestContext`, `FetchedPage`, `select_actionable`을 추가한다.
 
-- [ ] **Step 2: 실패를 확인한다**
+- [x] **Step 2: 실패를 확인한다**
 
 ```bash
 cd apps/pipeline
@@ -725,7 +725,7 @@ uv run pytest tests/test_noonnu_url_scan.py -k "ingest or actionable" -v
 
 Expected: FAIL, `ImportError: cannot import name 'IngestContext'`
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `noonnu_url_scan.py`에 추가한다. import에 `from uuid import UUID`, `from fontagit_pipeline.audit_store import AuditStore`, `from fontagit_pipeline.noonnu_url_ingest import build_finding_drafts, build_snapshot_draft`를 더한다.
 
@@ -795,7 +795,7 @@ def _ingest_record(
         ingest.store.save_finding(ingest.run_id, draft)
 ```
 
-- [ ] **Step 4: 통과 확인 + 전체 회귀**
+- [x] **Step 4: 통과 확인 + 전체 회귀**
 
 ```bash
 cd apps/pipeline
@@ -804,7 +804,7 @@ uv run pytest -q 2>&1 | tail -5
 
 Expected: 기존 472 + 신규 테스트 전부 PASS, 4 skipped 유지
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add apps/pipeline/src/fontagit_pipeline/noonnu_url_scan.py apps/pipeline/tests/test_noonnu_url_scan.py
@@ -1006,7 +1006,7 @@ git commit -m "feat: noonnu-url-scan에 적재-대상필터-재시도 플래그 
 **Files:**
 - Create: `scripts/verify-noonnu-url-fix.sql`
 
-- [ ] **Step 1: 쿼리 파일을 만든다**
+- [x] **Step 1: 쿼리 파일을 만든다**
 
 ```sql
 -- 눈누 official_url 오염 정정 검증 (#150)
@@ -1041,11 +1041,11 @@ from fontagit.font_audit_findings
 where run_id = :run_id;
 ```
 
-- [ ] **Step 2: dev에서 실행해 문법을 확인한다 (읽기 전용)**
+- [x] **Step 2: dev에서 실행해 문법을 확인한다 (읽기 전용)**
 
 MCP `supabase-dev`로 (1), (2), (4)를 실행한다. (3)은 run_id가 없으므로 Task 7 이후에 돌린다. 컬럼명이 실제와 다르면 여기서 드러나므로 즉시 고친다.
 
-- [ ] **Step 3: 커밋**
+- [x] **Step 3: 커밋**
 
 ```bash
 git add scripts/verify-noonnu-url-fix.sql
