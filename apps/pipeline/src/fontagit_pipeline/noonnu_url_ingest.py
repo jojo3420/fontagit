@@ -42,16 +42,30 @@ def provider_record_id_from_source_url(source_url: str) -> str:
     예: https://noonnu.cc/font_page/589 -> "589"
 
     Raises:
-        ValueError: 경로 마지막 조각이 비어 있어 식별자를 만들 수 없는 경우.
+        ValueError: `/font_page/<숫자>` 형태가 아니어서 식별자를 만들 수 없는 경우.
     """
     record_id = urlparse(source_url).path.rstrip("/").rsplit("/", 1)[-1]
-    if not record_id:
+    if not record_id.isdigit():
         raise ValueError(f"source_url에서 provider_record_id를 얻지 못했습니다: {source_url}")
     return record_id
 
 
 def build_snapshot_draft(record: ScanRecord, page: FetchedPage) -> SnapshotDraft:
-    """판정 1건과 그 근거가 된 응답으로 감사 근거를 만든다."""
+    """판정 1건과 그 근거가 된 응답으로 감사 근거를 만든다.
+
+    Raises:
+        ValueError: 리다이렉트로 다른 폰트 페이지에 도달한 경우. 근거는 도착
+            페이지에서 뽑히는데 `provider_record_id`는 요청 URL에서 뽑히므로,
+            둘이 어긋나면 A 폰트에 B 폰트의 제작사 주소가 실린다. 조용히
+            건너뛰면 사람 검수도 그 어긋남을 보지 못하므로 여기서 끊는다.
+    """
+    requested_id = provider_record_id_from_source_url(record.source_url)
+    reached_id = provider_record_id_from_source_url(page.final_url)
+    if requested_id != reached_id:
+        raise ValueError(
+            "리다이렉트로 다른 폰트 페이지에 도달했습니다: "
+            f"{record.source_url} -> {page.final_url}"
+        )
     extracted: dict[str, object] = {
         "official_url": record.new_official_url,
         "foundry": record.new_foundry,
@@ -71,7 +85,7 @@ def build_snapshot_draft(record: ScanRecord, page: FetchedPage) -> SnapshotDraft
     return SnapshotDraft(
         font_id=UUID(record.font_id),
         provider=_PROVIDER,
-        provider_record_id=provider_record_id_from_source_url(record.source_url),
+        provider_record_id=requested_id,
         source_kind="noonnu",
         document_kind="metadata",
         request_url=record.source_url,

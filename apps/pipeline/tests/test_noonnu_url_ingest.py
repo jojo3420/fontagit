@@ -2,6 +2,8 @@
 
 from uuid import UUID
 
+import pytest
+
 from fontagit_pipeline.noonnu_url_ingest import (
     build_finding_drafts,
     build_snapshot_draft,
@@ -47,6 +49,28 @@ def _page() -> FetchedPage:
 
 def test_provider_record_id_extracted_from_source_url() -> None:
     assert provider_record_id_from_source_url("https://noonnu.cc/font_page/589") == "589"
+
+
+def test_provider_record_id_rejects_non_numeric_path() -> None:
+    """폰트 페이지 번호가 아닌 경로는 식별자로 쓰지 않는다."""
+    with pytest.raises(ValueError):
+        provider_record_id_from_source_url("https://noonnu.cc/index")
+
+
+def test_snapshot_rejects_redirect_to_other_font_page() -> None:
+    """리다이렉트로 다른 폰트 페이지에 닿으면 근거로 쓰지 않는다.
+
+    근거는 도착 페이지에서 뽑히는데 provider_record_id는 요청 URL에서
+    뽑히므로, 그대로 두면 A 폰트에 B 폰트 제작사 주소가 실린다.
+    """
+    other_page = FetchedPage(
+        html="<html><body>다른 폰트</body></html>",
+        final_url="https://noonnu.cc/font_page/590",
+        http_status=200,
+    )
+
+    with pytest.raises(ValueError, match="다른 폰트 페이지"):
+        build_snapshot_draft(_record(), other_page)
 
 
 def test_snapshot_hash_is_deterministic() -> None:
