@@ -33,6 +33,7 @@ MANUAL_APPROVABLE_FIELDS = frozenset(
         "download_url",
         "download_source_kind",
         "license_source_url",
+        "official_url",
     }
 )
 

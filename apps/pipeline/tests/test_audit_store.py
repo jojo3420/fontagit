@@ -291,7 +291,7 @@ def test_manual_approvable_fields_excludes_legal_fields() -> None:
 
 
 def test_manual_approvable_fields_contains_expected_metadata_fields() -> None:
-    """MANUAL_APPROVABLE_FIELDS는 기존 tags/weights + 신규 5개 필드로 정확히 구성된다."""
+    """MANUAL_APPROVABLE_FIELDS는 기존 tags/weights + 신규 6개 필드로 정확히 구성된다."""
     assert MANUAL_APPROVABLE_FIELDS == {
         "tags",
         "weights",
@@ -300,12 +300,31 @@ def test_manual_approvable_fields_contains_expected_metadata_fields() -> None:
         "download_url",
         "download_source_kind",
         "license_source_url",
+        "official_url",
     }
+
+
+def test_official_url_is_manually_approvable() -> None:
+    """0026이 manifest에서 허용한 official_url을 승인 경로도 받아야 한다."""
+    assert "official_url" in MANUAL_APPROVABLE_FIELDS
+
+
+def test_legal_fields_stay_excluded() -> None:
+    """법적 판정 필드는 사람 배치 승인 대상이 아니다."""
+    assert "allow_commercial" not in MANUAL_APPROVABLE_FIELDS
+    assert "license_verified" not in MANUAL_APPROVABLE_FIELDS
 
 
 @pytest.mark.parametrize(
     "field_name",
-    ["foundry", "foundry_url", "download_url", "download_source_kind", "license_source_url"],
+    [
+        "foundry",
+        "foundry_url",
+        "download_url",
+        "download_source_kind",
+        "license_source_url",
+        "official_url",
+    ],
 )
 def test_approve_finding_accepts_new_manual_approvable_fields(field_name: str) -> None:
     """이슈 #128 - Tier A archive findings 5필드는 approve_finding으로 승인 가능해야 한다."""

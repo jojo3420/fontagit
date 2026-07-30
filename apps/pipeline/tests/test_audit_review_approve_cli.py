@@ -84,6 +84,7 @@ def test_approve_default_fields_approves_all_manual_approvable_findings() -> Non
             "download_url",
             "download_source_kind",
             "license_source_url",
+            "official_url",
         }
         assert mock_store.approve_finding.call_count == 2
         for call in mock_store.approve_finding.call_args_list:
