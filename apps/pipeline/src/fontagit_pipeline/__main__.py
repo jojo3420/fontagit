@@ -286,7 +286,7 @@ def _run_url_scan(args: argparse.Namespace) -> int:
                 ingest = IngestContext(
                     store=store,
                     run_id=run_id,
-                    page_fetcher=lambda url: fetch_scan_page(http, url),
+                    page_fetcher=lambda page_url: fetch_scan_page(http, page_url),
                 )
 
             records = scan_targets(
