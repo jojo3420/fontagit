@@ -938,15 +938,16 @@ def load_actionable_records(
         logger.info("재스캔 대상 %d종으로 좁혔습니다", len(targets))
 ```
 
-적재 문맥 준비 (스캔 실행 직전):
+적재 문맥 준비 (`with httpx.Client(...) as http:` 블록 안, `scan_targets` 호출 직전).
+⚠️ `client`는 Supabase 클라이언트(`__main__.py:245`)이고 httpx 쪽은 `http`(`:263`)다. 헷갈리지 말 것:
 
 ```python
     ingest: IngestContext | None = None
     run_id: UUID | None = None
     if args.store_findings:
-        store = SupabaseAuditStore.from_dev_credentials(
-            settings.supabase_url, settings.supabase_secret_key
-        )
+        # url/secret은 이 함수 앞부분에서 이미 None 체크된 지역 변수다.
+        # settings.supabase_dev_url을 직접 넘기면 Optional 때문에 mypy가 늘어난다.
+        store = SupabaseAuditStore.from_dev_credentials(url, secret)
         baseline_sha256 = hashlib.sha256(
             json.dumps(
                 sorted(target.font_id for target in targets), separators=(",", ":")
@@ -962,7 +963,7 @@ def load_actionable_records(
         ingest = IngestContext(
             store=store,
             run_id=run_id,
-            page_fetcher=lambda url: fetch_scan_page(client, url),
+            page_fetcher=lambda target_url: fetch_scan_page(http, target_url),
         )
 ```
 
