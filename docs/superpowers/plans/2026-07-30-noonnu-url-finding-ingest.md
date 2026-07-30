@@ -1284,7 +1284,7 @@ git commit -m "chore: prod 눈누 URL 정정 적용 근거 보관 (#150)"
 
 정적 사이트라 DB만 고치면 화면이 바뀌지 않는다.
 
-- [ ] **Step 1: 재배포**
+- [x] **Step 1: 재배포**
 
 ```bash
 # main 브랜치에서만 동작한다
@@ -1293,11 +1293,11 @@ git commit -m "chore: prod 눈누 URL 정정 적용 근거 보관 (#150)"
 
 ⚠️ stale `.next` fetch-cache가 옛 데이터를 굽는 사고 이력이 있다. 배포 전 캐시 상태를 확인한다.
 
-- [ ] **Step 2: 표본 화면 확인**
+- [x] **Step 2: 표본 화면 확인**
 
 정정된 폰트 3종의 상세 페이지를 열어 제작사 링크가 눈누 SNS가 아님을 확인한다. 스크린샷 또는 URL을 근거로 남긴다.
 
-- [ ] **Step 3: license_verified 강등 별도 이슈 등록**
+- [x] **Step 3: license_verified 강등 별도 이슈 등록**
 
 ```bash
 gh issue create --title "눈누만 근거인 폰트의 license_verified 정책 결정" \
@@ -1306,7 +1306,7 @@ gh issue create --title "눈누만 근거인 폰트의 license_verified 정책 �
 
 본문에 담을 것: #150에서 범위 밖으로 분리한 경위, 172종만 강등하면 기준이 일관되지 않는 문제, `0026:337-339`가 `license_status` 동반 변경을 강제한다는 제약, Tier B 전체가 대상이 되는 논리.
 
-- [ ] **Step 4: 진행 일지 갱신 후 PR 생성**
+- [x] **Step 4: 진행 일지 갱신 후 PR 생성**
 
 ```bash
 git add docs/progress/
