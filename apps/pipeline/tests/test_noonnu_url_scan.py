@@ -17,6 +17,7 @@ from fontagit_pipeline.noonnu_url_scan import (
     ScanTarget,
     acquire_scan_lock,
     fetch_scan_html,
+    fetch_scan_page,
     load_scan_targets,
     scan_targets,
     summarize,
@@ -786,3 +787,21 @@ def test_fetch_scan_html_preserves_status_code_for_backoff(tmp_path: Path) -> No
 
     assert len(sleeps) == 1
     assert sleeps[0] > 30.0
+
+
+def test_fetch_scan_page_returns_final_url_after_redirect() -> None:
+    """리다이렉트를 따라간 뒤 최종 URL과 상태 코드를 함께 돌려준다."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/font_page/1":
+            return httpx.Response(
+                302, headers={"location": "https://noonnu.cc/font_page/2"}
+            )
+        return httpx.Response(200, text="<html><body>ok</body></html>")
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    page = fetch_scan_page(client, "https://noonnu.cc/font_page/1")
+
+    assert page.html == "<html><body>ok</body></html>"
+    assert page.final_url == "https://noonnu.cc/font_page/2"
+    assert page.http_status == 200

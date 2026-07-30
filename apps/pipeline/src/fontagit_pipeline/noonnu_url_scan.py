@@ -235,17 +235,20 @@ def _build_untrusted_host_record(target: ScanTarget) -> ScanRecord:
     )
 
 
-def fetch_scan_html(client: httpx.Client, url: str) -> str:
-    """눈누 상세 HTML을 받는다.
+@dataclass(frozen=True)
+class FetchedPage:
+    """HTML과 함께 감사 근거에 필요한 응답 메타를 담는다."""
 
-    `noonnu_seed._fetch_url`과 달리 httpx 예외를 `NoonnuSeedError`로 감싸지 않고
-    그대로 올린다. 감싸면 상태 코드가 메시지 문자열에 뭉개져
-    `_resolve_backoff_seconds`가 429/403을 알아볼 수 없기 때문이다.
+    html: str
+    final_url: str
+    http_status: int
 
-    리다이렉트는 client의 자동 추종(follow_redirects) 대신 매 홉마다
-    `_is_allowed_scan_url`로 확인한 뒤에만 따라가는 수동 루프로 처리한다.
-    자동 추종은 서버 응답이 임의로 지정한 호스트를 그대로 따라가는 SSRF 경로가
-    된다.
+
+def fetch_scan_page(client: httpx.Client, url: str) -> FetchedPage:
+    """눈누 상세 페이지를 받아 HTML과 응답 메타를 함께 돌려준다.
+
+    `fetch_scan_html`과 같은 리다이렉트 정책을 쓰되, 감사 근거에 필요한
+    최종 URL과 상태 코드를 버리지 않는다.
     """
     current_url = url
     for _ in range(_MAX_REDIRECTS):
@@ -257,12 +260,21 @@ def fetch_scan_html(client: httpx.Client, url: str) -> str:
         )
         if not response.has_redirect_location:
             response.raise_for_status()
-            return response.text
+            return FetchedPage(
+                html=response.text,
+                final_url=current_url,
+                http_status=response.status_code,
+            )
         next_url = urljoin(current_url, response.headers["location"])
         if not _is_allowed_scan_url(next_url):
             raise ValueError(f"신뢰할 수 없는 리다이렉트 대상: {next_url}")
         current_url = next_url
     raise ValueError(f"리다이렉트 한도({_MAX_REDIRECTS})를 초과했습니다: {url}")
+
+
+def fetch_scan_html(client: httpx.Client, url: str) -> str:
+    """눈누 상세 HTML만 받는다. 기존 호출부 호환용 얇은 위임이다."""
+    return fetch_scan_page(client, url).html
 
 
 def _looks_like_normal_html_document(html: str) -> bool:
