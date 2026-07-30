@@ -25,7 +25,7 @@ FontAgit는 한글 폰트를 찾고 라이선스-미리보기 정보를 확인�
 ## 2026-07-30 - 눈누 URL 오염 172종 정정 dev/prod 적용 + 재배포 (#150, #148 종결)
 - 상태: 완료 (자동 대상 164종 정정 / 사람 검수 8종은 #156으로 분리)
 - 요약: #148에서 이관된 오염 데이터 정정을 끝냈다. 눈누 상세 본문 앵커를 근거로 삼는 스캔-적재-승인-적용 경로를 구현하고 dev 185종 재스캔 후 dev-prod 순으로 적용했다. 계획서상 "구현 완료"였던 코드가 dev 실행에서 차단 결함 4종(스냅샷 `document_kind` 허용값 위반, RPC 근거 검증이 눈누 앵커 거부, `complete_run` 집계 누락, 배치 승인이 `auto_applicable` 무시)을 드러내 먼저 수정했다. prod에는 마이그레이션 0026이 아예 없어 0026+0027을 함께 올렸다. `license_verified` 강등은 DB 체크 제약이 `license_status` 동반 변경을 강제해 실행하지 않고 #155로 분리했다.
-- 커밋/PR: `98158c9`(차단 결함 4종), `68f7700`(prod 승인 패키지), PR 생성 예정
+- 커밋/PR: `98158c9`(차단 결함 4종), `68f7700`(prod 승인 패키지), `2376b89`(진행 일지), PR #154 (https://github.com/jojo3420/fontagit/pull/154)
 - 검증(실측): prod 눈누 인스타 잔존 `official_url` 172 → 8, `license_source_url` 172 → 7, 정정 반영 175건, manifest preflight 어긋남 0, `updated_rows=175`. 재배포 후 fontagit.com 표본 5종(효남-늘-화이팅 포함)에서 제작사 링크 확인. `pytest -q` 489 passed / ruff 통과 / mypy 신규 0.
 - 남은 일: (1)#156 사람 검수 8종 (2)#155 `license_verified` 정책 결정 (3)#141 크롤러 결함 (4)#142 체크포인트 결함
 - 관련 문서: `docs/runbooks/2026-07-30-noonnu-url-prod-approval.md`, `docs/superpowers/plans/2026-07-30-noonnu-url-finding-ingest.md`
