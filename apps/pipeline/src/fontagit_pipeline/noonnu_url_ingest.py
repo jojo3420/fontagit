@@ -28,6 +28,13 @@ _EXTRACTION_RULE_ID = "noonnu-url-scan-content-anchor-v2"
 _PARSER_VERSION = "noonnu-url-scan-v2"
 _CONFIDENCE = "reference"
 
+_EVIDENCE_ROLE = "noonnu-official-url-anchor"
+"""적용 RPC(0027)가 눈누 근거의 URL 정정을 허용할 때 확인하는 마커.
+
+`font-file-script`(폰트 파일 실검사)를 재사용하면 근거 등급이 뒤섞이므로
+이 정정 전용 값을 따로 둔다.
+"""
+
 
 def provider_record_id_from_source_url(source_url: str) -> str:
     """눈누 상세 URL에서 폰트 페이지 번호를 뽑는다.
@@ -51,6 +58,7 @@ def build_snapshot_draft(record: ScanRecord, page: FetchedPage) -> SnapshotDraft
         "classification": record.classification,
         "recommended_action": record.recommended_action,
         "anchor_evidence": record.evidence,
+        "evidence_role": _EVIDENCE_ROLE,
     }
     normalized_sha256 = hashlib.sha256(
         json.dumps(
@@ -65,7 +73,7 @@ def build_snapshot_draft(record: ScanRecord, page: FetchedPage) -> SnapshotDraft
         provider=_PROVIDER,
         provider_record_id=provider_record_id_from_source_url(record.source_url),
         source_kind="noonnu",
-        document_kind="font_detail",
+        document_kind="metadata",
         request_url=record.source_url,
         final_url=page.final_url,
         http_status=page.http_status,

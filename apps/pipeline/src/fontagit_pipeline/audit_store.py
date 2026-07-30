@@ -918,7 +918,11 @@ class SupabaseAuditStore:
         return all_findings
 
     def get_proposed_findings_by_fields(
-        self, run_id: UUID, field_names: Sequence[str]
+        self,
+        run_id: UUID,
+        field_names: Sequence[str],
+        *,
+        auto_applicable_only: bool = True,
     ) -> list[dict[str, object]]:
         """font_audit_findings 테이블에서 지정한 field_name들의 proposed findings 조회 (페이지네이션).
 
@@ -932,6 +936,10 @@ class SupabaseAuditStore:
             run_id: 조회할 감사 run의 UUID
             field_names: 조회할 field_name 목록. MANUAL_APPROVABLE_FIELDS와 교집합이
                 비어 있으면 DB 조회 없이 빈 리스트 반환.
+            auto_applicable_only: True(기본)면 auto_applicable=true인 finding만 반환한다.
+                끄면 스캔기가 사람 판단 대상으로 분류한 건까지 일괄 승인돼 오적용으로
+                이어지므로(#150 dev 실측: 349건 기대에 370건 조회), 사람이 개별 검토한
+                뒤에만 False로 호출한다.
 
         Returns:
             proposed 상태이고 field_names∩MANUAL_APPROVABLE_FIELDS에 속하는 finding 레코드 리스트
@@ -948,15 +956,17 @@ class SupabaseAuditStore:
         offset = 0
 
         while True:
-            result = (
+            query = (
                 self._schema.table("font_audit_findings")
                 .select("*")
                 .eq("run_id", str(run_id))
                 .eq("status", "proposed")
                 .in_("field_name", allowed_field_names)
-                .order("id", desc=False)
-                .range(offset, offset + page_size - 1)
-                .execute()
+            )
+            if auto_applicable_only:
+                query = query.eq("auto_applicable", True)
+            result = (
+                query.order("id", desc=False).range(offset, offset + page_size - 1).execute()
             )
             data = result.data
             if not isinstance(data, list):

@@ -69,6 +69,20 @@ def test_snapshot_carries_response_metadata() -> None:
     assert snapshot.extracted["official_url"] == "https://clova.ai/handwriting"
 
 
+def test_snapshot_matches_db_and_rpc_contract() -> None:
+    """document_kind는 0017 체크 제약(download/license/metadata) 안이어야 하고,
+
+    evidence_role은 0027이 눈누 근거 URL 정정을 허용할 때 보는 마커여야 한다.
+    dev 실측에서 'font_detail'이 제약 위반으로 첫 폰트부터 적재를 막았다.
+    """
+    snapshot = build_snapshot_draft(_record(), _page())
+
+    assert snapshot.document_kind in {"download", "license", "metadata"}
+    assert snapshot.document_kind == "metadata"
+    assert snapshot.source_kind == "noonnu"
+    assert snapshot.extracted["evidence_role"] == "noonnu-official-url-anchor"
+
+
 def test_auto_fix_safe_produces_two_applicable_findings() -> None:
     """official_url과 license_source_url 두 건이 자동 적용 대상으로 나온다."""
     findings = build_finding_drafts(_record(), _EVIDENCE_ID)

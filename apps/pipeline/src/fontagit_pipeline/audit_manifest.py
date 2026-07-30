@@ -137,8 +137,18 @@ class ManifestError(ValueError):
 # license_source_kind와 달리 사람 검수 전 reference 신뢰도 근거(눈누 font-file-script,
 # Tier A google/fonts METADATA.pb)를 허용한다. legal 필드는 절대 포함하지 않는다.
 _REFERENCE_EVIDENCE_FIELDS = frozenset(
-    {"foundry", "foundry_url", "download_url", "download_source_kind", "license_source_url"}
+    {
+        "foundry",
+        "foundry_url",
+        "download_url",
+        "download_source_kind",
+        "license_source_url",
+        # 이슈 #150: 눈누 상세 본문 앵커 근거로 official_url을 정정한다(0027과 1:1).
+        "official_url",
+    }
 )
+
+_NOONNU_REFERENCE_EVIDENCE_ROLES = frozenset({"font-file-script", "noonnu-official-url-anchor"})
 
 
 def _is_reference_metadata_evidence(snapshot: Mapping[str, object]) -> bool:
@@ -154,7 +164,7 @@ def _is_reference_metadata_evidence(snapshot: Mapping[str, object]) -> bool:
         return False
     source_kind = snapshot.get("source_kind")
     evidence_role = extracted.get("evidence_role")
-    if source_kind == "noonnu" and evidence_role == "font-file-script":
+    if source_kind == "noonnu" and evidence_role in _NOONNU_REFERENCE_EVIDENCE_ROLES:
         return True
     if (
         # Tier A(google-fonts) 스냅샷은 archive 등급으로 저장한다(이슈 #133).

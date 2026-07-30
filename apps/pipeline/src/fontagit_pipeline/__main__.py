@@ -4,6 +4,7 @@ import argparse
 import logging
 import os
 import sys
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -318,7 +319,21 @@ def _run_url_scan(args: argparse.Namespace) -> int:
             len(actionable),
             expected_findings,
         )
-        ingest.store.complete_run(run_id, {"summary": summary})
+        # complete_run은 집계 4종을 정수로 요구한다(audit_store.py:530-533).
+        raw_actions = summary["recommended_action"]
+        action_counts = raw_actions if isinstance(raw_actions, Mapping) else {}
+        total = int(cast(int, summary["total"]))
+        error_count = int(cast(int, summary["error_count"]))
+        ingest.store.complete_run(
+            run_id,
+            {
+                "success_count": total - error_count,
+                "verified_count": int(action_counts.get("auto_fix_safe", 0)),
+                "needs_review_count": int(action_counts.get("manual_review", 0)),
+                "broken_count": error_count,
+                "summary": summary,
+            },
+        )
 
     _write_scan_report(args.out, summary, records)
     logger.info("요약: %s", json.dumps(summary, ensure_ascii=False))
@@ -1519,11 +1534,15 @@ def main_audit_review_approve(args: argparse.Namespace) -> int:
             logger.error("run status는 completed여야 합니다: status=%s", run_status)
             return 1
 
-        proposed_findings = store.get_proposed_findings_by_fields(run_id, requested_fields)
+        auto_applicable_only = not getattr(args, "include_manual_review", False)
+        proposed_findings = store.get_proposed_findings_by_fields(
+            run_id, requested_fields, auto_applicable_only=auto_applicable_only
+        )
         logger.info(
-            "배치 승인 대상 조회: run_id=%s fields=%s count=%d",
+            "배치 승인 대상 조회: run_id=%s fields=%s auto_applicable_only=%s count=%d",
             run_id,
             requested_fields,
+            auto_applicable_only,
             len(proposed_findings),
         )
 
@@ -2291,6 +2310,11 @@ if __name__ == "__main__":
         "--dry-run",
         action="store_true",
         help="승인 없이 대상 건수와 필드별 분포만 로깅",
+    )
+    review_approve_parser.add_argument(
+        "--include-manual-review",
+        action="store_true",
+        help="auto_applicable=false인 finding까지 승인 대상에 포함(사람이 개별 검토한 뒤에만 사용)",
     )
     review_approve_parser.set_defaults(func=main_audit_review)
 

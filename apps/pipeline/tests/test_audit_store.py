@@ -387,6 +387,23 @@ def test_get_proposed_findings_by_fields_filters_status_and_fields() -> None:
     assert {row["field_name"] for row in results} == {"foundry", "download_url"}
     select_response.in_.assert_called_with("field_name", ["foundry", "download_url"])
     select_response.eq.assert_any_call("status", "proposed")
+    select_response.eq.assert_any_call("auto_applicable", True)
+
+
+def test_get_proposed_findings_by_fields_can_include_manual_review() -> None:
+    """auto_applicable_only=False면 사람 판단 대상까지 조회한다(#150 후속 7종 경로)."""
+    run_id = UUID("00000000-0000-0000-0000-000000000924")
+    select_response = _query([])
+    schema = MagicMock()
+    schema.table.return_value = select_response
+    client = MagicMock()
+    client.schema.return_value = schema
+
+    SupabaseAuditStore(client).get_proposed_findings_by_fields(
+        run_id, ["foundry"], auto_applicable_only=False
+    )
+
+    assert ("auto_applicable", True) not in [call.args for call in select_response.eq.call_args_list]
 
 
 def test_get_proposed_findings_by_fields_empty_field_names_skips_query() -> None:
