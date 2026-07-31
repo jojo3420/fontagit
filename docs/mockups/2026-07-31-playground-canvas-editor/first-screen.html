@@ -1,0 +1,68 @@
+<h2>플레이그라운드에 처음 들어오면 무엇이 보일까요?</h2>
+<p class="subtitle">이 화면이 이탈률을 좌우합니다. 빈 캔버스는 "뭘 해야 하지"에서 멈추고, 미리 채워두면 바로 폰트를 바꿔보게 됩니다.</p>
+
+<style>
+  .st { border:1px solid #3a3a46; border-radius:8px; overflow:hidden; }
+  .st-row { display:flex; min-height:190px; }
+  .st-left { width:110px; background:#26262e; padding:8px; flex:none; font-size:10px; }
+  .st-right { width:100px; background:#26262e; padding:8px; flex:none; font-size:10px; }
+  .st-canvas { flex:1; background:#16161b; display:flex; align-items:center; justify-content:center; padding:14px; }
+  .st-art { background:#fff; color:#222; width:170px; height:170px; display:flex; align-items:center; justify-content:center; text-align:center; border-radius:2px; }
+  .st-it { background:#3a3a46; border-radius:3px; padding:5px; margin-bottom:4px; }
+  .st-dim { opacity:.45; }
+  .st-hint { color:#8a8a99; font-size:11px; }
+  .st-sel { outline:2px solid #5a8ee0; outline-offset:3px; padding:4px 8px; }
+</style>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>빈 캔버스 + 안내</h3>
+      <p>사용자가 직접 텍스트를 추가해야 시작됩니다. 가장 정직하지만 한 단계를 더 요구합니다. 텍스트가 없는 동안 속성 패널과 폰트 목록은 비활성 상태가 됩니다.</p>
+      <div class="st">
+        <div class="st-row">
+          <div class="st-left st-dim">폰트 목록<div class="st-it">비활성</div></div>
+          <div class="st-canvas"><div class="st-art st-hint">텍스트 추가를 눌러<br>시작하세요</div></div>
+          <div class="st-right st-dim">속성<div class="st-it">비활성</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>샘플 텍스트 하나가 선택된 채로 (추천)</h3>
+      <p>"오늘도 좋은 하루" 같은 문구 하나가 캔버스 가운데 놓이고 이미 선택돼 있습니다. 들어오자마자 왼쪽 폰트를 클릭하면 바뀌는 걸 볼 수 있어, 첫 행동까지 클릭 한 번입니다. 문구는 더블클릭으로 바로 고칩니다.</p>
+      <div class="st">
+        <div class="st-row">
+          <div class="st-left">폰트 목록<div class="st-it">에스코어</div><div class="st-it">지마켓</div><div class="st-it">고운돋움</div></div>
+          <div class="st-canvas"><div class="st-art"><span class="st-sel">오늘도 좋은 하루</span></div></div>
+          <div class="st-right">속성<div class="st-it">크기 72</div><div class="st-it">색</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>시작 템플릿 고르기 화면 먼저</h3>
+      <p>썸네일용, 인용구, 카드뉴스 같은 시안 몇 개를 먼저 고르게 합니다. 결과물 품질은 올라가지만 편집기에 닿기 전 한 화면이 더 끼고, 템플릿 시안 제작과 유지 비용이 새로 생깁니다.</p>
+      <div class="st">
+        <div class="st-row">
+          <div class="st-canvas" style="gap:10px">
+            <div class="st-art" style="width:80px;height:80px" class="st-hint">썸네일</div>
+            <div class="st-art" style="width:80px;height:80px">인용구</div>
+            <div class="st-art" style="width:80px;height:80px">카드뉴스</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="subtitle">추천은 B입니다. 목표가 폰트 교체 경험이라면 첫 클릭까지의 거리를 줄이는 게 가장 큰 효과를 냅니다. C는 1차 범위를 넘어섭니다.</p>
+</div>
